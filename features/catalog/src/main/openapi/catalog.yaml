@@ -399,7 +399,7 @@ components:
       enum: [TEXT, SECRET, FLAG]
     AccountFieldResponse:
       type: object
-      required: [name, kind, required, label, help]
+      required: [name, kind, required, label, help, readAt]
       properties:
         name:
           type: string
@@ -413,3 +413,21 @@ components:
         help:
           type: string
           nullable: true
+        readAt:
+          $ref: '#/components/schemas/AccountFieldReadAtResponse'
+    AccountFieldReadAtResponse:
+      description: >
+        Set when the value cannot be typed because it only exists inside the band's own session on the
+        platform: the page offers `script` as a bookmarklet to keep (or a line to paste into the
+        browser's console) and the band runs it at `site`, signed in there however it normally signs in.
+        Null for an ordinary field.
+      type: object
+      nullable: true
+      required: [site, script]
+      properties:
+        site:
+          description: Where the band signs in and runs it.
+          type: string
+        script:
+          description: One line of JavaScript, which leaves the value on the clipboard.
+          type: string

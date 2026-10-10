@@ -192,6 +192,14 @@ export const en = {
     disconnectText: 'Its login and password are forgotten here. Nothing changes on {{platform}}; this band’s work there waits until it is connected again.',
     kept: 'Kept — type to replace', ownersConnect: 'The band’s owners connect its platforms.',
     secretsHelp: 'Passwords and secrets are kept encrypted and never shown again; leave one empty to keep it.',
+    readAt: {
+      how: 'Do this on a computer — {{platform}} signs you in itself, so your password never reaches us.',
+      step1: '1. Drag the button below to your bookmarks bar, then sign in at {{site}} as you always do.',
+      step2: '2. Click the bookmark there — it copies your sign-in — and paste it below.',
+      bookmarklet: 'Connect {{platform}}',
+      open: 'open {{site}}',
+      console: 'No bookmarks bar? Paste this into the browser’s console (F12) on that page instead:',
+    },
     intro: 'Each band uses its own accounts. The app signs in as the band to publish there.',
     field: {
       login: 'Login', password: 'Password', totpSecret: 'Authenticator secret', bandSlug: 'The band’s address',

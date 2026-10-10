@@ -41,11 +41,9 @@ public class BandsintownPlatform {
                 .accountField(AccountField.text(BandsintownAccount.ARTIST_NAME, true, "Artist name",
                         "As Bandsintown spells it — every uploaded event carries it"))
                 .accountField(AccountField.secret(BandsintownAccount.CONNECTION, true, "Sign-in from your browser",
-                        "On a computer: sign in at artists.bandsintown.com the way you always do, run this in the "
-                                + "browser's console (F12) — it copies your sign-in to the clipboard — and paste "
-                                + "it here. It is Bandsintown's own sign-in, so Facebook and two-factor work as "
-                                + "usual, and we keep only what it copies, never your password: "
-                                + CONNECTION_SNIPPET))
+                                "Bandsintown's own sign-in, so Facebook and two-factor work as usual — we never "
+                                        + "see your password, only a session you can revoke by signing out there.")
+                        .readAt("https://artists.bandsintown.com/events", CONNECTION_SNIPPET))
                 .accountField(AccountField.flag(BandsintownAccount.NOTIFY_FOLLOWERS, "Notify followers",
                         "Off: new events are published without telling the followers"))
                 .build();

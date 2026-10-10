@@ -12,8 +12,9 @@ import java.util.regex.Pattern;
  * @param label    what the field is, in the platform's words (English; the page has its own words for
  *                 the common names)
  * @param help     a hint under the field, or null
+ * @param readAt   where the value is read instead of typed, or null — see {@link ReadAt}
  */
-public record AccountField(String name, Kind kind, boolean required, String label, String help) {
+public record AccountField(String name, Kind kind, boolean required, String label, String help, ReadAt readAt) {
 
     private static final Pattern NAME = Pattern.compile("[a-z][a-zA-Z0-9]*");
 
@@ -27,6 +28,27 @@ public record AccountField(String name, Kind kind, boolean required, String labe
         FLAG
     }
 
+    /**
+     * A value the band cannot simply type, because it only exists inside its own session on the
+     * platform's site: the page offers {@code script} as something the band runs there (a bookmarklet
+     * it keeps, or a line pasted into the browser's console) and the value comes back to be pasted in.
+     *
+     * <p>This is how a platform whose sign-in is the browser's own — a federated one, or one with
+     * two-factor — is connected without this server ever seeing a password: what the band hands over is
+     * a session it can revoke. The page knows nothing of the platform; it renders what it is given.
+     *
+     * @param site   where the band signs in and runs it, an https address
+     * @param script one line of JavaScript, which must leave the value on the clipboard or in sight
+     */
+    public record ReadAt(String site, String script) {
+        public ReadAt {
+            if (site == null || !site.startsWith("https://") || script == null || script.isBlank()) {
+                throw new IllegalArgumentException("a field read at a site needs its https address and a line "
+                        + "to run there");
+            }
+        }
+    }
+
     public AccountField {
         if (name == null || !NAME.matcher(name).matches()) {
             throw new IllegalArgumentException("an account field's name is letters and digits: " + name);
@@ -38,15 +60,20 @@ public record AccountField(String name, Kind kind, boolean required, String labe
     }
 
     public static AccountField text(String name, boolean required, String label, String help) {
-        return new AccountField(name, Kind.TEXT, required, label, help);
+        return new AccountField(name, Kind.TEXT, required, label, help, null);
     }
 
     public static AccountField secret(String name, boolean required, String label, String help) {
-        return new AccountField(name, Kind.SECRET, required, label, help);
+        return new AccountField(name, Kind.SECRET, required, label, help, null);
     }
 
     public static AccountField flag(String name, String label, String help) {
-        return new AccountField(name, Kind.FLAG, false, label, help);
+        return new AccountField(name, Kind.FLAG, false, label, help, null);
+    }
+
+    /** The same field, with the line that reads its value where the band is signed in ({@link ReadAt}). */
+    public AccountField readAt(String site, String script) {
+        return new AccountField(name, kind, required, label, help, new ReadAt(site, script));
     }
 
     public boolean secret() {

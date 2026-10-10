@@ -1,4 +1,4 @@
-import { Badge, Button, Group, PasswordInput, Stack, Switch, Text, TextInput } from '@mantine/core';
+import { Anchor, Badge, Button, Code, Group, PasswordInput, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConnectPlatform, useDisconnectPlatform, usePlatformAccounts, usePlatforms, useSyncAction, useSyncStatus, useTestPlatform } from '../api/hooks';
@@ -16,6 +16,43 @@ function useFieldText() {
     label: (f: AccountField) => t(`account.field.${f.name}`, { defaultValue: f.label }),
     help: (f: AccountField) => (f.help ? t(`account.help.${f.name}`, { defaultValue: f.help }) : undefined),
   };
+}
+
+/**
+ * How to fetch a value that can't be typed, because it only exists inside the band's own session on the
+ * platform: a bookmarklet to drag to the bookmarks bar, used after signing in there however they
+ * normally do — so a sign-in through Facebook or with two-factor needs nothing special from us, and no
+ * password ever reaches this page. The link's address is set on the element itself: React drops a
+ * `javascript:` href. Pasting the line into the browser's console does the same thing, for anyone whose
+ * browser has no bookmarks bar.
+ */
+function ReadAtSite({ readAt, platform }: { readAt: NonNullable<AccountField['readAt']>; platform: string }) {
+  const { t } = useTranslation();
+  const site = new URL(readAt.site).host;
+  return (
+    <Stack gap={4} p="xs" style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 8 }}>
+      <Text size="sm" fw={500}>{t('account.readAt.how', { platform })}</Text>
+      <Text size="xs" c="dimmed">{t('account.readAt.step1', { site })}</Text>
+      <Text size="xs" c="dimmed">{t('account.readAt.step2')}</Text>
+      <Group gap="xs" wrap="wrap">
+        <Anchor
+          ref={(a) => { if (a) a.setAttribute('href', `javascript:${encodeURI(readAt.script)}`); }}
+          draggable
+          onClick={(e) => e.preventDefault()}
+          size="sm"
+          fw={600}
+          style={{ border: '1px dashed var(--mantine-color-dimmed)', borderRadius: 6, padding: '2px 8px' }}
+        >
+          {t('account.readAt.bookmarklet', { platform })}
+        </Anchor>
+        <Anchor href={readAt.site} target="_blank" rel="noreferrer noopener" size="xs">
+          {t('account.readAt.open', { site })}
+        </Anchor>
+      </Group>
+      <Text size="xs" c="dimmed">{t('account.readAt.console')}</Text>
+      <Code block style={{ fontSize: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{readAt.script}</Code>
+    </Stack>
+  );
 }
 
 /** The account's form, built from the platform's fields: a secret kept is never shown — typing one replaces it. */
@@ -48,10 +85,13 @@ function AccountSheet({ platform, account, opened, onClose }: {
               checked={settings[f.name] === 'true'}
               onChange={(e) => { const on = e.currentTarget.checked; setSettings((s) => ({ ...s, [f.name]: String(on) })); }} />
           ) : f.kind === 'SECRET' ? (
-            <PasswordInput key={f.name} label={text.label(f)} description={text.help(f)} withAsterisk={f.required}
-              autoComplete="new-password" placeholder={kept.has(f.name) ? t('account.kept') : undefined}
-              value={secrets[f.name] ?? ''}
-              onChange={(e) => { const v = e.currentTarget.value; setSecrets((s) => ({ ...s, [f.name]: v })); }} />
+            <Stack key={f.name} gap={6}>
+              {f.readAt ? <ReadAtSite readAt={f.readAt} platform={platform.name} /> : null}
+              <PasswordInput label={text.label(f)} description={text.help(f)} withAsterisk={f.required}
+                autoComplete="new-password" placeholder={kept.has(f.name) ? t('account.kept') : undefined}
+                value={secrets[f.name] ?? ''}
+                onChange={(e) => { const v = e.currentTarget.value; setSecrets((s) => ({ ...s, [f.name]: v })); }} />
+            </Stack>
           ) : (
             <TextInput key={f.name} label={text.label(f)} description={text.help(f)} withAsterisk={f.required}
               autoComplete="off" value={settings[f.name] ?? ''}

@@ -199,6 +199,14 @@ export const sk = {
     disconnectText: 'Prihlasovacie meno a heslo sa tu zabudnú. Na {{platform}} sa nič nezmení; práca tejto kapely tam počká, kým sa znova nepripojí.',
     kept: 'Uložené — napíš nové, ak ho chceš zmeniť', ownersConnect: 'Platformy kapely pripájajú jej vlastníci.',
     secretsHelp: 'Heslá a tajné kľúče sú uložené zašifrované a už sa nezobrazia; prázdne pole ponechá uložené.',
+    readAt: {
+      how: 'Urob to na počítači — prihlasuje ťa {{platform}} samotný, tvoje heslo sa k nám nikdy nedostane.',
+      step1: '1. Potiahni tlačidlo nižšie na lištu záložiek a prihlás sa na {{site}} ako vždy.',
+      step2: '2. Tam klikni na záložku — skopíruje tvoje prihlásenie — a vlož ho sem dole.',
+      bookmarklet: 'Pripojiť {{platform}}',
+      open: 'otvoriť {{site}}',
+      console: 'Nemáš lištu záložiek? Vlož toto do konzoly prehliadača (F12) na tej stránke:',
+    },
     intro: 'Každá kapela používa vlastné účty. Aplikácia sa nimi prihlasuje za kapelu, keď tam zverejňuje.',
     field: {
       login: 'Prihlasovacie meno', password: 'Heslo', totpSecret: 'Tajný kľúč overovacej aplikácie', bandSlug: 'Adresa kapely',
