@@ -49,6 +49,8 @@ final class BitSignIn implements BitCredentials {
             .build();
     private String session;
     private Instant staleAt = Instant.EPOCH;
+    /** The manager the portal's own sign-in named, when the band's connection didn't carry one. */
+    private String managerFromPortal = "";
 
     BitSignIn(String baseUrl, BitConnection connection, Clock clock) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
@@ -75,7 +77,7 @@ final class BitSignIn implements BitCredentials {
 
     @Override
     public String managerId() {
-        return connection.managerId();
+        return connection.managerId().isBlank() ? managerFromPortal : connection.managerId();
     }
 
     @Override
@@ -124,6 +126,7 @@ final class BitSignIn implements BitCredentials {
                 .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(mapOf(accessToken)))),
                 "signing in to the portal");
         String token = answer.path("payload").path("token").asString("");
+        managerFromPortal = answer.path("payload").path("managerId").asString("");
         if (token.isBlank()) {
             if (answer.path("payload").path("requiresVerification").asBoolean(false)) {
                 throw BitPortalException.needsUser("Bandsintown wants this band's sign-in verified — sign in there "

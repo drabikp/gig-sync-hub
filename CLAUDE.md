@@ -665,12 +665,30 @@ bzscraper.bandsintown.pacing.min-ms / .max-ms   # human pauses between requests 
 
 **Connecting a band, and why it is the one thing a browser does.** The portal's identity provider
 (Cognito) allows only the browser's own sign-in exchange — asked for any other, it answers
-"USER_PASSWORD_AUTH flow not enabled" — and no Java client implements that exchange. So the band signs
-in **once in its own browser**, runs the one-line snippet Settings shows, and pastes what it prints: the
-refresh token the portal left behind, plus the two numbers its addresses are built from (the manager and
-the artist — an account like band #1's answers nothing when asked for its artists, so they are collected
-at the same time). That is all the server keeps (`BitConnection`): **no password and no authenticator
-secret**, and what it holds the band can revoke by signing out there.
+"USER_PASSWORD_AUTH flow not enabled" — and no Java client implements that exchange. Nor can we put a
+sign-in form of our own in its place: bands sign in to Bandsintown **with Facebook** as well as with a
+password, and a federated sign-in cannot be reimplemented. So the band signs in **once in its own
+browser, on Bandsintown's own form, however it normally does** (Facebook, two-factor, plain password —
+all the same to us), runs the one-line snippet Settings shows, and pastes **the refresh token, and
+nothing else** (`BitConnection`; an older paste carrying the ids is still read). Framing that form is
+impossible and always will be: `artists.bandsintown.com` sends `x-frame-options: SAMEORIGIN`, and a
+cross-origin frame is opaque anyway — only code running in THAT origin can read the token, which is
+what the snippet (or a bookmarklet) is for.
+
+The snippet reads the token at the key its own identity library documents —
+`CognitoIdentityServiceProvider.<clientId>.<user>.refreshToken`, reached through that library's
+`LastAuthUser` key rather than guessed at with a regex. The server keeps **no password and no
+authenticator secret**, and what it holds the band can revoke by signing out there.
+
+**The two numbers are the server's to find, never the band's.** `POST /api/login` answers the manager;
+`GET /api/managers/{m}/managed-actors?type=artists` (`BitSignIn.artists()`) answers the artists it looks
+after, each row's **`managed_actor_id`** being what the addresses want (its `id`/`artist_id` is the
+public artist id — a different number, and the one in the portal's own URLs, so a pasted URL would be
+the wrong thing to ask for). **The `type` is not optional**: asked bare, that list answers an empty
+array however many artists there are — which is what once had us believing such accounts could not be
+asked at all. One artist is taken as it stands; a manager of several is matched on the artist name the
+band gave, and told which there are when none matches (`HttpBitSignIn.theArtist`). Both numbers are then
+kept with the account, so later sessions cost no extra call.
 
 From the refresh token, `BitSignIn` works out a session whenever one is needed, with no browser: the
 refresh token is exchanged for an access token (about 5 h), which the portal's own sign-in

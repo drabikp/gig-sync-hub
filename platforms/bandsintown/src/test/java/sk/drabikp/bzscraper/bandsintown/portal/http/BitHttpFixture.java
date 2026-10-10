@@ -40,6 +40,7 @@ final class BitHttpFixture implements AutoCloseable {
 
     private static final Pattern EVENT = Pattern.compile("/api/managers/(\\d+)/managed-actors/(\\d+)/events/(\\d+)");
     private static final Pattern EVENTS = Pattern.compile("/api/managers/(\\d+)/managed-actors/(\\d+)/events");
+    private static final Pattern ACTORS = Pattern.compile("/api/managers/(\\d+)/managed-actors");
     private static final Pattern FIELD = Pattern.compile(
             "\"(\\w+)\"\\s*:\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|(null|true|false|-?[\\d.]+))");
 
@@ -63,6 +64,12 @@ final class BitHttpFixture implements AutoCloseable {
     volatile boolean updatesMakeDrafts;
     /** Whether an uploaded draft refuses to be published (it is then left there for the user). */
     volatile boolean publishFails;
+    /**
+     * The artists the manager looks after, by {@code managed_actor_id} — answered ONLY to a list asked
+     * for with {@code type=artists}, as the portal does: the bare path answers an empty list however many
+     * there are (checked against the real portal, 2026-10-10).
+     */
+    final Map<String, String> artists = new LinkedHashMap<>();
 
     BitHttpFixture() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -148,6 +155,8 @@ final class BitHttpFixture implements AutoCloseable {
                 upload(exchange, body);
             } else if (list.matches()) {
                 listEvents(exchange, query);
+            } else if (ACTORS.matcher(uri.getPath()).matches()) {
+                listArtists(exchange, query);
             } else {
                 send(exchange, 404, "{\"status\":\"error\",\"error\":\"not found\"}");
             }
@@ -212,6 +221,20 @@ final class BitHttpFixture implements AutoCloseable {
         }
         send(exchange, 200, ok(matching.subList(0, to).stream().map(BitHttpFixture::json)
                 .collect(Collectors.joining(",", "[", "]"))));
+    }
+
+    /**
+     * What this manager looks after. The portal answers this only when asked for a kind
+     * ({@code ?type=artists}); asked bare it answers an empty list however many there are, which is the
+     * trap that once had us believing the account had none.
+     */
+    private void listArtists(HttpExchange exchange, Map<String, String> query) throws IOException {
+        List<String> rows = new ArrayList<>();
+        if ("artists".equals(query.get("type"))) {
+            artists.forEach((actorId, name) -> rows.add("{\"artist_id\":3741440,\"id\":3741440,"
+                    + "\"managed_actor_id\":" + actorId + ",\"name\":" + quote(name) + ",\"type\":\"ARTIST\"}"));
+        }
+        send(exchange, 200, ok("[" + String.join(",", rows) + "]"));
     }
 
     /** When an event starts, as the portal's paging spells a day it has reached. */
