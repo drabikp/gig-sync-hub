@@ -11,7 +11,10 @@ import sk.drabikp.bzscraper.bandsintown.portal.BitPlaces;
 import sk.drabikp.bzscraper.bandsintown.portal.BitSession;
 import sk.drabikp.bzscraper.bandsintown.portal.HumanPacer;
 import sk.drabikp.bzscraper.bandsintown.portal.PortalReply;
+import sk.drabikp.bzscraper.gig.domain.Address;
+import sk.drabikp.bzscraper.gig.domain.Coordinates;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.gig.domain.TextFold;
 import sk.drabikp.bzscraper.importing.domain.ImportedGig;
 import sk.drabikp.bzscraper.sync.application.port.out.FailureKind;
@@ -200,23 +203,19 @@ final class HttpBitSession implements BitSession {
 
     /**
      * Changes the one event, past events included — the upload refuses those, this doesn't: when the band
-     * plays, the name and the description. NOT where it is: asked to move an event's venue, Bandsintown
-     * leaves the request hanging until its own gateway gives up (HTTP 504, checked against the real portal
-     * on 2026-10-10), so a gig whose place has changed is the band's to correct there — said plainly
-     * rather than retried. A note when Bandsintown had placed it far from the gig's town.
+     * plays, the name, the description and where it is. The portal's own edit form replaces an event
+     * whole rather than sending the fields that changed, so this does the same: it reads the event, lays
+     * the gig over what came back and puts all of it back. A note when Bandsintown placed it far from the
+     * gig's town.
      */
     @Override
     public Optional<String> editEventInForm(String eventId, Gig gig) throws BitPortalException {
-        BitEvent stored = event(eventId).orElseThrow(() -> BitPortalException.temporary(
-                "Bandsintown doesn't give event " + eventId + " — nothing was changed."));
-        refuseAPlaceChange(eventId, gig, stored);
+        Map<String, Object> held = storedEvent(eventId);
+        BitEvent stored = BitEvent.of(held);
         ZonedDateTime start = gig.schedule().showStart();
         ZonedDateTime end = gig.schedule().showEnd();
-        // the event's own fields, and the state it stays in — the portal insists on being told that even
-        // when it isn't changing
-        Map<String, Object> change = new LinkedHashMap<>();
-        change.put("version", stored.version());
-        change.put("status", stored.status());
+        // the event as the portal holds it — version, state and all — with the gig laid over it
+        Map<String, Object> change = new LinkedHashMap<>(held);
         change.put("start_date", start.format(DATE));
         change.put("start_time", start.format(TIME));
         change.put("end_date", end == null ? null : end.format(DATE));
@@ -225,7 +224,10 @@ final class HttpBitSession implements BitSession {
         if (gig.description() != null) {
             change.put("description", gig.description());
         }
-        PortalReply reply = api.patch(api.actorPath("events/" + eventId), change);
+        place(gig, stored, change);
+        // no ?past= here, whatever the portal's own pages put on their list and bulk calls: asked for it
+        // on one event it answers 400 "Unknown query parameter 'past'" (checked live 2026-10-10)
+        PortalReply reply = api.put(api.actorPath("events/" + eventId), change);
         if (!reply.ok()) {
             throw BitPortalException.refused("Bandsintown didn't save event " + eventId + " — "
                     + (reply.rowErrors().isEmpty() ? reply.describe() : String.join(", ", reply.rowErrors())));
@@ -234,16 +236,42 @@ final class HttpBitSession implements BitSession {
     }
 
     /**
-     * Stops before changing anything when the gig's place is no longer the event's: the venue by name
-     * (either containing the other, as the same place is written both ways) or the town.
+     * The gig's place, written the way the portal writes one of its user's OWN places: the name, the
+     * town, the country, the region, the street, the postal code, the town's coordinates and its zone,
+     * with no venue id — an id belongs to one of Bandsintown's own venue pages, and the portal clears it
+     * whenever the place is the user's.
+     *
+     * <p>The coordinates are what makes it a place at all: the portal's own form keeps a venue only when
+     * it has a name, a town, a country AND whereabouts, and blanks the lot otherwise. So a town merely
+     * typed into the gig's form leaves the event's place as it stands — and when the gig has meanwhile
+     * moved somewhere else, that is the band's to sort out rather than something to do quietly.
      */
-    private void refuseAPlaceChange(String eventId, Gig gig, BitEvent stored) throws BitPortalException {
-        if (!sameName(gig.location().venue(), stored.venueName())
-                || !sameName(gig.location().city(), stored.venueCity())) {
-            throw BitPortalException.needsUser("Bandsintown won't move event " + eventId + " to "
-                    + where(gig) + " from here (it only ever times out) — change its place on "
-                    + "Bandsintown itself, then the rest follows.");
+    private static void place(Gig gig, BitEvent stored, Map<String, Object> change) throws BitPortalException {
+        Location location = gig.location();
+        Address address = location.address();
+        Optional<Coordinates> at = address == null ? Optional.empty() : address.coordinates();
+        if (at.isEmpty()) {
+            if (!sameName(location.venue(), stored.venueName()) || !sameName(location.city(), stored.venueCity())) {
+                throw BitPortalException.needsUser("Bandsintown needs to know where " + where(gig)
+                        + " is before it can move event " + stored.id() + " there — pick the town from the "
+                        + "list in the gig's form, or change the place on Bandsintown itself.");
+            }
+            return;
         }
+        change.put("venue_id", null);              // the band's own place, not one of Bandsintown's venues
+        change.put("venue_name", location.displayVenue());
+        change.put("venue_city", location.city());
+        change.put("venue_country", location.countryName());
+        change.put("venue_region", address.region());
+        change.put("venue_address", address.street());
+        change.put("venue_postal_code", address.postalCode());
+        change.put("venue_latitude", at.get().latitude());
+        change.put("venue_longitude", at.get().longitude());
+        change.put("venue_timezone", location.timezone());
+        change.put("venue_type", null);
+        change.put("google_place_id", null);
+        change.put("place_id", null);
+        change.put("place_input", null);
     }
 
     /** The gig's place as a person would say it. */
@@ -332,6 +360,17 @@ final class HttpBitSession implements BitSession {
     private Optional<BitEvent> event(String eventId) throws BitPortalException {
         PortalReply reply = api.get(api.actorPath("events/" + eventId));
         return reply.ok() ? reply.event() : Optional.empty();
+    }
+
+    /**
+     * The event's every field as the portal wrote it — what a change starts from, since the portal's own
+     * form puts the whole event back rather than the fields that changed.
+     */
+    private Map<String, Object> storedEvent(String eventId) throws BitPortalException {
+        PortalReply reply = api.get(api.actorPath("events/" + eventId));
+        return (reply.ok() ? reply.payload() : Optional.<Map<String, Object>>empty())
+                .orElseThrow(() -> BitPortalException.temporary(
+                        "Bandsintown doesn't give event " + eventId + " — nothing was changed."));
     }
 
     private static PortalReply answered(PortalReply reply, String what) throws BitPortalException {

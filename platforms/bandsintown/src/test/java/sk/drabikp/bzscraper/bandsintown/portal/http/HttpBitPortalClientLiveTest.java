@@ -70,6 +70,11 @@ class HttpBitPortalClientLiveTest {
                         new Address(null, "811 01", null, "Bratislavský kraj", 48.1486, 17.1077)), List.of(),
                 Admission.free(), "Automated test event - edited in the form.", null, null, null, false);
 
+        Gig typedElsewhere = new Gig("BZSCRAPER TEST - please ignore (typed town)",
+                GigSchedule.startingAt(ZonedDateTime.of(2027, 10, 8, 19, 15, 0, 0, BRATISLAVA)),
+                new Location("Somewhere Else", "Košice", Country.SLOVAKIA), List.of(),
+                Admission.free(), "Automated test event - a town nobody looked up.", null, null, null, false);
+
         Gig samePlace = new Gig("BZSCRAPER TEST - please ignore (same place)",
                 GigSchedule.startingAt(ZonedDateTime.of(2027, 10, 8, 19, 15, 0, 0, BRATISLAVA)),
                 gig.location(), List.of(), Admission.free(), "Automated test event - time changed.",
@@ -113,10 +118,22 @@ class HttpBitPortalClientLiveTest {
                 String formId = id;
                 steps.put("4 change one event, its place unchanged", tried(() ->
                         "ok" + session.editEventInForm(formId, samePlace).map(note -> ", note: " + note).orElse("")));
-                steps.put("5 moving its place is refused, not retried", tried(() -> {
+                steps.put("5 move its place (the PUT the portal's own form sends)", tried(() -> {
+                    String note = session.editEventInForm(formId, byForm).orElse("");
+                    BitEvent saved = api.get(api.actorPath("events/" + eventId)).event().orElseThrow();
+                    if (!"Majestic Music Club".equals(saved.venueName())) {
+                        return "FAILED: it saved the venue as " + saved.venueName();
+                    }
+                    if (saved.latitude() == null || Math.abs(saved.latitude() - 48.1486) > 0.5) {
+                        return "FAILED: it saved the whereabouts as " + saved.latitude() + "," + saved.longitude();
+                    }
+                    return "ok, " + saved.venueName() + " at " + saved.latitude() + "," + saved.longitude()
+                            + (note.isEmpty() ? "" : " (note: " + note + ")");
+                }));
+                steps.put("5b a town only typed in still needs the user", tried(() -> {
                     try {
-                        session.editEventInForm(formId, byForm);
-                        return "FAILED: it claimed to move the place";
+                        session.editEventInForm(formId, typedElsewhere);
+                        return "FAILED: it moved the place without knowing where it is";
                     } catch (BitPortalException e) {
                         return e.kind() == FailureKind.NEEDS_USER ? "ok, needs the user" : "FAILED: " + e.kind();
                     }

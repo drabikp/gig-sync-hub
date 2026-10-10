@@ -39,11 +39,14 @@ public interface BitSession extends AutoCloseable {
     List<Edited> updateEvents(List<EventEdit> edits) throws BitPortalException;
 
     /**
-     * Edits the event in the portal's single-page form — which also takes PAST events, unlike
-     * the upload: the place is picked from Bandsintown's venue search in the gig's town.
+     * Changes the one event the way the portal's own edit form does — which also takes PAST events,
+     * unlike the upload: the event is read, the gig laid over it and the whole of it put back, place
+     * included (the gig's town, as the place search found it, rather than one of Bandsintown's venues).
      *
      * @return a note when Bandsintown placed it far from the town
-     * @throws BitPortalException permanent when Bandsintown refused it or has no such place
+     * @throws BitPortalException permanent when Bandsintown refused it; needing the user when the gig's
+     *                            town was only typed in, so its whereabouts — which the portal insists
+     *                            on before it keeps a place — are not known
      */
     Optional<String> editEventInForm(String eventId, Gig gig) throws BitPortalException;
 

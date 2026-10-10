@@ -29,8 +29,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The HTTP session against a stand-in that answers as the artist portal's API does
- * ({@link BitHttpFixture}): publishing and its read-back, the paged lists, an update by event id, the
- * venue pick and a removal — and that a session the portal no longer accepts is the user's to renew.
+ * ({@link BitHttpFixture}): publishing and its read-back, the paged lists, an update by event id, one
+ * event put back whole with a place of the band's own, and a removal.
  */
 class HttpBitSessionTest {
 
@@ -146,38 +146,95 @@ class HttpBitSessionTest {
     }
 
     @Test
-    void one_events_own_fields_change_and_its_place_is_left_alone() throws Exception {
+    void one_event_is_put_back_whole_with_its_place_written_as_the_portal_writes_one() throws Exception {
         String id = portal.event("PUBLISHED", "2026-11-12",
-                Map.of("venue_name", "Lucerna Music Bar", "venue_city", "Praha"));
+                Map.of("venue_name", "Lucerna Music Bar", "venue_city", "Praha", "venue_id", 4242L));
 
-        session.editEventInForm(id, inPraha("Garden show", "Lucerna Music Bar"));
+        session.editEventInForm(id, inPraha("Garden show", "Secret Garden", at(2026, 11, 12)));
 
+        assertThat(portal.writes).singleElement().asString()
+                .as("the edit is a PUT, not the PATCH the portal keeps for an event's state")
+                .startsWith("PUT ").endsWith("/events/" + id);
         assertThat(portal.changes).last().satisfies(change -> {
             assertThat(change.getKey()).isEqualTo(id);
-            assertThat(change.getValue()).contains("\"title\":\"Garden show\"").contains("\"status\":\"PUBLISHED\"")
-                    .as("the place is never sent: Bandsintown only ever times out on it")
-                    .doesNotContain("venue");
+            assertThat(change.getValue()).contains("\"title\":\"Garden show\"")
+                    .as("the state it stays in, put back with everything else")
+                    .contains("\"status\":\"PUBLISHED\"")
+                    .as("the whole place, down to the town's whereabouts and its zone")
+                    .contains("\"venue_name\":\"Secret Garden\"", "\"venue_city\":\"Praha\"",
+                            "\"venue_country\":\"Czechia\"", "\"venue_region\":\"Praha\"",
+                            "\"venue_postal_code\":\"110 00\"", "\"venue_latitude\":50.0755",
+                            "\"venue_longitude\":14.4378", "\"venue_timezone\":\"Europe/Prague\"")
+                    .as("the band's own place, never one of Bandsintown's venue pages")
+                    .contains("\"venue_id\":null");
         });
-        assertThat(portal.events.get(id).get("title")).isEqualTo("Garden show");
+        assertThat(portal.events.get(id)).containsEntry("title", "Garden show")
+                .containsEntry("venue_name", "Secret Garden").containsEntry("venue_id", null);
     }
 
     @Test
-    void moving_one_events_place_needs_the_user_and_changes_nothing() throws Exception {
+    void a_past_event_is_changed_the_same_way_the_upload_having_refused_it() throws Exception {
+        String id = portal.event("PUBLISHED", "2026-09-12", Map.of());
+
+        session.editEventInForm(id, inPraha("Was in September", "Secret Garden", at(2026, 9, 12)));
+
+        assertThat(portal.writes).singleElement().asString()
+                .as("nothing says which list it is in — asked that, the portal answers 400")
+                .doesNotContain("past");
+        assertThat(portal.events.get(id)).containsEntry("title", "Was in September");
+    }
+
+    @Test
+    void a_town_only_typed_in_cannot_move_a_place_and_says_which_town_to_pick() throws Exception {
         String id = portal.event("PUBLISHED", "2026-11-12",
                 Map.of("venue_name", "Lucerna Music Bar", "venue_city", "Praha"));
 
-        assertThatThrownBy(() -> session.editEventInForm(id, inPraha("Garden show", "Secret Garden")))
-                .isInstanceOfSatisfying(BitPortalException.class,
-                        e -> assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER));
-        assertThat(portal.changes).as("nothing was sent").isEmpty();
+        assertThatThrownBy(() -> session.editEventInForm(id, typedIn("Garden show", "Secret Garden")))
+                .isInstanceOfSatisfying(BitPortalException.class, e -> {
+                    assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER);
+                    assertThat(e.getMessage()).contains("pick the town from the list");
+                });
+        assertThat(portal.writes).as("nothing was written").isEmpty();
+    }
+
+    @Test
+    void a_town_only_typed_in_still_changes_everything_but_the_place() throws Exception {
+        String id = portal.event("PUBLISHED", "2026-11-12",
+                Map.of("venue_name", "Lucerna Music Bar", "venue_city", "Praha"));
+
+        session.editEventInForm(id, typedIn("Garden show", "Lucerna Music Bar"));
+
+        assertThat(portal.events.get(id)).containsEntry("title", "Garden show")
+                .as("the place it had is put back as it was")
+                .containsEntry("venue_name", "Lucerna Music Bar").containsEntry("venue_city", "Praha");
+    }
+
+    @Test
+    void removing_an_event_sets_its_state_with_the_reason_and_an_event_already_gone_is_let_be() throws Exception {
+        String id = portal.event("PUBLISHED", "2026-11-12", Map.of());
+
+        session.deleteEvent(id, RemovalReason.CANCELED);
+        session.deleteEvent(id, RemovalReason.CANCELED);
+
+        assertThat(portal.events.get(id).get("status")).isEqualTo("DELETED");
+        assertThat(portal.writes).as("the second removal saw it was gone and wrote nothing").hasSize(1);
+        assertThat(portal.changes).singleElement().satisfies(change ->
+                assertThat(change.getValue()).contains("\"status\":\"DELETED\"").contains("CANCELED"));
     }
 
     /** A gig in Praha whose town was picked from the place search, so its whereabouts are known. */
-    private static Gig inPraha(String title, String venue) {
-        return Gig.create(title, GigSchedule.startingAt(at(2026, 11, 12)),
+    private static Gig inPraha(String title, String venue, ZonedDateTime when) {
+        return Gig.create(title, GigSchedule.startingAt(when),
                 new Location(venue, "Praha", Country.CZECHIA,
                         new Address(null, "110 00", "okres Praha", "Praha", 50.0755, 14.4378)),
                 List.of(), Admission.free(), null, null, null, null);
+    }
+
+    /** A gig whose town was typed, not picked: nobody knows where it is. */
+    private static Gig typedIn(String title, String venue) {
+        return Gig.create(title, GigSchedule.startingAt(at(2026, 11, 12)),
+                new Location(venue, "Praha", Country.CZECHIA), List.of(), Admission.free(),
+                null, null, null, null);
     }
 
     private static ZonedDateTime at(int year, int month, int day) {

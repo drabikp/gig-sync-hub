@@ -78,6 +78,20 @@ public record PortalReply(String method, String url, int status, Map<String, Obj
         return Optional.ofNullable(payloadMap()).map(BitEvent::of);
     }
 
+    /**
+     * The payload exactly as the portal wrote it, when it is one object — every field of an event,
+     * including the ones {@link BitEvent} has no use for. The portal's own edit form sends the whole
+     * event back when it changes one of its fields, so a change starts from this.
+     */
+    public Optional<Map<String, Object>> payload() {
+        return Optional.ofNullable(payloadMap());
+    }
+
+    /** A payload that is a list of objects, as the portal wrote them (its lists of this and that). */
+    public List<Map<String, Object>> payloadRows() {
+        return payloadList();
+    }
+
     public boolean hasNextPage() {
         return next != null;
     }

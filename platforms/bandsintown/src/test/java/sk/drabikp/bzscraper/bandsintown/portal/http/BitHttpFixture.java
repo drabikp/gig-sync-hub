@@ -25,9 +25,11 @@ import java.util.stream.Collectors;
  * A stand-in for the artist portal's own API, as the probe of 2026-10-10 saw it: the reply envelope
  * {@code {"status":"OK","payload":…}}, the event lists with the past ones paged by an
  * {@code x-next-page} header, the Bulk Upload answering which spreadsheet row became which event (or
- * refusing a row the way the portal does), an event changed by setting its fields, and the venue
- * search. It keeps what it is sent, so the client's read-backs see what was stored, and it insists on
- * the session token and the fingerprint, so a client that forgets them fails here as it would there.
+ * refusing a row the way the portal does), and an event's two kinds of write — a PATCH that sets its
+ * state (publish, remove) and a PUT that replaces it whole, which is how the portal's own form changes
+ * any of its fields. It keeps what it is sent, so the client's read-backs see what was stored, and it
+ * insists on the session token and the fingerprint, so a client that forgets them fails here as it
+ * would there.
  */
 final class BitHttpFixture implements AutoCloseable {
 
@@ -38,6 +40,8 @@ final class BitHttpFixture implements AutoCloseable {
 
     private static final Pattern EVENT = Pattern.compile("/api/managers/(\\d+)/managed-actors/(\\d+)/events/(\\d+)");
     private static final Pattern EVENTS = Pattern.compile("/api/managers/(\\d+)/managed-actors/(\\d+)/events");
+    private static final Pattern FIELD = Pattern.compile(
+            "\"(\\w+)\"\\s*:\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|(null|true|false|-?[\\d.]+))");
 
     private final HttpServer server;
     private final AtomicInteger ids = new AtomicInteger(109010000);
@@ -48,7 +52,8 @@ final class BitHttpFixture implements AutoCloseable {
     final List<String> uploads = new CopyOnWriteArrayList<>();
     /** Every change sent to one event: its id, then the fields. */
     final List<Map.Entry<String, String>> changes = new CopyOnWriteArrayList<>();
-    /** What the venue search answers. */
+    /** Every write, as the portal saw it asked: {@code "PUT /api/…/events/1?past=false"}. */
+    final List<String> writes = new CopyOnWriteArrayList<>();
     /** How many past events one page holds (the portal's own list gives twenty). */
     volatile int pastPageSize = 20;
     /** A spreadsheet row (2 = the first) the next upload refuses, and what it says. */
@@ -131,6 +136,10 @@ final class BitHttpFixture implements AutoCloseable {
             URI uri = exchange.getRequestURI();
             Map<String, String> query = query(uri.getRawQuery());
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                writes.add(exchange.getRequestMethod() + " " + uri.getPath()
+                        + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery()));
+            }
             Matcher one = EVENT.matcher(uri.getPath());
             Matcher list = EVENTS.matcher(uri.getPath());
             if (one.matches()) {
@@ -147,11 +156,23 @@ final class BitHttpFixture implements AutoCloseable {
         }
     }
 
-    /** One event: read it, or change it by the fields sent (which is also how it is removed). */
+    /**
+     * One event: read it, set its state by a PATCH (which is also how it is removed), or replace it
+     * whole by a PUT — as the portal's own pages do, a PATCH for the state and a PUT for the fields.
+     */
     private void oneEvent(HttpExchange exchange, String id, String body) throws IOException {
         Map<String, Object> event = events.get(id);
         if (event == null) {
             send(exchange, 404, "{\"status\":\"error\",\"error\":\"not found\"}");
+            return;
+        }
+        if ("PUT".equals(exchange.getRequestMethod())) {
+            changes.add(Map.entry(id, body));
+            Map<String, Object> replaced = new LinkedHashMap<>(allFields(body));
+            replaced.put("id", event.get("id"));
+            replaced.put("version", "001" + System.nanoTime());
+            events.put(id, replaced);
+            send(exchange, 200, ok(json(replaced)));
             return;
         }
         if ("PATCH".equals(exchange.getRequestMethod())) {
@@ -262,16 +283,38 @@ final class BitHttpFixture implements AutoCloseable {
         return at < 0 || at >= values.length ? "" : values[at];
     }
 
-    /** The fields of a small flat JSON body, as text. */
+    /** The fields of a small flat JSON body, as text; what was sent as null is left out. */
     private static Map<String, String> fields(String json) {
         Map<String, String> fields = new LinkedHashMap<>();
-        Matcher m = Pattern.compile("\"(\\w+)\"\\s*:\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|(null|true|false|-?[\\d.]+))")
-                .matcher(json);
+        Matcher m = FIELD.matcher(json);
         while (m.find()) {
             String value = m.group(2) != null ? m.group(2).replace("\\n", "\n").replace("\\\"", "\"") : m.group(3);
             if (!"null".equals(value)) {
                 fields.put(m.group(1), value);
             }
+        }
+        return fields;
+    }
+
+    /**
+     * Every field of a small flat JSON body, nulls kept (a PUT clears a field by sending one) and
+     * numbers kept as numbers, so a read-back answers them as the portal does.
+     */
+    private static Map<String, Object> allFields(String json) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        Matcher m = FIELD.matcher(json);
+        while (m.find()) {
+            Object value;
+            if (m.group(2) != null) {
+                value = m.group(2).replace("\\n", "\n").replace("\\\"", "\"");
+            } else if ("null".equals(m.group(3))) {
+                value = null;
+            } else if ("true".equals(m.group(3)) || "false".equals(m.group(3))) {
+                value = m.group(3);
+            } else {
+                value = Double.valueOf(m.group(3));
+            }
+            fields.put(m.group(1), value);
         }
         return fields;
     }

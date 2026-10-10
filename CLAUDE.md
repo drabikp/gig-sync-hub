@@ -693,10 +693,19 @@ is the one place the portal's JSON is read.
 - **Update** — the same upload with `Event Id` (+ `Status`) per row edits the events in place
   (`BitSession.EventEdit` per row; results matched by row position).
 - **One event at a time** (`BandsintownFormEdit`) — what the upload refuses (past events, and rows it
-  said no to): the event is changed on its own, its place picked from the portal's venue search
-  (`/api/venues/autocomplete?term=…` — Bandsintown's OWN venues, each with coordinates, so the one in
-  the gig's town is chosen by where it is, not by matching text). The place it saved is checked
-  (`BitPlaces.check`, > 25 km from the town → a note).
+  said no to): the event is changed as the portal's own edit form changes one — **read it, lay the gig
+  over it, `PUT` the whole of it back** at `…/events/{id}` (no `?past=` — the portal's own pages put that
+  on their LIST and bulk calls, but one event answers 400 `Unknown query parameter 'past'`). A `PATCH` of an
+  event is the portal's way of setting its STATE only (publish, move to draft, remove) — asked to edit
+  fields it stalls until the gateway gives up (504), which is what a bare `venue_id` on a PATCH did to
+  us before 2026-10-10. A place travels as the portal writes one of its user's own: `venue_name`,
+  `venue_city`, `venue_country`, `venue_region`, `venue_address`, `venue_postal_code`,
+  `venue_latitude`, `venue_longitude`, `venue_timezone`, with `venue_id` **null** (an id belongs to one
+  of Bandsintown's own venue pages). The coordinates are what makes it a place — the portal keeps a
+  venue only with a name, town, country AND whereabouts — so a town merely TYPED into the gig's form
+  leaves the event's place as it stands, and a gig that has moved somewhere else then needs the user
+  ("pick the town from the list"). The place it saved is checked (`BitPlaces.check`, > 25 km from the
+  town → a note).
 - **When** — rows carry the band's `Slot` when the gig has one (`GigSchedule.showStart/showEnd`),
   else the event's start/end: Bandsintown is about when the artist plays.
 - **Past events** — a published past gig is listed under Past, not Upcoming: the create read-back
@@ -806,8 +815,9 @@ changed with its name), the delete tab, the band's gig list and a deleted concer
 what it is sent, so the client's read-backs see what was stored. `HttpBandzonePortalClientTest` runs
 the whole cycle against it, plus a refused login, a town Bandzone knows several of, and a concert
 already gone. `BitHttpFixture` does the same for the artist portal's API (its reply envelope, the
-past list's date cursor, the upload's row → event id mapping, row errors, the venue search, an
-event's stored state) and `HttpBitSessionTest` runs the six operations against it.
+past list's date cursor, the upload's row → event id mapping, row errors, and an event's two writes —
+a PATCH that sets its state, a PUT that replaces it whole) and `HttpBitSessionTest` runs the six
+operations against it.
 `PlatformClientTest` covers the client switch and an unknown value stopping the start.
 Change a client → run these first; the live tests below then confirm against the real sites.
 

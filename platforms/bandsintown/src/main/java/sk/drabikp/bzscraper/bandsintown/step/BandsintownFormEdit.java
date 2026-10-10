@@ -11,10 +11,10 @@ import sk.drabikp.bzscraper.sync.domain.StepOutcome;
 import sk.drabikp.bzscraper.sync.domain.StepType;
 
 /**
- * Bandsintown's form edit: the event's single-page edit form, one event at a time — what
- * the bulk upload can't do: past events (the upload refuses them) and rows it refused.
- * Sets the place (from Bandsintown's venue search, in the gig's town), dates, times, name
- * and description. A cancelled gig needs nothing: cancelling removed it.
+ * Bandsintown's form edit: one event at a time, changed the way the portal's own edit form changes
+ * one — what the bulk upload can't do: past events (the upload refuses them) and rows it refused.
+ * Sets the place (the gig's town as the place search found it), dates, times, name and description.
+ * A cancelled gig needs nothing: cancelling removed it.
  */
 @Component
 class BandsintownFormEdit implements OneAtATimeStep {

@@ -27,10 +27,24 @@ interface BitApi {
         return "/api/managers/" + managerId() + "/managed-actors/" + actorId() + "/" + suffix;
     }
 
+    /** What hangs off the manager alone — all there is before the artist is known. */
+    default String managerPath(String suffix) {
+        return "/api/managers/" + managerId() + "/" + suffix;
+    }
+
     PortalReply get(String path) throws BitPortalException;
 
-    /** Changes something; {@code body} is written as the request's JSON. */
+    /**
+     * Sets an event's state — which is all the portal's own pages use a PATCH for (publish, move to
+     * draft, delete); {@code body} is written as the request's JSON.
+     */
     PortalReply patch(String path, Map<String, ?> body) throws BitPortalException;
+
+    /**
+     * Replaces something whole, which is how the portal's own edit form changes an event's fields: it
+     * reads the event, lays the form's values over it and puts all of it back.
+     */
+    PortalReply put(String path, Map<String, ?> body) throws BitPortalException;
 
     /** A spreadsheet as the Bulk Upload sends it. */
     PortalReply multipartPatch(String path, String csv) throws BitPortalException;

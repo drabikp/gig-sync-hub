@@ -26,8 +26,13 @@ final class BitWeb implements BitApi {
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
-    /** A change is given as long as an upload: the portal works out a venue's whereabouts as it saves. */
-    private static final Duration WRITE_TIMEOUT = Duration.ofSeconds(120);
+    /**
+     * An upload is given longer than anything else: the portal reads the whole spreadsheet, works out
+     * where each row is and makes the events before it answers. A single change is not — it is told
+     * everything it needs, so one that hangs is something wrong, and better said so in half a minute
+     * than after two (a lane waits for it).
+     */
+    private static final Duration UPLOAD_TIMEOUT = Duration.ofSeconds(120);
     /** What the portal calls the spreadsheet in its upload — it says so itself if this is wrong. */
     private static final String UPLOAD_FIELD = "upfile";
 
@@ -67,10 +72,19 @@ final class BitWeb implements BitApi {
 
     @Override
     public PortalReply patch(String path, Map<String, ?> body) throws BitPortalException {
-        return send("PATCH", path, authorized(path)
+        return json("PATCH", path, body);
+    }
+
+    @Override
+    public PortalReply put(String path, Map<String, ?> body) throws BitPortalException {
+        return json("PUT", path, body);
+    }
+
+    private PortalReply json(String method, String path, Map<String, ?> body) throws BitPortalException {
+        return send(method, path, authorized(path)
                 .header("Content-Type", "application/json")
-                .method("PATCH", HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))),
-                WRITE_TIMEOUT);
+                .method(method, HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))),
+                REQUEST_TIMEOUT);
     }
 
     /** The spreadsheet under {@code upfile}, as the Bulk Upload's own form sends it. */
@@ -84,7 +98,7 @@ final class BitWeb implements BitApi {
         body.writeBytes(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
         return send("PATCH", path, authorized(path)
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                .method("PATCH", HttpRequest.BodyPublishers.ofByteArray(body.toByteArray())), WRITE_TIMEOUT);
+                .method("PATCH", HttpRequest.BodyPublishers.ofByteArray(body.toByteArray())), UPLOAD_TIMEOUT);
     }
 
     private HttpRequest.Builder authorized(String path) throws BitPortalException {
