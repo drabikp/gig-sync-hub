@@ -20,6 +20,7 @@ import sk.drabikp.bzscraper.accounts.application.port.out.InvitationStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.MembershipStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.PlatformAccountCheck;
 import sk.drabikp.bzscraper.accounts.application.port.out.PlatformAccountStore;
+import sk.drabikp.bzscraper.accounts.application.port.out.PlatformSignIn;
 import sk.drabikp.bzscraper.accounts.application.port.out.UserStore;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
@@ -75,8 +76,10 @@ class AccountsConfiguration {
     @Bean
     PlatformAccountService platformAccountService(PlatformAccountStore store, Platforms platforms,
                                                   AccountsService access, SecretBox box,
-                                                  ObjectProvider<PlatformAccountCheck> checks, Clock clock) {
+                                                  ObjectProvider<PlatformAccountCheck> checks,
+                                                  ObjectProvider<PlatformSignIn> signIns, Clock clock) {
         return new PlatformAccountService(store, platforms, access, box, () -> checks.orderedStream().toList(),
+                () -> signIns.orderedStream().toList(),
                 clock);
     }
 

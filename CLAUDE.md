@@ -42,9 +42,9 @@ Rauthy's admin (`https://$BZ_DOMAIN/auth/v1/admin` — admins need MFA: register
 add yourself and the members to the group `bzscraper`. A later change of `BZ_DOMAIN` = change the
 client's redirect / post-logout addresses there (the bootstrap is never read again).
 
-**Docker** (`Dockerfile`, `compose.yaml`): the image builds the app from the sources (Java 21 +
-Chromium + chromedriver from Debian, a non-root user whose uid/gid match the host's, `BZ_UID`/`BZ_GID`,
-default 1000); compose runs `db` (PostgreSQL 18, volume `db-data`, on `127.0.0.1:5432` for development),
+**Docker** (`Dockerfile`, `compose.yaml`): the image builds the app from the sources (a Temurin 21 JRE
+and the jar — nothing else: no browser runs on this server, so none is installed; a non-root user whose
+uid/gid match the host's, `BZ_UID`/`BZ_GID`, default 1000); compose runs `db` (PostgreSQL 18, volume `db-data`, on `127.0.0.1:5432` for development),
 `app`, `rauthy-db` + `rauthy` (the sign-in), `proxy` (Caddy) and `backup` (`docker/backup.sh`:
 `pg_dump` of the app's and Rauthy's databases on start and daily into `./data/backups`, the newest 14
 of each kept). **Secrets are files** under `./secrets` (git-ignored, `600`; `docker/make-secrets.sh` makes
@@ -59,7 +59,8 @@ secrets file the same way, `SECRETS_FILE`). Whether this server drives the platf
 old band slug and artist name, and this machine's settings (`BZ_DOMAIN`,
 `BZ_APP_BIND`, `BZ_SUBNET`, `BZ_UID`/`BZ_GID`) are in the git-ignored `.env` (`.env.example`) —
 compose reads it for its own `${…}` and passes it to the app. `./data` is mounted at `/app/data` (the
-band's calendar profile, backups), the platforms' saved logins live in the volume `browser-profiles`.
+band's calendar profile, backups); a platform's sign-in is kept in the database with the band's account,
+not on disk.
 `.dockerignore` is an allowlist: only the sources reach the build. The containers' network has a
 fixed subnet (`BZ_SUBNET`, default `10.201.0.0/24`): Docker's own 172.x pick collided with a VPN's
 routes, and the published port then reset every connection. The app has its own name server
@@ -75,7 +76,7 @@ once, or trust Caddy's root). The app's own port is published on `127.0.0.1` onl
 `BZ_APP_BIND=0.0.0.0` opens it to the local network). The operator's endpoints (actuator: health, metrics)
 answer on the management port 8081, bound to 127.0.0.1 inside the container — never through the proxy or
 the published port: `docker compose exec app curl -s localhost:8081/actuator/metrics/bzscraper.sync.tasks`
-(`bzscraper.sync.tasks` / `.held` per band, `bzscraper.browser.open` / `.max` / `.sessions` — `BandMetrics`);
+(`bzscraper.sync.tasks` / `.held` per band — `BandMetrics`);
 the image's health check uses it. `server.forward-headers-strategy=native`: Tomcat
 believes `X-Forwarded-*` only from private addresses, so behind the proxy requests count as HTTPS —
 Rauthy is told to send the user back over HTTPS and the session and CSRF cookies are `Secure`
@@ -129,19 +130,18 @@ features/check      Reconciler, platform check service + nightly schedule, each 
 features/calendar   calendar domain (+ domain.event: the calendar's events; + domain.rules: profile
                     and classifier), review service, stores, iCal feed, profile file; /api/calendar;
                     shipped presets (calendar/*.profile)
-platforms/browser   PlatformClient (`bzscraper.<platform>.client`: off / http / selenium) + OnPlatformClient
-                    (a client bean exists only for its own setting); PlatformBrowser (every lease names its account — a band's login — and gets that
-                    account's profile; one session per account, `max-sessions` per platform; warm browsers
-                    per account), BrowserPool (the server's limit, `bzscraper.browser.max`, shared by the
-                    platforms; the idlest warm browser closed to make room), BrowserProfile, WarmBrowser,
-                    properties; test-jar: TestChromium
+platforms/browser   what every platform shares: PlatformClient (`bzscraper.<platform>.client`: off or
+                    http) + OnPlatformClient (a client bean exists only for its own setting), and the
+                    human pacing both clients keep to
 platforms/bandzone      bandzone (traits, properties, exception) · scrape · portal (client API, stub,
-                        BandzoneTowns, PosterDownloader — shared by both clients) · portal.http (no
-                        browser: NetteForm, Answer, BandzoneWeb, ConcertForm, LineupTab, session, client)
-                        · portal.selenium (the Chromium fallback + page objects) · step · rest
+                        BandzoneTowns, PosterDownloader) · portal.http (NetteForm, Answer, BandzoneWeb,
+                        ConcertForm, LineupTab, session, client, sign-in) · step · rest
                         (the public `/gigs/{band_slug}` endpoint — any band, by its slug)
-platforms/bandsintown   bandsintown (traits, properties, exception, RemovalReason) · portal ·
-                        portal.selenium (+ the event list → gig mapping) · step · importing · csv
+platforms/bandsintown   bandsintown (traits, properties, exception, RemovalReason) · portal (client API,
+                        stub, PortalReply + BitEvent/BitPlace/BitEventMapper/BitPlaces — how the portal's
+                        own JSON reads) · portal.http (BitConnection: what a band's one browser sign-in
+                        left; BitSignIn: a session from it, no browser; BitApi/BitWeb, HttpBitSession)
+                        · step · importing · csv
 web/live            LiveUpdates as server-sent events (SseLiveUpdates, GET /api/bands/{bandId}/events: a
                     band's changes to its pages, changedEverywhere to all) — the only place that knows
                     SSE; everyone else tells the LiveUpdates port
@@ -169,15 +169,15 @@ higher one, the lower one owns a port and the higher one implements it (`GigMove
 calendar's links follow a gig's identity move). Each feature wires its own services
 (`<feature>.config.<Feature>Configuration`, next to its properties record); the implementations
 are public only so that wiring can build them — `ArchitectureTest` keeps everyone else on the
-ports. Inside a platform, the steps, the importer and the endpoint use the portal client; its
-Selenium implementation and page objects (package-private) are used by nothing else.
+ports. Inside a platform, the steps, the importer and the endpoint use the portal client; how it
+talks to the platform (`portal.http`, package-private) is used by nothing else.
 `ArchitectureTest` (ArchUnit): domain depends only on the JDK and domain code; application code
 uses no framework, logger, adapter, config, live module or web setup; a feature is used from
 outside only through its domain and ports; the kernel's persistence and wiring are its own; the
 kernel knows no feature; a band's rows are read and written by band (no persistence adapter calls a
 repository's `findAll()` / `count()` / `deleteAll()` — the accounts' band directory excepted); live updates are used only through their port and the live module knows
 only the kernel; nothing uses the app's web setup; the features know no platform, nor a platform
-another; a platform's browser code stays behind its portal client; every controller implements
+another; how a platform talks to its site stays behind its portal client; every controller implements
 the interface generated from its module's spec and has no private methods (the live stream
 excepted); no cycles between modules nor between any two packages. `PlatformNamesTest`: no
 feature source (code, string or comment — the generated code from the specs too) names a platform.
@@ -334,15 +334,18 @@ no thread-local "current band": the worker and the nightly check work for every 
   its owner is the first to sign in with `bzscraper.accounts.first-owner-email` (unset: whoever signs
   in first).
 - **Each band's own connections** (phase 2): its platform accounts (`band_platform_account`) and
-  calendar (`band_calendar`), connected on the page; the secrets (passwords, the authenticator secret,
-  the iCal address) sealed with AES-256-GCM (`SecretBox`, keys from the Docker secret `data_keys`, the
+  calendar (`band_calendar`), connected on the page; the secrets (the way back in to each platform — a
+  Bandzone session, a Bandsintown refresh token — and the iCal address) sealed with AES-256-GCM (`SecretBox`, keys from the Docker secret `data_keys`, the
   row's band — and platform — part of what is sealed: a ciphertext copied to another band's row doesn't
   open), opened only when a platform signs in or the calendar is read, never sent to the page. A
   platform describes its account (`AccountField`s in its `PlatformTraits`: text, secret, yes/no) — the
   page's form and the server's check come from that, no feature names a platform's fields. The portal
   clients read the band's account at `openSession(band, …)` (`BandzoneAccount` / `BandsintownAccount`;
-  none = NEEDS_USER "connect it in Settings"), the importers and the CSV too; a platform's browser
-  profile is per band and login. Band #1's old configuration (`bzscraper.bandzone.login/…`,
+  none = NEEDS_USER "connect it in Settings"), the importers and the CSV too. **No password is kept**: a
+  band types its Bandzone one once (the server signs in and writes down only the session, which lasts
+  years), and signs in to Bandsintown in its OWN browser, pasting what that leaves — so no authenticator
+  secret is kept either. When a platform ends a sign-in the band connects again; it is never retried.
+  Band #1's old configuration (`bzscraper.bandzone.login/…`,
   `bzscraper.bandsintown.login/…`, `bzscraper.calendar.ical-url`, the rules file) is kept once on start
   while band #1 has none, then unused. The shipped calendar presets are everyone's
   (`calendar_rule.band_id` null); each band's own rules are edited on the page.
@@ -372,17 +375,16 @@ no thread-local "current band": the worker and the nightly check work for every 
   (`PublicAddresses`; a gig's links must be http(s), `links`), at most 10 MB, and a failure says nothing of
   what answered. **The public list** (`/gigs/<slug>`) is a band's choice (`band.public_list`, V7, Settings
   → This band; band #1's on). An e-mail Rauthy hasn't verified is no e-mail to the app (invitations, the
-  first owner); a login's e-mail and name are refreshed at each sign-in. A failed platform login says only
-  the error's type (a browser message may quote the password typed in). Caddy's log never holds a token
+  first owner); a login's e-mail and name are refreshed at each sign-in. Caddy's log never holds a token
   (invitation links, the sign-out's `id_token_hint`).
 - **Many bands on one server** (phase 3): the sync runs `bzscraper.sync.worker.threads` (2) **lanes** at
   once — a lane is a band's work on a platform (`Lane`), run by one worker at a time — and the bands take
   turns (`FairTurns`: round-robin by band, a band's oldest due task first), so one band's hundred tasks
   or slow platform don't keep the others waiting. Circuit breakers are per lane (a band's broken account
   holds back only that band there) and per platform above them (`breaker.platform-bands`, 3, bands held
-  back on one platform at once = it seems down: held back for all, told to every band's pages). Browsers:
-  one session per account, `max-sessions` per platform, `bzscraper.browser.max` on the server
-  (`BrowserPool`). The nightly platform check runs for every band, one after another; each band has its
+  back on one platform at once = it seems down: held back for all, told to every band's pages). A session
+  is a few requests, so nothing is queued behind a scarce resource: how many bands sync at once is the
+  worker threads, nothing more. The nightly platform check runs for every band, one after another; each band has its
   own import session, check result (kept, `band_check`) and pause. The public `/gigs/{band_slug}` finds
   the band by its slug.
 
@@ -438,7 +440,7 @@ A step's `refusal(gig)` passes the gig on (also asked at queue time → "Left ou
 and a delete then forgets the copy). Outcomes: done (a created event's id recorded, a removed
 one's forgotten — in the same transaction) / refused (the platform said no, nothing happened
 → next step) / failed (retry at the same step per `SyncRetryPolicy`; never for creates) /
-failed for good (→ user) / postponed (the platform's browser was busy with a read — again in a
+failed for good (→ user) / postponed (the work was interrupted, as when the app stops — again in a
 minute, no attempt used, not counted by the breaker). The run's step is `sync_task.step`; the path is logged ("bulk edit:
 … → form edit"); due runs at one step go together (batch, or ≤10 one by one, each saved on
 its own). Moot work (gig deleted/cancelled/published meanwhile) ends done with a note.
@@ -459,8 +461,8 @@ workers at once; none of a paused band or a lane held back) go to the engine.
   factories `temporary`/`refused`/`needsUser`/`busy`): TEMPORARY (retry),
   REFUSED (the platform said no this way — next step, e.g. Bandsintown's row error
   `INVALID_START_TIME` on a past event), NEEDS_USER (switched off or not configured, a town to
-  correct, a draft left behind, a Bandsintown login or authenticator secret that doesn't work —
-  fails at once, so a password isn't typed again and again), BUSY (postponed; also work
+  correct, a draft left behind, a platform's sign-in the band must renew — fails at once, so nothing
+  is tried with a sign-in that is over), BUSY (postponed; also work
   interrupted while the app stops — except a create, which may have happened: TEMPORARY with
   "check there"); a step's unexpected exception fails the run with its type and message and is
   logged in full (`SyncFaults`); steps return
@@ -484,16 +486,13 @@ workers at once; none of a paused band or a lane held back) go to the engine.
   on; then one trial batch decides. `.platform-bands` (3) bands held back on one platform at once hold
   the platform back for everyone (`Breaker.everyone`) until fewer are. The Inbox, Activity and Settings
   show a band's with "Resume now" (one held for everyone can't be resumed by a band).
-- **Browsers** (`PlatformBrowser`; sessions open through `PlatformBrowser.open`: lease, log in,
-  screenshot + discard on failure, the platform's exception): one session per account (a band's login),
-  `bzscraper.<platform>.selenium.max-sessions` (1) per platform from this server, `bzscraper.browser.max`
-  (2) Chromiums on the server (`BrowserPool`; the idlest warm one closed to make room). A sync step doesn't
-  wait for a browser (BUSY → postponed); a read the user started (Import, the platform check) waits up to
-  10 min. A browser stays warm ~60 s after a session for its account (`WarmBrowser`), so the account's
-  next step or task takes it over (one start + login check per run, not per gig); closed when idle,
-  when the server needs room, and on shutdown (a browser handed back after that is closed at once; handing back
-  never throws and always releases the lease). Failures leave a screenshot,
-  `$TMPDIR/bzscraper-<platform>-<step>.png`.
+- **Sessions are cheap**: a session is a handful of HTTP requests, so nothing waits for a scarce
+  resource — no pool, no lease, and a sync step is never postponed for want of one. A band's sign-in is
+  reused across sessions (Bandzone's cookies, Bandsintown's session worked out from the kept refresh
+  token and held until it goes stale), so a run signs in once rather than once per gig; when the platform
+  has ended it, the band connects again (NEEDS_USER) and it is not retried. Requests are paced like a
+  person's — a short random wait between them, a longer one between upload batches — because the
+  platforms' terms are about people using their pages, and a burst is what gets an account flagged.
 - Page: actions return a `QueueResult` (a toast "Publishing on …" / "Left out: …"); every gig
   shows its state per platform (live / queued / running / retrying / failed / not there) and
   follows it live (`SyncChanges` → `LiveUpdates` → server-sent events); actions on a gig whose
@@ -601,62 +600,50 @@ exactly one fits name + country + postal area (`TownChoice`).
 
 `BandzoneGigProvider`/`BandzoneGigImporter` scrape read-only (`BandzoneHtmlFetcher`, at
 `bzscraper.bandzone.base-url`, the year tabs read at once with a 60 s limit). Writes go through the
-band-admin pages; off by default (stub). Which client does them is
-`bzscraper.<platform>.client` (`PlatformClient`, `OnPlatformClient`; unset, the older
-`selenium.enabled=true` still means `selenium`):
+band-admin pages; off by default (stub). Whether this server drives it is
+`bzscraper.<platform>.client` (`PlatformClient`, `OnPlatformClient`):
 
 ```
-bzscraper.bandzone.client=http       # no browser: what the admin's own pages send (the default when driving)
-bzscraper.bandzone.client=selenium   # the fallback, drives the pages in Chromium
-bzscraper.bandzone.client=off        # the stub (default): this server doesn't drive Bandzone
-bzscraper.bandzone.selenium.chromium-binary / .chromedriver   # selenium only; else bzscraper.browser.*
-bzscraper.bandzone.selenium.profile-dir              # selenium only; default ~/.bzscraper/bandzone-browser (a directory per band's account in it)
+bzscraper.bandzone.client=http       # this server drives Bandzone (no browser is involved)
+bzscraper.bandzone.client=off        # the stub (default): it doesn't
 ```
 
-**The HTTP client** (`portal.http`, no Chromium): Bandzone's admin is plain server-rendered forms
+**The client** (`portal.http`): Bandzone's admin is plain server-rendered forms
 whose widgets post the whole form back over AJAX and get JSON, so the client sends exactly what the
 pages send — `NetteForm` (a form as a browser would send it: its fields in page order, its buttons
 pressed by name), `Answer` (the JSON: a picker's `items`, the re-rendered form's `snippets`, a
 finished form's `redirect`, its `flash` messages), `BandzoneWeb` (one account's cookies, the login,
 the AJAX posts, the poster's multipart upload), `ConcertForm` (the fields the wizard and the edit
 form share; a picker is the form's own search and pick buttons), `LineupTab`, `HttpBandzoneSession`.
-A field or button the page hasn't got is an error naming it, never a silent skip. Same rules as the
-Selenium client: the town is picked by name + country + district (`BandzoneTowns`, shared), a club
-matched exactly is linked and anything else kept as free text, a cancel is checked on the band's gig
-list and a delete on the concert's public page (404).
+A field or button the page hasn't got is an error naming it, never a silent skip. The town is picked by
+name + country + district (`BandzoneTowns`), a club matched exactly is linked and anything else kept as
+free text, a cancel is checked on the band's gig list and a delete on the concert's public page (404).
 
-Each band's account (login, password, the band's address `bandSlug`) is connected on the page
-(`BandzoneAccount`); "Test sign-in" logs in and reads the band's page (`BandzoneAccountCheck`).
-`bzscraper.bandzone.login / .password / .band-slug` are band #1's old ones (kept once). The real
-band's login lives in the git-ignored `.bz-creds` (line 1 login, line 2 password, `chmod 600`);
+**Connecting a band** (`BandzoneAccount`): it types its login, its password and the band's address
+(`bandSlug`) on the page once. The server signs in there and then (`HttpBandzoneSignIn`, through the
+accounts' `PlatformSignIn`) and writes down only the **session** Bandzone gives back — with "stay signed
+in" it lasts about ten years — so the password is never stored. A band that doesn't sign in is not saved,
+so an account that doesn't work can't be connected. "Test sign-in" reads the band's page with the kept
+session (`BandzoneAccountCheck`); when Bandzone has ended it, the band connects again.
+`bzscraper.bandzone.login / .password / .band-slug` are band #1's old ones (kept once). The real band's
+login lives in the git-ignored `.bz-creds` (line 1 login, line 2 password, `chmod 600`);
 `.bz-test-creds` is the test band.
 
-**Saved logins** (`BrowserProfile`, both platforms): the browser keeps the platform's login
-in a profile directory that is private (`700`), one per account — a band's login (a test account can
-never act as the real band, nor one band reuse another's saved login), with cookies encrypted by the desktop keyring
-(`bzscraper.browser.password-store=auto`, default: the keyring when a desktop session bus
-is reachable, else Chromium's own store — on a server the private directory, owned by the
-service user on an encrypted volume, is the protection). A still-valid saved login is
-reused; the password (and the Bandsintown authenticator code) is used only when the
-platform ended it. Deleting the profile directory logs out.
-
-- **Create** — 2-step wizard: date/time/city → (optional "similar concerts" screen,
-  answered "new") → info (name, entry, description, Facebook) → redirect to
-  `/koncert/{id}-…`; the id is taken from that URL. `BandzoneFormCreate` then
+- **Create** — the 2-step wizard: date/time/city → (optional "similar concerts" screen,
+  answered "new") → info (name, entry, description, Facebook) → Bandzone sends to
+  `/koncert/{id}-…`; the id is taken from that address. `BandzoneFormCreate` then
   completes the gig via the edit form (end, venue, poster, lineup); if that fails the
   gig is still PUBLISHED with a note to use Re-sync.
-- **Login** — `BandzoneLoginPage`; every field the pages set must be there (`BandzoneBrowser`
-  throws "Bandzone field …" instead of silently skipping it).
 - **Update** — `/koncert/{id}/update`: poster upload (`PosterDownloader`: 10 s to connect, 30 s
-  for the file — the download holds the browser and the sync's one thread), city then venue autocomplete
-  (venue search is scoped to the city; no exact club match → free-text venue), dates,
-  info fields; then read back and verified. Autocomplete picks and the poster upload
-  re-render the form via AJAX, so they run **before** plain fields and are followed
-  by a staleness wait.
-- **Lineup** (`BandzoneLineupPage`) — full sync: removes performers not in the lineup
+  for the file), city then venue search (the venue search is scoped to the city; no exact club
+  match → free-text venue), dates, info fields; then read back and verified. A picker's pick and
+  the poster upload make Bandzone answer with the form again, so what follows works from that
+  answer rather than from the page it was sent.
+- **Lineup** (`LineupTab`) — full sync: removes performers not in the lineup
   (never the band itself, whose name comes from the profile's `og:title`); adds an
-  exact case-insensitive profile match, else a "band without profile" stub.
-- **Cancel / delete** (`BandzoneDeleteTab`) — the button's form is submitted, then checked: a
+  exact case-insensitive profile match, else a "band without profile" stub — never another
+  concert's stub, which the search also offers.
+- **Cancel / delete** (the concert's delete tab) — the button's form is submitted, then checked: a
   cancelled concert must be listed `gig--canceled` on the band's gig list (planned tab, else its
   year's); a deleted one's PUBLIC page (`/koncert/<id>`) must answer 404 — the admin pages of a
   deleted concert still open, delete button and all (seen 2026-10-09), so they prove nothing. A
@@ -665,61 +652,70 @@ platform ended it. Deleting the profile directory logs out.
   (Bandzone gets the whole event; the band's `Slot` goes to Bandsintown only).
 - A city Bandzone's search doesn't know fails at once (permanent) with "correct the city".
 
-## Bandsintown (Selenium)
+## Bandsintown (no browser on the server)
 
-Bandsintown has no write API for artists, and its internal API signs every request, so
-the artist portal (artists.bandsintown.com) is driven in Chromium. Off by default (stub):
+Bandsintown has no write API for artists, so the app uses the artist portal's own API — the one its
+pages call — over plain HTTP. Off by default (stub):
 
 ```
-bzscraper.bandsintown.selenium.enabled=true               # this server drives Bandsintown
-bzscraper.bandsintown.selenium.profile-dir                # default ~/.bzscraper/bandsintown-browser (a directory per band's account in it)
-bzscraper.bandsintown.pacing.min-ms / .max-ms             # human pauses between steps (900 / 2600)
+bzscraper.bandsintown.client=http          # this server drives Bandsintown
+bzscraper.bandsintown.client=off           # the stub (default): it doesn't
+bzscraper.bandsintown.pacing.min-ms / .max-ms   # human pauses between requests (900 / 2600)
 ```
 
-Each band's account is connected on the page (`BandsintownAccount`): login, password, authenticator
-secret (base32, optional — asked for when Bandsintown wants a code), artist name (required: rows + CSV
-carry it), artist id (picks the artist on a multi-artist login), notify followers (default: publish
-silently). `bzscraper.bandsintown.login / .password / .totp-secret / .artist-name / .artist-id /
-.notify-followers` are band #1's old ones (kept once).
+**Connecting a band, and why it is the one thing a browser does.** The portal's identity provider
+(Cognito) allows only the browser's own sign-in exchange — asked for any other, it answers
+"USER_PASSWORD_AUTH flow not enabled" — and no Java client implements that exchange. So the band signs
+in **once in its own browser**, runs the one-line snippet Settings shows, and pastes what it prints: the
+refresh token the portal left behind, plus the two numbers its addresses are built from (the manager and
+the artist — an account like band #1's answers nothing when asked for its artists, so they are collected
+at the same time). That is all the server keeps (`BitConnection`): **no password and no authenticator
+secret**, and what it holds the band can revoke by signing out there.
 
-- **Create** — Bulk Upload of a `BandsintownCsv` (template columns — `BandsintownCsv.Column`, in
-  their order —, ≤ `BitSession.MAX_ROWS_PER_UPLOAD` (25) rows per upload; logging in: `BitLoginPage`)
-  creates drafts; the upload reply maps CSV row → event id. In the success dialog
-  "Notify my followers" is set from config, then Publish; the event list is read back
-  to confirm PUBLISHED. Silent = "Do Not Announce = Y" + switch off (`announced_at`
-  2000-01-01).
-- **Update** — Bulk Upload of a row WITH `Event Id` (+ `Status`) edits the event in place
+From the refresh token, `BitSignIn` works out a session whenever one is needed, with no browser: the
+refresh token is exchanged for an access token (about 5 h), which the portal's own sign-in
+(`POST /api/login`) turns into the session its API wants — recorded against a **fingerprint the server
+made up for that band**, nothing of a browser's recomputed. Every request then carries that session and
+that fingerprint. When the refresh token is over (the band signed out, or the window the portal allows
+has passed), only the band can renew it: NEEDS_USER, never retried.
+
+The rest of the account is the band's too (`BandsintownAccount`): the artist name (required — rows and
+the CSV carry it) and notify followers (default: publish silently).
+
+Every address hangs off the manager and the artist together (`BitApi.actorPath`), and `PortalReply`
+is the one place the portal's JSON is read.
+
+- **Create** — the Bulk Upload the portal's own page uses: a `BandsintownCsv` (template columns —
+  `BandsintownCsv.Column`, in their order —, ≤ `BitSession.MAX_ROWS_PER_UPLOAD` (25) rows) sent as
+  a multipart change of the events under `upfile`; the reply maps CSV row → event id. Each new draft
+  is then published, quoting the version it was read with. Silent = "Do Not Announce = Y" +
+  `announced_at` 2000-01-01. The event lists are read back to confirm PUBLISHED.
+- **Update** — the same upload with `Event Id` (+ `Status`) per row edits the events in place
   (`BitSession.EventEdit` per row; results matched by row position).
-- **Form edit** (`BandsintownFormEdit`, `editEventInForm`) — the event's single-page form
-  (`/artists/<id>/events/<event>?version=single-page`), which opens for past events too:
-  "Clear value" on the venue, type "venue town", pick the suggestion in the gig's town
-  (`BitPlaces`, by Google `place_id`) and check the field shows it; then dates, times, name,
-  description; Save → the reply's place is checked (`placeCheck`, > 25 km off → a note).
+- **One event at a time** (`BandsintownFormEdit`) — what the upload refuses (past events, and rows it
+  said no to): the event is changed on its own, its place picked from the portal's venue search
+  (`/api/venues/autocomplete?term=…` — Bandsintown's OWN venues, each with coordinates, so the one in
+  the gig's town is chosen by where it is, not by matching text). The place it saved is checked
+  (`BitPlaces.check`, > 25 km from the town → a note).
 - **When** — rows carry the band's `Slot` when the gig has one (`GigSchedule.showStart/showEnd`),
   else the event's start/end: Bandsintown is about when the artist plays.
-- **Past events** — a published past gig is listed under Past Events, not Upcoming: the
-  create read-back checks the past list too. The list's "⋯ → Delete" doesn't reach PAST
-  events, so they are removed through the form (below); an event in neither list counts as
-  already removed. Bulk
-  edits of past events are refused (`INVALID_START_TIME`) → the form edit does them.
-- **List (import)** — Upcoming + Past tabs' event lists (past is paged: `x-next-page`,
-  more load on scroll) → `BitEventMapper` (no entry info on Bandsintown; an event it can't read
-  is left out with a warning in the log; an unknown time zone falls back to the country's).
-- **Cancel/Delete** — Bandsintown has no cancelled state: both remove the event via the
-  row's "⋯" → Delete, `RemovalReason` CANCELED or OTHER. Already-gone = success (so reactivate =
-  delete no-op + create). Editing a cancelled gig skips Bandsintown.
-- **Form cancel/remove** (`BandsintownFormCancel`/`BandsintownFormRemove`, `deleteEventInForm`)
-  — past events (and whatever the list refused): the single-page form → Delete opens the same
-  "remove this event?" dialog; its reason, details and Delete are looked up INSIDE the dialog
-  (the form has dropdowns, text areas and a Delete of its own). A form that doesn't open for
-  an event neither list shows = already gone.
-- Replies are read by wrapping `window.fetch` in the page. The row to delete is found by
-  its index in the captured event list and checked (city, day) before clicking.
-- **Human pacing** (`HumanPacer`, user requirement): random pauses, real mouse clicks,
-  key-by-key typing, one browser at a time, saved login reused (authenticator code only
-  when the session expired), no automation flags / HeadlessChrome UA.
-- Setup problems (no login, no authenticator secret, several artists, no artist id) need the
-  user (NEEDS_USER), not a retry.
+- **Past events** — a published past gig is listed under Past, not Upcoming: the create read-back
+  checks the past list too. Bulk edits of past events are refused (`INVALID_START_TIME`) → the
+  one-at-a-time change does them.
+- **List (import)** — the upcoming and past lists (`events?past=false` / `?past=true`) →
+  `BitEventMapper` (no entry info on Bandsintown; an event it can't read is left out with a warning
+  in the log; an unknown time zone falls back to the country's). The past list comes 20 at a time and
+  its `x-next-page` is a DATE, asked for again as `before=…` until there is no more.
+- **Cancel/Delete** — Bandsintown has no cancelled state: both remove the event, `RemovalReason`
+  CANCELED or OTHER carried with it. Already-gone = success (so reactivate = delete no-op + create).
+  Editing a cancelled gig skips Bandsintown. Over the API there is no list-versus-form difference, so
+  `deleteEvent` and `deleteEventInForm` are the same removal — which means the DELETE workflow's
+  second step (`BandsintownFormRemove`) is never reached, and `BandsintownFormCancel` likewise.
+- **Human pacing** (user requirement): a short random wait between requests and a longer one between
+  upload batches, and one request at a time for an account — the platforms' terms are about people
+  using their pages, and a burst is what gets an account flagged.
+- Setup problems (nothing connected, a sign-in the band must renew) need the user (NEEDS_USER), not a
+  retry.
 
 ## Database
 
@@ -760,14 +756,14 @@ start; skipped when the database has data; every row becomes band #1's. H2 stays
 
 - Spring Boot 4.0.3, Java 21; Spring Data JPA + PostgreSQL 18 + Flyway (H2 2.4.240 only for the import);
   Spring Security's OAuth2 client (OIDC) with Rauthy 0.37 (Docker)
-- Docker: Debian trixie (Chromium + chromedriver) + the Temurin 21 JRE; Testcontainers 2 for the tests
+- Docker: the Temurin 21 JRE (nothing else — no browser is installed); Testcontainers 2 for the tests
 - OpenAPI: openapi-generator 7.26 (`spring`, Spring Boot 4 + Jackson 3); openapi-typescript 7 + openapi-fetch
 - MapStruct 1.6.3 (every mapper: API ↔ domain and JPA entity ↔ domain)
 - The page: React 19 + TypeScript, Vite 6, Mantine 8, TanStack Query 5, React Router 7, i18next,
   vite-plugin-pwa, Mantine dates (+ dayjs); built by Maven (frontend-maven-plugin, Node 22 fetched into web/frontend/node)
 - JSoup 1.22.1 (HTML scraping)
 - OpenCSV 5.12.0 (CSV)
-- Selenium 4.27.0 (Bandzone + Bandsintown) — needs a Chromium + chromedriver runtime
+- Nothing for driving a browser: both platforms are reached over plain HTTP (`java.net.http`)
 
 ## Testing
 
@@ -783,9 +779,8 @@ rotation. The app's tests connect as `bzscraper_app` like production, so every A
 row-level security (`BandMembershipApiTest` checks it; `RowLevelSecurityTest` in the kernel checks the
 policies themselves); `BandMembershipApiTest`: an invitation joins whom it's for, once; the audit log;
 the export without a secret; `RateLimitsTest`. `ManyBandsSyncTest` (sync): ten bands queued at once on three workers all finish, a lane is never
-run twice at once, one band's broken account holds back only it, many failing bands hold the platform back;
-`BrowserPoolTest` (browser, mock drivers): the server's limit, the idlest warm browser closed for a new
-account, one session per account, the platform's limit. Each feature's tests run with a band
+run twice at once, one band's broken account holds back only it, many failing bands hold the platform back.
+Each feature's tests run with a band
 (`TestBands.BAND`; the fakes key everything by band) and check that another band (`OTHER`) sees none
 of it. The page: Vitest (`web/frontend`, run by `./mvnw test`) — both languages have the
 same keys and every key the pages use, dates, the calendar's show applied to the form, a band's address from its name.
@@ -802,47 +797,31 @@ fake can't drift from the real one. `bzscraper.sync.worker.enabled=false` in Spr
 test run — `./mvnw test` needs Docker; `H2ImportTest`: an H2 backup into its own empty database)
 (`JpaGigConcurrencyTest`: the optimistic lock across real transactions).
 
-**Page objects against copies of the platforms' pages** (headless Chromium from
-`TestChromium`, browser test-jar; test-jars carry only these shared helpers; skipped where Chromium + chromedriver are missing, paths
-`-Dbzscraper.test.chromium` / `-Dbzscraper.test.chromedriver`, default `/usr/bin/…`;
-`PlatformBrowserTest` covers the browser lease itself): `BitPortalPagesTest` runs the Bandsintown
-pages against `PortalFixture` — an in-process HTTP server with copies of the portal's list
-and event-form pages (`src/test/resources/bandsintown-portal`, built like the real ones as
-the probes saw them: the row "⋯" menu, the reason dialog, a form with its own Delete,
-dropdowns and text areas, a debounced Google-places venue search) that plays the portal's
-API, with the real reply capture. `BandzonePagesTest` does the same with `BandzoneFixture`
-(`src/test/resources/bandzone-admin`: the edit form that re-renders after an autocomplete
-pick and shows what was stored, the city search with three Hranice, the club search, the
-delete tab with `confirm()` and the band's gig list marking a cancelled concert, a deleted
-concert's public page answering 404, the two-step wizard, the performers tab with its band search and
-"band without profile" stub). Change a page object → run these first;
-the live tests below then confirm against the real sites.
+**The platforms are tested against stand-ins that talk as their sites do**, so no browser and no
+network are needed. `BandzoneHttpFixture` (bandzone test sources) answers as the band admin's pages
+do — the login and its cookie, the pickers' `items`, a pick's re-rendered form, a finished form's
+`redirect`, the poster uploader, the wizard (with and without the "similar concerts?" step), the
+performers tab with its remove dialogs (which may answer only "go there" when the concert's address
+changed with its name), the delete tab, the band's gig list and a deleted concert's 404 — and keeps
+what it is sent, so the client's read-backs see what was stored. `HttpBandzonePortalClientTest` runs
+the whole cycle against it, plus a refused login, a town Bandzone knows several of, and a concert
+already gone. `BitHttpFixture` does the same for the artist portal's API (its reply envelope, the
+past list's date cursor, the upload's row → event id mapping, row errors, the venue search, an
+event's stored state) and `HttpBitSessionTest` runs the six operations against it.
+`PlatformClientTest` covers the client switch and an unknown value stopping the start.
+Change a client → run these first; the live tests below then confirm against the real sites.
 
-**The Bandzone HTTP client needs no browser, so its tests don't either**: `BandzoneHttpFixture`
-(bandzone test sources) talks as the admin's pages do — the login and its cookie, the pickers'
-`items`, a pick's re-rendered form, a finished form's `redirect`, the poster uploader, the wizard
-(with and without the "similar concerts?" step), the performers tab with its remove dialogs (which
-may answer only "go there" when the concert's address changed with its name), the delete tab, the
-band's gig list and a deleted concert's 404 — and keeps what it is sent, so the client's read-backs
-see what was stored. `HttpBandzonePortalClientTest` runs the whole cycle against it, plus a refused
-login, a town Bandzone knows several of, and a concert already gone. `PlatformClientTest` (browser)
-covers the client switch, the older `selenium.enabled` still meaning the browser, and an unknown
-value stopping the start.
+`HttpBandzonePortalClientLiveTest` creates, edits (every field, incl. lineup and poster), cancels,
+deletes and deletes again (already gone) a real Bandzone gig, and checks the login is reused. Skipped
+unless `BZ_LIVE=true`; reads `BZ_LOGIN` / `BZ_PASSWORD` / `BZ_SLUG`, `BZ_LINEUP_BAND` (a real band
+that gets notified), optional `BZ_KEEP=true`. Run it only against a test band.
 
-`SeleniumBandzonePortalClientLiveTest` creates, edits (every field, incl. lineup and
-poster), cancels, deletes and deletes again (already gone) a real Bandzone gig. Skipped unless `BZ_LIVE=true`; reads
-`BZ_LOGIN` / `BZ_PASSWORD` / `BZ_SLUG`, `BZ_LINEUP_BAND` (a real band that gets
-notified), optional `BZ_KEEP=true`, `BZ_CHROMIUM` / `BZ_CHROMEDRIVER`. Run it only
-against a test band.
-
-`HttpBandzonePortalClientLiveTest` does the same cycle as the Selenium one over plain HTTP, and
-checks the login is reused; same environment variables (`BZ_LIVE=true`, `BZ_LOGIN` / `BZ_PASSWORD` /
-`BZ_SLUG`, `BZ_LINEUP_BAND`, `BZ_KEEP`), no Chromium needed. Run it only against a test band.
-
-`SeleniumBitPortalClientLiveTest` creates a made-up Bandsintown event (published
-WITHOUT notifying followers), edits it and deletes it. Skipped unless `BIT_LIVE=true`;
-reads `BIT_LOGIN` / `BIT_PASSWORD` / `BIT_TOTP` / `BIT_ARTIST_NAME`; `BIT_CLEANUP_ID=<id>` only deletes a
-leftover event. There is no Bandsintown test artist — the event is public for ~1 minute.
+`HttpBitPortalClientLiveTest` creates a made-up Bandsintown event (published WITHOUT announcing it),
+reads it back, edits it both ways and removes it — the removal runs even when a step fails, and every
+step is tried and reported, so one made-up event tells us about all of them. Skipped unless
+`BIT_LIVE=true`; reads `BIT_ARTIST_NAME` and `BIT_CONNECTION_FILE` (the connection a band's browser
+sign-in leaves, as the snippet in Settings prints it — no browser and no password are involved).
+There is no Bandsintown test artist — the event is public for ~1 minute.
 
 `CalendarClassificationLiveTest` prints how the shipped + band rules sort the REAL
 calendar (read-only). Skipped unless `CAL_LIVE=true`; reads `CAL_URL`, optional

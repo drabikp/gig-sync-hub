@@ -4,9 +4,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
-import sk.drabikp.bzscraper.browser.OnPlatformClient;
-import sk.drabikp.bzscraper.browser.PlatformClient;
 import sk.drabikp.bzscraper.gig.domain.BandId;
+import sk.drabikp.bzscraper.portal.OnPlatformClient;
+import sk.drabikp.bzscraper.portal.PlatformClient;
 
 import java.time.Duration;
 
@@ -14,7 +14,7 @@ import java.time.Duration;
  * Placeholder {@link BandzonePortalClient}: lets the app boot and the Bandzone
  * publish pipeline wire without a browser. Opening a session fails with a clear
  * message, so a publish reports every gig FAILED rather than silently doing nothing.
- * The real clients: {@code bzscraper.bandzone.client=http} (or {@code selenium}, the fallback).
+ * The real client: {@code bzscraper.bandzone.client=http}.
  */
 @Component
 @OnPlatformClient(platform = "bandzone", value = PlatformClient.OFF)

@@ -34,7 +34,7 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-browser</artifactId>
+			<artifactId>bzscraper-portal</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -53,10 +53,6 @@
 			<artifactId>spring-boot-starter-jackson</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.seleniumhq.selenium</groupId>
-			<artifactId>selenium-java</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>sk.drabik</groupId>
 			<artifactId>bzscraper-accounts</artifactId>
 			<type>test-jar</type>
@@ -70,7 +66,7 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-browser</artifactId>
+			<artifactId>bzscraper-portal</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>

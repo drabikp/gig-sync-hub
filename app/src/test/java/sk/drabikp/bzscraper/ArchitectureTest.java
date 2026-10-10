@@ -98,7 +98,7 @@ class ArchitectureTest {
     static final ArchRule the_kernel_knows_no_feature = noClasses()
             .that().resideInAPackage(ROOT + "gig..")
             .should().dependOnClassesThat().resideInAnyPackage(packages(Stream.concat(FEATURES.stream(),
-                    Stream.of("live", "web", "browser", "bandzone", "bandsintown"))));
+                    Stream.of("live", "web", "portal", "bandzone", "bandsintown"))));
 
     /**
      * Live updates are server-sent events only inside the live module: everyone else tells the
@@ -113,7 +113,7 @@ class ArchitectureTest {
     static final ArchRule the_live_module_knows_only_the_kernel = noClasses()
             .that().resideInAPackage(ROOT + "live..")
             .should().dependOnClassesThat().resideInAnyPackage(packages(Stream.concat(FEATURES.stream(),
-                    Stream.of("web", "browser", "bandzone", "bandsintown"))));
+                    Stream.of("web", "portal", "bandzone", "bandsintown"))));
 
     @ArchTest
     static final ArchRule nothing_uses_the_apps_web_setup = noClasses()
@@ -123,7 +123,7 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule the_features_know_no_platform = noClasses()
             .that().resideInAnyPackage(packages(FEATURES.stream()))
-            .should().dependOnClassesThat().resideInAnyPackage(packages(Stream.of("browser", "bandzone",
+            .should().dependOnClassesThat().resideInAnyPackage(packages(Stream.of("portal", "bandzone",
                     "bandsintown")));
 
     @ArchTest
@@ -134,14 +134,14 @@ class ArchitectureTest {
             .toList());
 
     /**
-     * Inside a platform: the steps, the importer and the endpoints use the portal client; the
-     * client's Selenium implementation and its page objects are used by nothing else.
+     * Inside a platform: the steps, the importer and the endpoints use the portal client; how the client
+     * actually talks to the site — its requests, its reading of the answers — is used by nothing else.
      */
     @ArchTest
-    static final ArchRule a_platforms_browser_code_stays_behind_its_portal_client = all(PLATFORMS.stream()
+    static final ArchRule how_a_platform_talks_to_its_site_stays_behind_its_portal_client = all(PLATFORMS.stream()
             .flatMap(p -> Stream.of(
-                    classes().that().resideInAPackage(ROOT + p + ".portal.selenium..")
-                            .should().onlyHaveDependentClassesThat().resideInAPackage(ROOT + p + ".portal.selenium.."),
+                    classes().that().resideInAPackage(ROOT + p + ".portal.http..")
+                            .should().onlyHaveDependentClassesThat().resideInAPackage(ROOT + p + ".portal.http.."),
                     noClasses().that().resideInAPackage(ROOT + p + ".portal..")
                             .should().dependOnClassesThat().resideInAnyPackage(ROOT + p + ".step..",
                                     ROOT + p + ".importing..", ROOT + p + ".scrape..", ROOT + p + ".rest..")))

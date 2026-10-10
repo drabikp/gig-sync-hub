@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.accounts.application.port.in.PlatformAccountsUseCase
 import sk.drabikp.bzscraper.accounts.application.port.in.SecretBox;
 import sk.drabikp.bzscraper.accounts.application.port.out.PlatformAccountCheck;
 import sk.drabikp.bzscraper.accounts.application.port.out.PlatformAccountStore;
+import sk.drabikp.bzscraper.accounts.application.port.out.PlatformSignIn;
 import sk.drabikp.bzscraper.accounts.domain.AccountCheck;
 import sk.drabikp.bzscraper.accounts.domain.PlatformAccount;
 import sk.drabikp.bzscraper.accounts.domain.Role;
@@ -40,10 +41,13 @@ public class PlatformAccountService implements PlatformAccountsUseCase {
     private final BandAccess access;
     private final SecretBox box;
     private final Supplier<List<PlatformAccountCheck>> checks;
+    private final Supplier<List<PlatformSignIn>> signIns;
     private final Clock clock;
 
     public PlatformAccountService(PlatformAccountStore store, Platforms platforms, BandAccess access, SecretBox box,
-                                  Supplier<List<PlatformAccountCheck>> checks, Clock clock) {
+                                  Supplier<List<PlatformAccountCheck>> checks,
+                                  Supplier<List<PlatformSignIn>> signIns, Clock clock) {
+        this.signIns = signIns;
         this.store = store;
         this.platforms = platforms;
         this.access = access;
@@ -69,7 +73,7 @@ public class PlatformAccountService implements PlatformAccountsUseCase {
         owner(user, band);
         PlatformTraits traits = withAccount(platform);
         PlatformAccount kept = store.of(band, platform).orElse(null);
-        PlatformAccount account = AccountForm.valid(band, traits, settings, secrets, kept, box);
+        PlatformAccount account = signedIn(AccountForm.valid(band, traits, settings, secrets, kept, box));
         store.save(account);
         return view(platform, account);
     }
@@ -104,6 +108,27 @@ public class PlatformAccountService implements PlatformAccountsUseCase {
         Optional<PlatformAccount> checked = store.of(band, platform).map(now -> now.checked(dated));
         checked.ifPresent(store::save);
         return view(platform, checked.orElse(null));
+    }
+
+    /**
+     * What the platform wants kept for the account just typed — a session instead of the password, where
+     * the platform signs in for itself ({@link PlatformSignIn}); as typed, where it has no such sign-in.
+     * Refused when the platform wouldn't sign in: nothing is saved, so a band can't connect an account
+     * that doesn't work.
+     */
+    private PlatformAccount signedIn(PlatformAccount typed) {
+        Optional<PlatformSignIn> signIn = signIns.get().stream()
+                .filter(s -> s.platform().equals(typed.platform())).findFirst();
+        if (signIn.isEmpty()) {
+            return typed;
+        }
+        PlatformSignIn.Kept kept = signIn.get().signIn(typed);
+        if (!kept.signedIn()) {
+            throw new UserFacingException(AccountsErrorCode.PLATFORM_SIGN_IN_FAILED,
+                    Map.of("platform", platforms.name(typed.platform()), "problem", kept.problem()),
+                    "Could not sign in to " + platforms.name(typed.platform()) + ": " + kept.problem());
+        }
+        return new PlatformAccount(typed.band(), typed.platform(), kept.settings(), kept.secrets(), null);
     }
 
     private AccountView view(Platform platform, PlatformAccount account) {

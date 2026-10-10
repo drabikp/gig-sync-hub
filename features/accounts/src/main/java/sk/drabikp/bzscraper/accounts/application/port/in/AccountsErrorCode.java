@@ -28,7 +28,9 @@ public enum AccountsErrorCode implements ErrorCode {
     /** Deleting a band needs its address typed in. */
     CONFIRM_DELETE("confirmDelete"),
     /** A user may own only so many bands; {@code max}. */
-    TOO_MANY_BANDS("tooManyBands");
+    TOO_MANY_BANDS("tooManyBands"),
+    /** The platform wouldn't sign in with the account just given; {@code platform}, {@code problem}. */
+    PLATFORM_SIGN_IN_FAILED("platformSignInFailed");
 
     private final String code;
 

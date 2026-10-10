@@ -179,8 +179,9 @@ class BandsintownGigAdaptersTest {
                         "Uploaded to Bandsintown as event 303, but it is not published (DRAFT)")));
 
         List<StepOutcome> outcomes = new BandsintownBulkCreate(portalClient, new AccountsFakes.Accounts()
-                .with(BandId.FIRST, BandsintownPlatform.PLATFORM, Map.of("artistName", "Band", "notifyFollowers", "false"),
-                        Map.of())).run(List.of(
+                .with(BandId.FIRST, BandsintownPlatform.PLATFORM,
+                        Map.of("artistName", "Band", "notifyFollowers", "false", "managerId", "1", "actorId", "2",
+                                "fingerprint", "ours"), Map.of("refreshToken", "a-token"))).run(List.of(
                 new SyncStep.Item(BandId.FIRST, null, upcoming), new SyncStep.Item(BandId.FIRST, null, b), new SyncStep.Item(BandId.FIRST, null, c)));
 
         assertThat(outcomes).extracting(StepOutcome::kind).containsExactly(StepOutcome.Kind.DONE,

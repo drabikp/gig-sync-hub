@@ -18,7 +18,8 @@ import java.util.Map;
 /**
  * Bandsintown as the core knows it: no cancelled state (cancelling removes the event), an
  * event is when the artist plays (the band's slot of a longer event), no entry information.
- * A band's account there: the artist portal's login (with its authenticator secret) and the artist.
+ * A band's account there: the artist, and the line its own browser sign-in printed — the portal's sign-in
+ * happens only in a browser, so the band does that once itself and the server keeps the session.
  */
 @Configuration
 public class BandsintownPlatform {
@@ -34,49 +35,19 @@ public class BandsintownPlatform {
                 .carriesAdmission(false)
                 .importPrecedence(20)
                 .eventUrl("https://www.bandsintown.com/e/{id}")
-                .accountField(AccountField.text(BandsintownAccount.LOGIN, true, "Login",
-                        "The e-mail you sign in to artists.bandsintown.com with"))
-                .accountField(AccountField.secret(BandsintownAccount.PASSWORD, true, "Password", null))
-                .accountField(AccountField.secret(BandsintownAccount.TOTP_SECRET, false, "Authenticator secret",
-                        "The text secret of two-factor sign-in (base32, shown when setting up the authenticator app)"
-                                + " — needed when Bandsintown asks for a code"))
                 .accountField(AccountField.text(BandsintownAccount.ARTIST_NAME, true, "Artist name",
                         "As Bandsintown spells it — every uploaded event carries it"))
-                .accountField(AccountField.text(BandsintownAccount.ARTIST_ID, false, "Artist id",
-                        "Only when the login manages several artists: the number in artists.bandsintown.com/artists/<id>"))
+                .accountField(AccountField.secret(BandsintownAccount.CONNECTION, true, "Sign-in from your browser",
+                        "Sign in at artists.bandsintown.com, open its Events page, then paste what this prints in "
+                                + "the browser's console: (()=>{const m=performance.getEntriesByType('resource')"
+                                + ".map(r=>/managers\\/(\\d+)\\/managed-actors\\/(\\d+)\\//.exec(r.name))"
+                                + ".find(x=>x);return JSON.stringify({refreshToken:Object.entries(localStorage)"
+                                + ".find(([k])=>/refreshToken$/.test(k))[1],managerId:m[1],actorId:m[2]})})()"))
                 .accountField(AccountField.flag(BandsintownAccount.NOTIFY_FOLLOWERS, "Notify followers",
                         "Off: new events are published without telling the followers"))
                 .build();
     }
 
-    /**
-     * Band #1's account from the configuration ({@code bzscraper.bandsintown.login / password / totp-secret /
-     * artist-name / artist-id / notify-followers}, from before each band connected its own), kept once while
-     * band #1 has none.
-     */
-    @Bean
-    ApplicationRunner bandsintownAccountOfBandOne(BandsintownProperties properties, PlatformAccounts accounts) {
-        return args -> {
-            if (properties.login().isBlank()) {
-                return;
-            }
-            Map<String, String> settings = new HashMap<>(Map.of(BandsintownAccount.LOGIN, properties.login(),
-                    BandsintownAccount.ARTIST_NAME, properties.artistName(),
-                    BandsintownAccount.NOTIFY_FOLLOWERS, String.valueOf(properties.notifyFollowers())));
-            if (!properties.artistId().isBlank()) {
-                settings.put(BandsintownAccount.ARTIST_ID, properties.artistId());
-            }
-            Map<String, String> secrets = new HashMap<>(Map.of(BandsintownAccount.PASSWORD, properties.password()));
-            if (!properties.totpSecret().isBlank()) {
-                secrets.put(BandsintownAccount.TOTP_SECRET, properties.totpSecret());
-            }
-            try {
-                if (accounts.adopt(BandId.FIRST, PLATFORM, settings, secrets)) {
-                    log.info("Band #1's Bandsintown account kept from the configuration — managed on the page from now on");
-                }
-            } catch (UserFacingException e) {
-                log.warn("Band #1's Bandsintown account from the configuration not kept: {}", e.getMessage());
-            }
-        };
-    }
+    // Band #1's configured login is NOT adopted any more: what a session needs cannot be made from a
+    // password on this server (see HttpBitSignIn), so every band connects Bandsintown from its own browser.
 }

@@ -42,12 +42,10 @@ class BandzoneWorkflowLiveTest {
 
     @DynamicPropertySource
     static void testBand(DynamicPropertyRegistry registry) {
-        registry.add("bzscraper.bandzone.selenium.enabled", () -> "true");
+        registry.add("bzscraper.bandzone.client", () -> "http");
         registry.add("bzscraper.bandzone.login", () -> System.getenv("BZ_LOGIN"));
         registry.add("bzscraper.bandzone.password", () -> System.getenv("BZ_PASSWORD"));
         registry.add("bzscraper.bandzone.band-slug", () -> System.getenv("BZ_SLUG"));
-        registry.add("bzscraper.bandzone.selenium.chromium-binary", () -> "/usr/bin/chromium");
-        registry.add("bzscraper.bandzone.selenium.chromedriver", () -> "/usr/bin/chromedriver");
     }
 
     @Autowired

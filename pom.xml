@@ -27,7 +27,7 @@
 		<module>features/importing</module>
 		<module>features/check</module>
 		<module>features/calendar</module>
-		<module>platforms/browser</module>
+		<module>platforms/portal</module>
 		<module>platforms/bandzone</module>
 		<module>platforms/bandsintown</module>
 		<module>web/live</module>
@@ -123,12 +123,12 @@
 			</dependency>
 			<dependency>
 				<groupId>sk.drabik</groupId>
-				<artifactId>bzscraper-browser</artifactId>
+				<artifactId>bzscraper-portal</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>sk.drabik</groupId>
-				<artifactId>bzscraper-browser</artifactId>
+				<artifactId>bzscraper-portal</artifactId>
 				<version>${project.version}</version>
 				<type>test-jar</type>
 			</dependency>
@@ -161,11 +161,6 @@
 				<groupId>com.opencsv</groupId>
 				<artifactId>opencsv</artifactId>
 				<version>5.12.0</version>
-			</dependency>
-			<dependency>
-				<groupId>org.seleniumhq.selenium</groupId>
-				<artifactId>selenium-java</artifactId>
-				<version>4.27.0</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

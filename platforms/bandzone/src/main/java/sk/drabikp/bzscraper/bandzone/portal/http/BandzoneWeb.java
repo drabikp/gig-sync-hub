@@ -9,6 +9,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.CookieManager;
+import java.net.HttpCookie;
 import java.net.CookiePolicy;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -46,16 +47,43 @@ final class BandzoneWeb {
     }
 
     private final String baseUrl;
+    private final CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ORIGINAL_SERVER);
     private final HttpClient http;
     private final JsonMapper json = JsonMapper.builder().build();
 
     BandzoneWeb(String baseUrl) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.http = HttpClient.newBuilder()
-                .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ORIGINAL_SERVER))
+                .cookieHandler(cookies)
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .connectTimeout(CONNECT_TIMEOUT)
                 .build();
+    }
+
+    /**
+     * The way back in, as one line to keep in the account's place of a password: the cookies Bandzone gave
+     * ("stay signed in" makes them last years). Only for keeping and sending back — never shown or logged.
+     */
+    String session() {
+        return cookies.getCookieStore().getCookies().stream()
+                .filter(cookie -> !cookie.hasExpired())
+                .map(cookie -> cookie.getName() + "=" + cookie.getValue())
+                .collect(Collectors.joining("; "));
+    }
+
+    /** Works as the account again with a {@link #session()} kept earlier, instead of logging in. */
+    void useSession(String session) {
+        URI base = URI.create(baseUrl);
+        for (String pair : session.split(";")) {
+            int equals = pair.indexOf('=');
+            if (equals > 0) {
+                HttpCookie cookie = new HttpCookie(pair.substring(0, equals).strip(), pair.substring(equals + 1).strip());
+                cookie.setDomain(base.getHost());
+                cookie.setPath("/");
+                cookie.setVersion(0);
+                cookies.getCookieStore().add(base, cookie);
+            }
+        }
     }
 
     /** Whether Bandzone still knows this account's login (its pages show the logout link). */

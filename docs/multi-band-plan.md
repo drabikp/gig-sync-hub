@@ -9,7 +9,7 @@ public service. Four phases; each one ends with a working app and is merged on i
 |---|---|---|
 | 1. Bands and memberships | several bands in one app, several people per band, a band switcher; your band becomes band #1 | L — every feature, spec and page |
 | 2. Each band's own accounts | each band connects its Bandzone, Bandsintown and calendar in Settings; secrets in the database, encrypted | M |
-| 3. A sync for many bands | browsers per account with a limit, fair turns, breakers / pause / check / import per band | M |
+| 3. A sync for many bands | fair turns, breakers / pause / check / import per band (browsers per account, as first planned, are gone — see the note after phase 4) | M |
 | 4. Public | sign-up, invitations, roles, audit log, export and delete, isolation in the database, operations | L |
 
 ## The model
@@ -304,26 +304,40 @@ message; tokens out of Caddy's log; unverified e-mails ignored).
 Still the operator's to decide or do before opening sign-up: SMTP for Rauthy (verification, recovery,
 invitation mails); open registration and drop the group restriction; ToS, privacy policy and who the
 operator is; ask Bandsintown (and Bandzone) for API / partner access; a Rauthy API key (delete the login
-with the account); the browsers in their own container (Chromium runs `--no-sandbox` next to the
-secrets); Rauthy on its own database instance and its admin reachable only from a known address; an
+with the account); Rauthy on its own database instance and its admin reachable only from a known address; an
 egress proxy for the bands' addresses (DNS rebinding remains possible between the check and the
 fetch); encrypted, offsite backups with `data_keys` kept apart; require `first-owner-email`;
 MDC logs, alerts, dependency scanning.
 
 ---
 
+## No browser on the server (2026-10-10)
+
+Phases 1–3 were built around driving the platforms' pages in Chromium: a browser per account, a pool
+limit, warm browsers, `max-sessions`. That is all gone. Bandzone's admin turned out to be plain
+server-rendered forms, so the app sends what those forms send; Bandsintown's portal has an API its own
+pages call, and the one step that genuinely needs a browser — its identity provider allows only the
+browser's sign-in exchange — is done by the band in **its own** browser, pasting what that leaves into
+Settings. So the server installs no browser, stores no platform password and no authenticator secret,
+and nothing queues behind a scarce browser. What the phase-3 notes say about the pool, warm browsers
+and sessions per account is history; the fair turns, the per-lane breakers and the per-band check,
+import and pause all stand.
+
 ## Risks
 
-- **The platforms' terms and bot detection.** The app drives Bandzone's and Bandsintown's web pages
-  with Selenium on the band's own account. For one band that's a band automating its own account; as
-  a service it's a third party holding many bands' passwords and authenticator secrets and driving
-  them from one server. Before opening: ask Bandsintown for API / partner access (and Bandzone),
-  make automation opt-in per band with clear wording, keep the CSV export and the by-hand paths
-  first-class, limit sessions per platform from one address.
+- **The platforms' terms and bot detection.** The app sends what Bandzone's and Bandsintown's own
+  pages send, on the band's own account. For one band that's a band automating its own account; as a
+  service it's a third party acting for many bands from one server — and a client that is not a
+  browser is easier to pick out, which is why requests are paced like a person's. It no longer holds
+  any band's password or authenticator secret, only a session each band can revoke. Before opening:
+  ask Bandsintown for API / partner access (and Bandzone), make automation opt-in per band with clear
+  wording, keep the CSV export and the by-hand paths first-class, and expect to reimplement a client
+  when a platform changes its pages.
 - **Holding the bands' secrets** — the most valuable thing to steal. Encryption with keys outside the
   database, nothing in logs, the security review, an encrypted disk.
 - **Phase 1 touches everything** — every feature, spec, page and test. Done module by module along
   the build order (kernel, accounts, places, sync, catalog, importing, check, calendar, platforms,
   app, page), each step building and passing, one branch.
-- **Costs**: a Chromium per running account bounds how many bands one server carries; the pool and the
-  fair turns keep it predictable.
+- **Costs**: with no browser to run, a band's sync is a handful of HTTP requests, so what bounds how
+  many bands one server carries is the worker threads and the platforms' own patience, not memory.
+  The fair turns keep it predictable.

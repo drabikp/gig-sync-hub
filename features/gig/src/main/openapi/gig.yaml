@@ -48,14 +48,14 @@ components:
         Sync: taskMovedOn (args.gig, status). Import: noPlatform, noPlan, nothingSelected, importReading.
         Calendar: calendarUnavailable, invalidCalendar (args.fields: address, zone), invalidRule
         (args.rule: its number, args.reason). Accounts: slugTaken (args.slug), invalidBand (args.fields:
-        name, slug), ownerOnly, invalidAccount (args.fields), secretsUnavailable, invalidEmail (args.email),
+        name, slug), ownerOnly, invalidAccount (args.fields), platformSignInFailed (args.platform, args.problem), secretsUnavailable, invalidEmail (args.email),
         alreadyMember (args.email), invitationGone, invitationNotForYou (args.email), lastOwner, confirmDelete
         (args.slug), tooManyBands (args.max). The app: tooManyRequests (args.seconds), unexpected.
       type: string
       enum: [changedMeanwhile, deletedMeanwhile, invalidGig, notFound, badRequest, notConfigured,
              gigBusy, gigIdentityTaken, taskMovedOn, noPlatform, noPlan, nothingSelected, importReading,
              calendarUnavailable, invalidCalendar, invalidRule, slugTaken, invalidBand, ownerOnly,
-             invalidAccount, secretsUnavailable, invalidEmail, alreadyMember, invitationGone,
+             invalidAccount, platformSignInFailed, secretsUnavailable, invalidEmail, alreadyMember, invitationGone,
              invitationNotForYou, lastOwner, confirmDelete, tooManyBands, tooManyRequests, unexpected]
     ProblemResponse:
       description: |

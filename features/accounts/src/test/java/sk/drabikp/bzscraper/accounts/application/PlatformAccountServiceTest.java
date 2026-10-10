@@ -4,9 +4,11 @@ import org.junit.jupiter.api.Test;
 import sk.drabikp.bzscraper.accounts.application.port.in.AccountsErrorCode;
 import sk.drabikp.bzscraper.accounts.application.port.in.PlatformAccountsUseCase.AccountView;
 import sk.drabikp.bzscraper.accounts.application.port.out.PlatformAccountCheck;
+import sk.drabikp.bzscraper.accounts.application.port.out.PlatformSignIn;
 import sk.drabikp.bzscraper.accounts.domain.AccountCheck;
 import sk.drabikp.bzscraper.accounts.domain.Band;
 import sk.drabikp.bzscraper.accounts.domain.Membership;
+import sk.drabikp.bzscraper.accounts.domain.PlatformAccount;
 import sk.drabikp.bzscraper.accounts.domain.Role;
 import sk.drabikp.bzscraper.accounts.domain.UserId;
 import sk.drabikp.bzscraper.gig.application.NotFoundException;
@@ -45,6 +47,7 @@ class PlatformAccountServiceTest {
     private final AccountsFakes.Stores stores = AccountsFakes.Stores.withFirstBand();
     private final AccountsFakes.Accounts accounts = new AccountsFakes.Accounts();
     private final List<BandId> checked = new ArrayList<>();
+    private final List<PlatformSignIn> signIns = new ArrayList<>();
     private final UserId owner = new UserId(UUID.randomUUID());
     private final UserId manager = new UserId(UUID.randomUUID());
     private final UserId stranger = new UserId(UUID.randomUUID());
@@ -70,7 +73,39 @@ class PlatformAccountServiceTest {
         };
         service = new PlatformAccountService(accounts, PLATFORMS, AccountsFakes.service(new AccountsFakes.SignedIn(),
                 stores, ""), new AesGcmSecretBox(AccountsFakes.TEST_KEYS), () -> List.of(alphaCheck),
-                Clock.fixed(Instant.parse("2026-10-10T10:00:00Z"), ZoneOffset.UTC));
+                () -> signIns, Clock.fixed(Instant.parse("2026-10-10T10:00:00Z"), ZoneOffset.UTC));
+    }
+
+    @Test
+    void a_platform_that_signs_in_for_itself_keeps_a_session_and_never_the_password() {
+        signIns.add(new PlatformSignIn() {
+            @Override
+            public Platform platform() {
+                return ALPHA;
+            }
+
+            @Override
+            public Kept signIn(PlatformAccount typed) {
+                return "right".equals(typed.secret("password"))
+                        ? Kept.of(typed.settings(), Map.of("session", "a-session-that-lasts"))
+                        : Kept.failed("wrong password");
+            }
+        });
+
+        service.connect(owner, BandId.FIRST, ALPHA, Map.of("login", "a@band.test"), Map.of("password", "right"));
+        PlatformAccount stored = accounts.of(BandId.FIRST, ALPHA).orElseThrow();
+        assertThat(stored.secrets()).as("the session instead of the password").containsOnlyKeys("session");
+        assertThat(service.accounts(owner, BandId.FIRST)).singleElement()
+                .satisfies(a -> assertThat(a.secretsSet()).containsExactly("session"));
+
+        assertThatThrownBy(() -> service.connect(owner, BandId.FIRST, ALPHA, Map.of("login", "a@band.test"),
+                Map.of("password", "wrong")))
+                .isInstanceOfSatisfying(UserFacingException.class, e -> {
+                    assertThat(e.code()).isEqualTo(AccountsErrorCode.PLATFORM_SIGN_IN_FAILED);
+                    assertThat(e.args()).containsEntry("problem", "wrong password");
+                });
+        assertThat(accounts.of(BandId.FIRST, ALPHA).orElseThrow().secret("session"))
+                .as("the account that worked is left alone").isEqualTo("a-session-that-lasts");
     }
 
     @Test

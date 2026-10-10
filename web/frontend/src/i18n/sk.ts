@@ -276,6 +276,7 @@ export const sk = {
     invalidBand: 'Skontroluj kapelu ({{fields}}): názov najviac 100 znakov; adresa 2–64 malých písmen, číslic a pomlčiek.',
     ownerOnly: 'To môžu len vlastníci kapely.',
     invalidAccount: 'Skontroluj účet ({{fields}}).',
+    platformSignInFailed: '{{platform}} sa neprihlásil: {{problem}}',
     secretsUnavailable: 'Tento server zatiaľ nevie uchovať heslá (nemá na ne kľúč) — povedz to tomu, kto ho prevádzkuje.',
     invalidCalendar: 'Skontroluj kalendár ({{fields}}): adresa začína https:// (alebo webcal://).',
     invalidRule: 'Pravidlo {{rule}} nie je platné: {{reason}}',

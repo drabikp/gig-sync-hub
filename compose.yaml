@@ -80,14 +80,10 @@ services:
         target: bzscraper.calendar.ical-url
     volumes:
       - ./data:/app/data
-      # the platforms' saved logins (Chromium profiles)
-      - browser-profiles:/home/bzscraper/.bzscraper
     # this machine only (health, debugging): the way in for people is the proxy — signing in
     # needs https://$BZ_DOMAIN. BZ_APP_BIND=0.0.0.0 opens it to the local network.
     ports:
       - "${BZ_APP_BIND:-127.0.0.1}:8080:8080"
-    # Chromium's shared memory
-    shm_size: 512m
     # names on the internet (the platforms, the calendar, the town search): Docker's own forwarding
     # failed behind a VPN's name servers; container names (db) still resolve. BZ_DNS to change it.
     dns:
@@ -217,7 +213,6 @@ secrets:
 
 volumes:
   db-data:
-  browser-profiles:
   caddy-data:
   caddy-config:
 

@@ -269,6 +269,7 @@ export const en = {
     invalidBand: 'Check the band’s {{fields}}: a name of up to 100 characters; an address of 2–64 lower-case letters, digits and dashes.',
     ownerOnly: 'Only the band’s owners may do that.',
     invalidAccount: 'Check the account’s {{fields}}.',
+    platformSignInFailed: '{{platform}} wouldn’t sign in: {{problem}}',
     secretsUnavailable: 'This server can’t keep passwords yet (it has no key for them) — ask whoever runs it.',
     invalidCalendar: 'Check the calendar’s {{fields}}: its address starts with https:// (or webcal://).',
     invalidRule: 'Rule {{rule}} isn’t one: {{reason}}',
