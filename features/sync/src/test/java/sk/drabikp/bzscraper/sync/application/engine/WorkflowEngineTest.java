@@ -7,6 +7,7 @@ import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.application.SyncFakes;
 import sk.drabikp.bzscraper.sync.application.SyncPause;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncStep;
+import sk.drabikp.bzscraper.sync.domain.Lane;
 import sk.drabikp.bzscraper.sync.domain.StepOutcome;
 import sk.drabikp.bzscraper.sync.domain.StepType;
 import sk.drabikp.bzscraper.sync.domain.SyncAction;
@@ -115,22 +116,17 @@ class WorkflowEngineTest {
         List<String> health = new ArrayList<>();
         PlatformHealth watched = new PlatformHealth() {
             @Override
-            public java.util.Set<Platform> held() {
-                return java.util.Set.of();
-            }
-
-            @Override
-            public boolean held(Platform platform) {
+            public boolean held(Lane lane) {
                 return false;
             }
 
             @Override
-            public void succeeded(Platform platform) {
+            public void succeeded(Lane lane) {
                 health.add("succeeded");
             }
 
             @Override
-            public void failed(Platform platform, String failure) {
+            public void failed(Lane lane, String failure) {
                 health.add("failed");
             }
         };

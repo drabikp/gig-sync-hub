@@ -7,6 +7,7 @@ import sk.drabikp.bzscraper.sync.application.port.out.SyncFaults;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncOutbox;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncStep;
+import sk.drabikp.bzscraper.sync.domain.Lane;
 import sk.drabikp.bzscraper.sync.domain.StepOutcome;
 import sk.drabikp.bzscraper.sync.domain.StepType;
 import sk.drabikp.bzscraper.sync.domain.SyncTask;
@@ -29,8 +30,8 @@ import java.util.Optional;
  *       the gig passes it on). After it: {@link OutcomeSettlement}.</li>
  *   <li>A step that throws instead of answering fails its runs (the fault goes to
  *       {@link SyncFaults} in full).</li>
- *   <li>Each batch counts for or against its platform's health; paused or held back, no
- *       further batch starts.</li>
+ *   <li>Each batch counts for or against its lane's health (the band's account on the platform);
+ *       paused or held back, no further batch starts.</li>
  * </ul>
  */
 public class WorkflowEngine {
@@ -88,7 +89,7 @@ public class WorkflowEngine {
                 items.add(item.get());
             }
         }
-        for (int from = 0; from < runs.size() && !pause.paused(band) && !health.held(platform); from += step.batchSize()) {
+        for (int from = 0; from < runs.size() && !pause.paused(band) && !health.held(new Lane(band, platform)); from += step.batchSize()) {
             int to = Math.min(runs.size(), from + step.batchSize());
             runBatch(band, step, runs.subList(from, to), items.subList(from, to));
         }
@@ -120,9 +121,9 @@ public class WorkflowEngine {
         // never reached it
         List<StepOutcome> reached = settled.stream().filter(o -> o.kind() != StepOutcome.Kind.POSTPONED).toList();
         if (!reached.isEmpty() && reached.stream().allMatch(o -> o.kind() == StepOutcome.Kind.FAILED)) {
-            health.failed(step.platform(), step.type().label() + ": " + reached.getFirst().note());
+            health.failed(new Lane(band, step.platform()), step.type().label() + ": " + reached.getFirst().note());
         } else if (!reached.isEmpty()) {
-            health.succeeded(step.platform());
+            health.succeeded(new Lane(band, step.platform()));
         }
         notifier.changed(band);
     }

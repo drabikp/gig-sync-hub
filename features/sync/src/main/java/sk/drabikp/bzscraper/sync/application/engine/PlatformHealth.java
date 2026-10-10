@@ -1,20 +1,19 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
-import sk.drabikp.bzscraper.gig.domain.platform.Platform;
+import sk.drabikp.bzscraper.sync.domain.Lane;
 
-import java.util.Set;
-
-/** How each platform has been answering lately — the engine reports, and skips the ones held back. */
+/**
+ * How each band's account on each platform has been answering lately — the engine reports, and skips
+ * the lanes held back (a band's account, or a whole platform that seems down for everyone).
+ */
 public interface PlatformHealth {
 
-    /** The platforms whose work is held back right now. */
-    Set<Platform> held();
+    /** The lane's work is held back right now (its own breaker, or its platform's). */
+    boolean held(Lane lane);
 
-    boolean held(Platform platform);
+    /** The platform answered the band's account (any result other than a temporary failure). */
+    void succeeded(Lane lane);
 
-    /** The platform answered (any result other than a temporary failure). */
-    void succeeded(Platform platform);
-
-    /** A batch on the platform failed as a whole. */
-    void failed(Platform platform, String failure);
+    /** A batch of the band's on the platform failed as a whole. */
+    void failed(Lane lane, String failure);
 }

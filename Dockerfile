@@ -52,5 +52,5 @@ ENV BZSCRAPER_BROWSER_CHROMIUMBINARY=/usr/bin/chromium \
     BZSCRAPER_BROWSER_CHROMEDRIVER=/usr/bin/chromedriver
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -fsS http://localhost:8080/actuator/health > /dev/null || exit 1
+    CMD curl -fsS http://localhost:8081/actuator/health > /dev/null || exit 1
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]

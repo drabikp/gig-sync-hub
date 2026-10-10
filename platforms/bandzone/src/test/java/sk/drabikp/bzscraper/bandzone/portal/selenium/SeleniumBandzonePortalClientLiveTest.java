@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.accounts.application.AccountsFakes;
 import sk.drabikp.bzscraper.bandzone.BandzonePlatform;
 import sk.drabikp.bzscraper.bandzone.BandzoneProperties;
 import sk.drabikp.bzscraper.bandzone.portal.BandzoneSession;
+import sk.drabikp.bzscraper.browser.BrowserPool;
 import sk.drabikp.bzscraper.browser.BrowserProperties;
 import sk.drabikp.bzscraper.browser.SeleniumOptions;
 import sk.drabikp.bzscraper.gig.domain.Address;
@@ -55,11 +56,11 @@ class SeleniumBandzonePortalClientLiveTest {
                 new BandzoneProperties(env("BZ_BASE_URL", "https://bandzone.cz"), null, null, null,
                         new SeleniumOptions(true, Boolean.parseBoolean(env("BZ_HEADLESS", "true")),
                                 env("BZ_CHROMIUM", "/usr/bin/chromium"), env("BZ_CHROMEDRIVER", "/usr/bin/chromedriver"),
-                                env("BZ_PROFILE", ""))),
-                new BrowserProperties(env("BZ_PASSWORD_STORE", "auto"), null, null),
+                                env("BZ_PROFILE", ""), null)),
+                new BrowserProperties(env("BZ_PASSWORD_STORE", "auto"), null, null, null),
                 new AccountsFakes.Accounts().with(BandId.FIRST, BandzonePlatform.PLATFORM,
                         Map.of("login", env("BZ_LOGIN", ""), "bandSlug", env("BZ_SLUG", "")),
-                        Map.of("password", env("BZ_PASSWORD", ""))));
+                        Map.of("password", env("BZ_PASSWORD", ""))), new BrowserPool(1));
         String lineupBand = env("BZ_LINEUP_BAND", "");
         boolean keep = Boolean.parseBoolean(env("BZ_KEEP", "false"));
 

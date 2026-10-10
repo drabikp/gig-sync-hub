@@ -15,6 +15,6 @@ public interface SyncStateUseCase {
     /** The band's gigs with platform work queued, running or waiting for the user. */
     Set<GigId> gigsWithOpenWork(BandId band);
 
-    /** Whether the platform's work is held back by its circuit breaker right now. */
-    boolean heldBack(Platform platform);
+    /** Whether the band's work on the platform is held back by a circuit breaker (its own or the platform's) right now. */
+    boolean heldBack(BandId band, Platform platform);
 }

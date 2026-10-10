@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 import sk.drabikp.bzscraper.bandzone.BandzoneProperties;
 import sk.drabikp.bzscraper.bandzone.portal.BandzonePortalClient;
 import sk.drabikp.bzscraper.bandzone.portal.BandzoneSession;
+import sk.drabikp.bzscraper.browser.BrowserPool;
 import sk.drabikp.bzscraper.browser.BrowserProperties;
 import sk.drabikp.bzscraper.browser.PlatformBrowser;
 import sk.drabikp.bzscraper.gig.domain.BandId;
@@ -48,12 +49,12 @@ class SeleniumBandzonePortalClient implements BandzonePortalClient {
     private final PosterDownloader posters = new PosterDownloader();
 
     public SeleniumBandzonePortalClient(BandzoneProperties properties, BrowserProperties browserProperties,
-                                        PlatformAccounts accounts) {
+                                        PlatformAccounts accounts, BrowserPool pool) {
         this.baseUrl = properties.baseUrl();
         this.accounts = accounts;
         this.browser = new PlatformBrowser(properties.selenium().browser("bandzone", browserProperties, "1280,1024"),
                 new PlatformBrowser.Customizer() {
-                });
+                }, pool);
     }
 
     @Override

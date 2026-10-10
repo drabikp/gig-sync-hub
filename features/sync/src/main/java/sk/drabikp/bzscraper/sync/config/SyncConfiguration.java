@@ -16,6 +16,7 @@ import sk.drabikp.bzscraper.sync.application.SyncRequests;
 import sk.drabikp.bzscraper.sync.application.SyncState;
 import sk.drabikp.bzscraper.sync.application.SyncWakeUp;
 import sk.drabikp.bzscraper.sync.application.engine.OutcomeSettlement;
+import sk.drabikp.bzscraper.sync.application.engine.FairTurns;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformBreakers;
 import sk.drabikp.bzscraper.sync.application.engine.RecreateStep;
 import sk.drabikp.bzscraper.sync.application.engine.RunPreparation;
@@ -70,11 +71,20 @@ class SyncConfiguration {
                 platformBreakers);
     }
 
-    /** A platform failing this many batches in a row is held back this long (then one trial batch). */
+    /**
+     * A band's work on a platform failing this many batches in a row is held back this long (then one trial
+     * batch); so many bands held back on one platform hold it back for all.
+     */
     @Bean
     PlatformBreakers platformBreakers(Clock clock, SyncNotifier notifier, SyncTrigger trigger, SyncProperties sync) {
-        return new PlatformBreakers(sync.breaker().failures(), Duration.ofMinutes(sync.breaker().cooldownMinutes()),
-                clock, notifier, trigger);
+        return new PlatformBreakers(sync.breaker().failures(), sync.breaker().platformBands(),
+                Duration.ofMinutes(sync.breaker().cooldownMinutes()), clock, notifier, trigger);
+    }
+
+    /** Whose work runs next — the bands in turn, one run per lane at a time. */
+    @Bean
+    FairTurns fairTurns() {
+        return new FairTurns();
     }
 
     @Bean
@@ -108,8 +118,9 @@ class SyncConfiguration {
     @Bean
     SyncDispatcher syncDispatcher(WorkflowEngine workflowEngine, SyncOutbox outbox, SyncNotifier notifier,
                                   Clock clock, SyncPause syncPause, PlatformBreakers platformBreakers,
-                                  Platforms platforms) {
-        return new SyncDispatcher(workflowEngine, outbox, notifier, clock, syncPause, platformBreakers, platforms);
+                                  Platforms platforms, FairTurns fairTurns) {
+        return new SyncDispatcher(workflowEngine, outbox, notifier, clock, syncPause, platformBreakers, platforms,
+                fairTurns);
     }
 
     @Bean

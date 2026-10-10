@@ -70,8 +70,12 @@ on 80/443 gets and renews the Let's Encrypt certificate for `BZ_DOMAIN` itself (
 server), redirects HTTP to HTTPS, sets HSTS, routes `/auth/*` to Rauthy and the rest to `app:8080`,
 compresses everything but the live updates (`/api/bands/*/events`, passed through unbuffered).
 `BZ_DOMAIN=localhost` (the default) runs it locally with Caddy's own certificate (the browser warns
-once, or trust Caddy's root). The app's own port is published on `127.0.0.1` only (health, debugging;
-`BZ_APP_BIND=0.0.0.0` opens it to the local network). `server.forward-headers-strategy=native`: Tomcat
+once, or trust Caddy's root). The app's own port is published on `127.0.0.1` only (debugging;
+`BZ_APP_BIND=0.0.0.0` opens it to the local network). The operator's endpoints (actuator: health, metrics)
+answer on the management port 8081, bound to 127.0.0.1 inside the container — never through the proxy or
+the published port: `docker compose exec app curl -s localhost:8081/actuator/metrics/bzscraper.sync.tasks`
+(`bzscraper.sync.tasks` / `.held` per band, `bzscraper.browser.open` / `.max` / `.sessions` — `BandMetrics`);
+the image's health check uses it. `server.forward-headers-strategy=native`: Tomcat
 believes `X-Forwarded-*` only from private addresses, so behind the proxy requests count as HTTPS —
 Rauthy is told to send the user back over HTTPS and the session and CSRF cookies are `Secure`
 (`ProxyHeadersTest`, a real server).
@@ -115,13 +119,16 @@ features/sync       outbox (SyncOutbox = SyncTaskQueries + the writes; SyncTask�
 features/catalog    catalog use cases, GigWrites (← CatalogWrites), GigMovedListener, GigExporter;
                     …/gigs, …/exports, /api/platforms; test-jar: CatalogFakes
 features/importing  import planner/merge, GigImporter port (+ PlatformReads); /api/import (reads in the background)
-features/check      Reconciler, platform check service + nightly schedule; /api/check
+features/check      Reconciler, platform check service + nightly schedule, each band's latest result
+                    (CheckResultStore, table band_check — kept across restarts); /api/check
 features/calendar   calendar domain (+ domain.event: the calendar's events; + domain.rules: profile
                     and classifier), review service, stores, iCal feed, profile file; /api/calendar;
                     shipped presets (calendar/*.profile)
 platforms/browser   PlatformBrowser (every lease names its account — a band's login — and gets that
-                    account's profile; a warm browser only for the same account), BrowserProfile,
-                    WarmBrowser, properties; test-jar: TestChromium
+                    account's profile; one session per account, `max-sessions` per platform; warm browsers
+                    per account), BrowserPool (the server's limit, `bzscraper.browser.max`, shared by the
+                    platforms; the idlest warm browser closed to make room), BrowserProfile, WarmBrowser,
+                    properties; test-jar: TestChromium
 platforms/bandzone      bandzone (traits, properties, exception) · scrape · portal (client API, stub)
                         · portal.selenium (the Selenium client + page objects) · step · rest
                         (the public `/gigs/{band_slug}` endpoint — any band, by its slug)
@@ -135,7 +142,8 @@ web/frontend        the page: React + TypeScript + Vite + Mantine 8, TanStack Qu
 app/                BzscraperApplication; web (security: sign-in through Rauthy (OIDC), session + CSRF
                     for a single-page app; OidcCurrentLogin; BandAccessInterceptor: a band's addresses
                     for its members; ApiErrors; SinglePageApp: the page's own addresses load
-                    index.html); application.properties; ArchitectureTest, PlatformNamesTest,
+                    index.html); metrics (BandMetrics, the operator's); application.properties;
+                    ArchitectureTest, PlatformNamesTest,
                     ApiSecurityTest, BandIsolationTest, ErrorCodesTest
 ```
 
@@ -326,10 +334,16 @@ no thread-local "current band": the worker and the nightly check work for every 
   `bzscraper.bandsintown.login/…`, `bzscraper.calendar.ical-url`, the rules file) is kept once on start
   while band #1 has none, then unused. The shipped calendar presets are everyone's
   (`calendar_rule.band_id` null); each band's own rules are edited on the page.
-- The nightly platform check runs for every band (`BandDirectory.all()`), one after another; each
-  band has its own import session, check result and pause; the circuit breakers stay per platform
-  (one browser per platform), told to every band's pages (`changedEverywhere`). The public
-  `/gigs/{band_slug}` finds the band by its slug.
+- **Many bands on one server** (phase 3): the sync runs `bzscraper.sync.worker.threads` (2) **lanes** at
+  once — a lane is a band's work on a platform (`Lane`), run by one worker at a time — and the bands take
+  turns (`FairTurns`: round-robin by band, a band's oldest due task first), so one band's hundred tasks
+  or slow platform don't keep the others waiting. Circuit breakers are per lane (a band's broken account
+  holds back only that band there) and per platform above them (`breaker.platform-bands`, 3, bands held
+  back on one platform at once = it seems down: held back for all, told to every band's pages). Browsers:
+  one session per account, `max-sessions` per platform, `bzscraper.browser.max` on the server
+  (`BrowserPool`). The nightly platform check runs for every band, one after another; each band has its
+  own import session, check result (kept, `band_check`) and pause. The public `/gigs/{band_slug}` finds
+  the band by its slug.
 
 ## Architecture
 
@@ -387,8 +401,10 @@ failed for good (→ user) / postponed (the platform's browser was busy with a r
 minute, no attempt used, not counted by the breaker). The run's step is `sync_task.step`; the path is logged ("bulk edit:
 … → form edit"); due runs at one step go together (batch, or ≤10 one by one, each saved on
 its own). Moot work (gig deleted/cancelled/published meanwhile) ends done with a note.
-`SyncWorker` (one thread, woken on enqueue + every `bzscraper.sync.poll-seconds`) calls
-`SyncDispatcher.runNext()` (→ engine) until nothing is due.
+`SyncWorker` (`bzscraper.sync.worker.threads` threads, 2; woken on enqueue + every
+`bzscraper.sync.poll-seconds`) calls `SyncDispatcher.runNext()` until nothing it may run is due: the next
+lane's due runs (the bands in turn, `FairTurns`; a lane — a band's work on a platform — never by two
+workers at once; none of a paused band or a lane held back) go to the engine.
 
 - Tasks work from the state when they RUN; work that became moot ends DONE with a note.
 - Queueing rules (`SyncRequests`): no second UPDATE while one (or the PUBLISH) is PENDING;
@@ -419,18 +435,22 @@ its own). Moot work (gig deleted/cancelled/published meanwhile) ends done with a
 - **Pause / Resume** on Activity / Settings (`PauseSyncUseCase`, `SyncPause`): the gig in progress
   finishes, nothing new starts, the waiting work stays queued; a pause survives a restart
   (`SettingsStore`, table `app_setting`).
-- **Circuit breaker per platform** (`PlatformBreakers`, `PlatformBreakerUseCase`, in memory):
-  a batch whose results are ALL temporary failures counts against its platform (anything
-  else — done, refused, failed for good — shows the platform answering and resets it);
-  `bzscraper.sync.breaker.failures` (3) in a row → the platform is held back for
-  `.cooldown-minutes` (30): its tasks stay queued (`SyncOutbox.nextDue(now, skipping)`), the
-  other platforms go on; then one trial batch decides. The Inbox, Activity and Settings show it with "Resume now".
-- **One browser per platform** (`PlatformBrowser`; sessions open through `PlatformBrowser.open`:
-  lease, log in, screenshot + discard on failure, the platform's exception): a sync step doesn't wait for a browser
-  another operation holds (BUSY → postponed); a read the user started (Import, the platform
-  check) waits up to 10 min. The browser stays warm ~60 s after a session (`WarmBrowser`), so
-  the next step or task takes it over (one start + login check per run, not per gig); closed
-  when idle and on shutdown (a browser handed back after that is closed at once; handing back
+- **Circuit breakers per lane** (`PlatformBreakers`, `PlatformBreakerUseCase`, in memory): a batch
+  whose results are ALL temporary failures counts against its lane — the band's account on the platform
+  (anything else — done, refused, failed for good — shows the platform answering and resets it);
+  `bzscraper.sync.breaker.failures` (3) in a row → the band's work there is held back for
+  `.cooldown-minutes` (30): its tasks stay queued, the band's other platforms and every other band go
+  on; then one trial batch decides. `.platform-bands` (3) bands held back on one platform at once hold
+  the platform back for everyone (`Breaker.everyone`) until fewer are. The Inbox, Activity and Settings
+  show a band's with "Resume now" (one held for everyone can't be resumed by a band).
+- **Browsers** (`PlatformBrowser`; sessions open through `PlatformBrowser.open`: lease, log in,
+  screenshot + discard on failure, the platform's exception): one session per account (a band's login),
+  `bzscraper.<platform>.selenium.max-sessions` (1) per platform from this server, `bzscraper.browser.max`
+  (2) Chromiums on the server (`BrowserPool`; the idlest warm one closed to make room). A sync step doesn't
+  wait for a browser (BUSY → postponed); a read the user started (Import, the platform check) waits up to
+  10 min. A browser stays warm ~60 s after a session for its account (`WarmBrowser`), so the account's
+  next step or task takes it over (one start + login check per run, not per gig); closed when idle,
+  when the server needs room, and on shutdown (a browser handed back after that is closed at once; handing back
   never throws and always releases the lease). Failures leave a screenshot,
   `$TMPDIR/bzscraper-<platform>-<step>.png`.
 - Page: actions return a `QueueResult` (a toast "Publishing on …" / "Left out: …"); every gig
@@ -459,8 +479,8 @@ search. Gigs with sync work still queued are skipped. Fixes, always the user's c
 Re-sync (`ResyncGigUseCase`) or Forget link (a gone event, through `GigWrites.forgetLink`;
 Publish creates it again; the gig pages follow). Also
 counts platform events no gig is published as (→ Import). Runs nightly
-(`PlatformCheckSchedule`, `bzscraper.check.cron`, default 04:30; `bzscraper.check.enabled`);
-the result is kept in memory.
+(`PlatformCheckSchedule`, `bzscraper.check.cron`, default 04:30; `bzscraper.check.enabled`), every
+band one after another; each band's latest result is kept (`CheckResultStore`, table `band_check`).
 
 ## Import (`/import`)
 
@@ -662,7 +682,8 @@ with band #1 — keys `gig (band_id, id)`, `published_gig (band_id, platform, gi
 the log goes with its task), `calendar_rule.band_id` null for the shipped presets; deleting a band
 deletes all its rows. `V3__band_connections.sql`: `band_platform_account (band_id, platform)` (settings
 JSON, `secrets` sealed + `key_id`, the last sign-in test) and `band_calendar (band_id)` (the sealed
-address, `key_id`, zone).
+address, `key_id`, zone). `V4__band_check.sql`: `band_check (band_id)` — the band's latest platform
+check as JSON.
 
 **From H2** (the database until 2026-10): `H2Import` (a Flyway `afterMigrate` callback in the kernel)
 copies an H2 SQL backup (`SCRIPT TO`, `bzscraper.db.import-h2`) into an EMPTY database right after
@@ -697,7 +718,10 @@ its code, the page's own addresses load `index.html`. `BandIsolationTest`: every
 spec (read from the YAML) is 404 for a non-member, both ways. The test properties carry a made-up data
 key (`bzscraper.accounts.data-keys`; `AccountsFakes.TEST_KEYS` for module tests); the JPA tests of the
 sealed rows check the secret isn't in the row, that a row copied to another band doesn't open, and key
-rotation. Each feature's tests run with a band
+rotation. `ManyBandsSyncTest` (sync): ten bands queued at once on three workers all finish, a lane is never
+run twice at once, one band's broken account holds back only it, many failing bands hold the platform back;
+`BrowserPoolTest` (browser, mock drivers): the server's limit, the idlest warm browser closed for a new
+account, one session per account, the platform's limit. Each feature's tests run with a band
 (`TestBands.BAND`; the fakes key everything by band) and check that another band (`OTHER`) sees none
 of it. The page: Vitest (`web/frontend`, run by `./mvnw test`) — both languages have the
 same keys and every key the pages use, dates, the calendar's show applied to the form, a band's address from its name.

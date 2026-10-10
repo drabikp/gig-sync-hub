@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.check.application;
 import org.junit.jupiter.api.Test;
 import sk.drabikp.bzscraper.catalog.application.CatalogFakes;
 import sk.drabikp.bzscraper.catalog.application.port.in.GigWrites;
+import sk.drabikp.bzscraper.check.application.port.out.CheckResultStore;
 import sk.drabikp.bzscraper.check.domain.Drift;
 import sk.drabikp.bzscraper.check.domain.PlatformCheck;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
@@ -17,11 +18,15 @@ import sk.drabikp.bzscraper.sync.application.SyncFakes;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformBreakers;
 import sk.drabikp.bzscraper.sync.application.port.out.FailureKind;
 import sk.drabikp.bzscraper.sync.application.port.out.PlatformException;
+import sk.drabikp.bzscraper.sync.domain.Lane;
 import sk.drabikp.bzscraper.sync.domain.SyncAction;
 import sk.drabikp.bzscraper.sync.domain.SyncTask;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
@@ -36,7 +41,21 @@ class PlatformCheckServiceTest {
     private final SyncFakes.Outbox outbox = new SyncFakes.Outbox();
     private final SyncFakes.Signals signals = new SyncFakes.Signals();
     private final SyncFakes.MutableClock clock = new SyncFakes.MutableClock();
-    private final PlatformBreakers breakers = new PlatformBreakers(1, Duration.ofMinutes(30), clock, signals, signals);
+    private final PlatformBreakers breakers = new PlatformBreakers(1, 3, Duration.ofMinutes(30), clock, signals,
+            signals);
+    /** Each band's latest check, as a store keeps them. */
+    private final Map<BandId, PlatformCheck> kept = new HashMap<>();
+    private final CheckResultStore results = new CheckResultStore() {
+        @Override
+        public Optional<PlatformCheck> of(BandId band) {
+            return Optional.ofNullable(kept.get(band));
+        }
+
+        @Override
+        public void save(BandId band, PlatformCheck check) {
+            kept.put(band, check);
+        }
+    };
 
     private final Gig fest = TestGigs.gig("Fest", "Klub 007");
     private final Gig renamedThere = TestGigs.gig("Fest — changed by hand", "Klub 007");
@@ -64,7 +83,7 @@ class PlatformCheckServiceTest {
     private PlatformCheckService service(GigImporter... importers) {
         return new PlatformCheckService(List.of(importers), gigs, published, writes(),
                 SyncFakes.state(outbox, breakers), new SyncFakes.DirectTransactions(), TestPlatforms.PLATFORMS, clock,
-                3650, LiveUpdates.NONE);
+                3650, LiveUpdates.NONE, results);
     }
 
     private GigWrites writes() {
@@ -95,6 +114,8 @@ class PlatformCheckServiceTest {
         assertThat(check.unlinked()).containsEntry(BANDZONE, 1);
         assertThat(service.lastCheck(BAND)).contains(check);
         assertThat(service.running(BAND)).isFalse();
+        assertThat(service(importer(BANDZONE, band -> List.of())).lastCheck(BAND)).as("kept across a restart")
+                .contains(check);
     }
 
     @Test
@@ -102,7 +123,7 @@ class PlatformCheckServiceTest {
         gigs.save(BAND, fest);
         published.record(BAND, BANDZONE, fest.id(), "563380");
         outbox.enqueue(BAND, fest.id(), SyncTask.labelOf(fest), BANDZONE, SyncAction.UPDATE, clock.instant());
-        breakers.failed(BANDSINTOWN, "timeout");
+        breakers.failed(new Lane(BAND, BANDSINTOWN), "timeout");
         int[] bandsintownReads = {0};
         PlatformCheckService service = service(
                 importer(BANDZONE, band -> List.of(new ImportedGig(BANDZONE, renamedThere, "563380"))),
@@ -125,7 +146,7 @@ class PlatformCheckServiceTest {
         PlatformCheckService lastWeekOnly = new PlatformCheckService(
                 List.of(importer(BANDZONE, band -> List.of(new ImportedGig(BANDZONE, renamedThere, "563380")))),
                 gigs, published, writes(), SyncFakes.state(outbox, breakers), new SyncFakes.DirectTransactions(),
-                TestPlatforms.PLATFORMS, clock, 7, LiveUpdates.NONE);
+                TestPlatforms.PLATFORMS, clock, 7, LiveUpdates.NONE, results);
 
         assertThat(lastWeekOnly.check(BAND).orElseThrow().drifts()).isEmpty();
     }

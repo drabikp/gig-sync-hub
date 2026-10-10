@@ -18,19 +18,22 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
- * A platform's one Chromium, shared by every operation on that platform:
+ * A platform's browsers (Chromium), for every operation on that platform:
  * <ul>
- *   <li>one browser at a time — a profile can't be opened twice, and a person has one tab
- *       open; {@link #acquire} waits for it as long as the caller is willing to;</li>
  *   <li>a private profile per account (a band's login there) holding its saved login
- *       ({@link BrowserProfile}): every lease names its account, and the browser is that
+ *       ({@link BrowserProfile}): every lease names its account, and its browser is that
  *       account's — never another band's;</li>
+ *   <li>one session per account at a time (a profile can't be opened twice, and a person has
+ *       one tab open), at most {@code sessions} on the platform at once (many accounts from one
+ *       address look like a bot farm), and the server's limit on open browsers
+ *       ({@link BrowserPool}); {@link #acquire} waits as long as the caller is willing to;</li>
  *   <li>kept warm a minute after a session ({@link WarmBrowser}) for the account's next one;</li>
  *   <li>the same Chromium options for every platform, plus what {@link Customizer} adds;</li>
  *   <li>a screenshot of the page an operation failed on, in the temp directory
@@ -48,10 +51,14 @@ public final class PlatformBrowser {
 
     /**
      * Where the browser is and how it starts; {@code profileRoot} holds a directory per account (blank: the
-     * default, see {@link BrowserProfile#dir}).
+     * default, see {@link BrowserProfile#dir}); {@code sessions}: how many accounts' sessions at once.
      */
     public record Settings(String platform, String profileRoot, boolean headless, String chromiumBinary,
-                           String chromedriverPath, String passwordStore, String windowSize) {
+                           String chromedriverPath, String passwordStore, String windowSize, int sessions) {
+
+        public Settings {
+            sessions = Math.max(1, sessions);
+        }
     }
 
     /** What a platform adds to a new browser (options before it starts, set-up after). */
@@ -88,35 +95,88 @@ public final class PlatformBrowser {
 
     private final Settings settings;
     private final Customizer customizer;
-    private final Semaphore oneBrowser = new Semaphore(1);
+    private final BrowserPool pool;
+    private final Function<String, WebDriver> starter;
+    private final Semaphore sessions;
+    private final Map<String, Semaphore> accounts = new ConcurrentHashMap<>();
     private final WarmBrowser warm;
 
-    public PlatformBrowser(Settings settings, Customizer customizer) {
+    public PlatformBrowser(Settings settings, Customizer customizer, BrowserPool pool) {
+        this(settings, customizer, pool, null);
+    }
+
+    /** {@code starter} starts an account's browser (null: Chromium as {@code settings} say) — tests give their own. */
+    PlatformBrowser(Settings settings, Customizer customizer, BrowserPool pool, Function<String, WebDriver> starter) {
         this.settings = settings;
         this.customizer = customizer;
-        this.warm = new WarmBrowser(oneBrowser, KEEP_WARM, settings.platform());
+        this.pool = pool;
+        this.starter = starter != null ? starter : this::start;
+        this.sessions = new Semaphore(settings.sessions());
+        this.warm = new WarmBrowser(KEEP_WARM, settings.platform(), this::quit);
+        pool.register(settings.platform(), warm, this::sessionsInUse);
     }
 
     /**
-     * The browser for {@code account} — the warm one when it is that account's, else a new one with the
-     * account's profile — when it is free within {@code wait}; empty when another operation still has it
-     * (or the wait was interrupted). The lease must end with {@link Lease#keepWarm} or {@link Lease#discard}.
+     * The browser for {@code account} — its warm one, else a new one with the account's profile — when,
+     * within {@code wait}, the account has no other session, the platform has room for one more and the
+     * server for its browser; empty otherwise (or when the wait was interrupted). The lease must end with
+     * {@link Lease#keepWarm} or {@link Lease#discard}.
      */
     public Optional<Lease> acquire(String account, Duration wait) {
-        try {
-            if (!oneBrowser.tryAcquire(wait.toMillis(), TimeUnit.MILLISECONDS)) {
-                return Optional.empty();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        long deadline = System.nanoTime() + wait.toNanos();
+        Semaphore own = accounts.computeIfAbsent(account, a -> new Semaphore(1));
+        if (!tryAcquire(own, deadline)) {
+            return Optional.empty();
+        }
+        if (!tryAcquire(sessions, deadline)) {
+            own.release();
             return Optional.empty();
         }
         try {
             WebDriver driver = warm.take(account);
-            return Optional.of(new Lease(driver != null ? driver : start(account), account, driver != null));
+            if (driver != null) {
+                return Optional.of(new Lease(driver, account, true));
+            }
+            if (!pool.reserve(Duration.ofNanos(Math.max(0, deadline - System.nanoTime())))) {
+                sessions.release();
+                own.release();
+                return Optional.empty();
+            }
+            try {
+                return Optional.of(new Lease(starter.apply(account), account, false));
+            } catch (RuntimeException e) {
+                pool.closed();
+                throw e;
+            }
         } catch (RuntimeException e) {
-            oneBrowser.release();
+            sessions.release();
+            own.release();
             throw e;
+        }
+    }
+
+    /** The platform's sessions running right now. */
+    public int sessionsInUse() {
+        return settings.sessions() - sessions.availablePermits();
+    }
+
+    private static boolean tryAcquire(Semaphore semaphore, long deadline) {
+        try {
+            return semaphore.tryAcquire(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /** Closes a browser for good and frees its room on the server. Never throws. */
+    private void quit(WebDriver driver) {
+        try {
+            driver.quit();
+        } catch (RuntimeException e) {
+            logger.debug("Closing a {} browser failed", settings.platform(), e);
+        } finally {
+            pool.closed();
         }
     }
 
@@ -133,8 +193,8 @@ public final class PlatformBrowser {
         } catch (RuntimeException e) {
             throw failure(failures, "The " + failures.platform() + " browser did not start", e);
         }
-        Lease lease = leased.orElseThrow(() ->
-                failures.busy().apply("Another " + failures.platform() + " operation is using the browser."));
+        Lease lease = leased.orElseThrow(() -> failures.busy().apply("Another " + failures.platform()
+                + " operation is using the browser (this band's, or the server's browsers are all in use)."));
         try {
             return login.open(lease);
         } catch (RuntimeException e) {
@@ -146,12 +206,12 @@ public final class PlatformBrowser {
         }
     }
 
-    /** Closes the warm browser, and any handed back after this (app shutdown). */
+    /** Closes the warm browsers, and any handed back after this (app shutdown). */
     public void close() {
         warm.close();
     }
 
-    private ChromeDriver start(String account) {
+    private WebDriver start(String account) {
         Path profile = BrowserProfile.dir(settings.profileRoot(), settings.platform(), account);
         try {
             BrowserProfile.ensurePrivate(profile);
@@ -244,9 +304,9 @@ public final class PlatformBrowser {
                     warm.park(driver, account);
                 } catch (RuntimeException e) {
                     logger.warn("Keeping the {} browser open failed — closing it", settings.platform(), e);
-                    quit();
+                    quit(driver);
                 } finally {
-                    oneBrowser.release();
+                    release();
                 }
             }
         }
@@ -256,11 +316,16 @@ public final class PlatformBrowser {
             if (!ended) {
                 ended = true;
                 try {
-                    quit();
+                    quit(driver);
                 } finally {
-                    oneBrowser.release();
+                    release();
                 }
             }
+        }
+
+        private void release() {
+            sessions.release();
+            accounts.get(account).release();
         }
 
         /** Keeps a picture of the page {@code step} failed on, then discards the browser. */
@@ -269,14 +334,6 @@ public final class PlatformBrowser {
                 screenshot(step);
             }
             discard();
-        }
-
-        private void quit() {
-            try {
-                driver.quit();
-            } catch (RuntimeException e) {
-                logger.debug("Closing the {} browser failed", settings.platform(), e);
-            }
         }
 
         /** Keeps a picture of the current page for diagnosis. */

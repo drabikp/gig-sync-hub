@@ -62,8 +62,9 @@ class SecurityConfiguration {
     SecurityFilterChain api(HttpSecurity http, ClientRegistrationRepository registrations, JsonMapper json)
             throws Exception {
         http.authorizeHttpRequests(requests -> requests
-                        .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
-                        .requestMatchers("/api/**", "/actuator/**").authenticated()
+                        // the actuator answers on the management port only (this machine, the operator)
+                        .requestMatchers("/api/auth/**", "/actuator/**").permitAll()
+                        .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .oauth2Login(login -> login
                         .defaultSuccessUrl("/", true)

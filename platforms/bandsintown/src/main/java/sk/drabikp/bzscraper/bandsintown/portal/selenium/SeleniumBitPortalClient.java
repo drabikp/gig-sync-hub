@@ -12,6 +12,7 @@ import sk.drabikp.bzscraper.bandsintown.BandsintownProperties;
 import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 import sk.drabikp.bzscraper.bandsintown.portal.BitPortalClient;
 import sk.drabikp.bzscraper.bandsintown.portal.BitSession;
+import sk.drabikp.bzscraper.browser.BrowserPool;
 import sk.drabikp.bzscraper.browser.BrowserProperties;
 import sk.drabikp.bzscraper.browser.PlatformBrowser;
 import sk.drabikp.bzscraper.gig.domain.BandId;
@@ -49,7 +50,7 @@ class SeleniumBitPortalClient implements BitPortalClient {
     private final PlatformBrowser browser;
 
     public SeleniumBitPortalClient(BandsintownProperties properties, BrowserProperties browserProperties,
-                                   Clock clock, PlatformAccounts accounts) {
+                                   Clock clock, PlatformAccounts accounts, BrowserPool pool) {
         this.baseUrl = properties.baseUrl();
         this.accounts = accounts;
         this.clock = clock;
@@ -68,7 +69,7 @@ class SeleniumBitPortalClient implements BitPortalClient {
                 driver.executeCdpCommand("Page.addScriptToEvaluateOnNewDocument",
                         Map.of("source", PortalReplies.CAPTURE));
             }
-        });
+        }, pool);
     }
 
     @Override

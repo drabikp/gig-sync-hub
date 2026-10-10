@@ -6,6 +6,7 @@ import org.springframework.core.task.TaskExecutor;
 import sk.drabikp.bzscraper.catalog.application.port.in.GigWrites;
 import sk.drabikp.bzscraper.check.application.BackgroundCheck;
 import sk.drabikp.bzscraper.check.application.PlatformCheckService;
+import sk.drabikp.bzscraper.check.application.port.out.CheckResultStore;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
@@ -26,9 +27,9 @@ class CheckConfiguration {
                                               PublishedGigStore publishedGigStore, GigWrites catalogWrites,
                                               SyncStateUseCase syncState, Transactions transactions,
                                               Platforms platforms, Clock clock, CheckProperties check,
-                                              LiveUpdates live) {
+                                              LiveUpdates live, CheckResultStore results) {
         return new PlatformCheckService(importers, gigRepository, publishedGigStore, catalogWrites, syncState,
-                transactions, platforms, clock, check.pastDays(), live);
+                transactions, platforms, clock, check.pastDays(), live, results);
     }
 
     /** A check the user starts runs on Spring's task executor. */

@@ -63,7 +63,7 @@ public abstract class SyncOutboxContract {
         assertThat(outbox().supersede(BAND, gig.id(), BANDZONE, "test", NOW)).extracting(SyncTask::id)
                 .containsExactly(mine.id());
         assertThat(get(theirs).status()).isEqualTo(SyncStatus.PENDING);
-        assertThat(outbox().nextDue(NOW, Set.of(), Set.of(OTHER))).isEmpty();
+        assertThat(outbox().due(NOW)).extracting(SyncTask::band).containsExactly(OTHER);
     }
 
     @Test

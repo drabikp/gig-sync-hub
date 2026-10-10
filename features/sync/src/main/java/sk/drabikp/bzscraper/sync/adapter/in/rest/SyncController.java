@@ -66,7 +66,7 @@ class SyncController implements SyncApi {
 
     @Override
     public ResponseEntity<SyncStatusResponse> syncStatus(UUID bandId) {
-        return ResponseEntity.ok(mapper.toResponse(pause.paused(refs.toBandId(bandId)), breakers.breakers(),
+        return ResponseEntity.ok(mapper.toResponse(pause.paused(refs.toBandId(bandId)), breakers.breakers(refs.toBandId(bandId)),
                 syncLog.counts(refs.toBandId(bandId)), clock.instant()));
     }
 
@@ -84,7 +84,7 @@ class SyncController implements SyncApi {
 
     @Override
     public ResponseEntity<Void> resumePlatform(UUID bandId, String platform) {
-        breakers.resume(platforms.get(platform));
+        breakers.resume(refs.toBandId(bandId), platforms.get(platform));
         return ResponseEntity.noContent().build();
     }
 }

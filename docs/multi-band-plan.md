@@ -223,6 +223,16 @@ it; band #1 runs from the database; no band secret in `./secrets` but the master
 
 ## Phase 3 — a sync for many bands
 
+> **Status (2026-10-10): implemented.** Lanes (a band's work on a platform) run on several workers
+> (`bzscraper.sync.worker.threads`, 2), the bands in turn (`FairTurns`); breakers per lane and per platform
+> above them; the browser pool (`bzscraper.browser.max`), `max-sessions` per platform, one session per
+> account, the idlest warm browser closed to make room; each band's check result in `band_check`; metrics
+> per band on the operator's management port (8081, this machine only). Load tests with fakes:
+> `ManyBandsSyncTest` (ten bands, a broken account, three workers), `BrowserPoolTest`. Left for later: the
+> operator's global pause (stopping the worker, `bzscraper.sync.worker.enabled=false`, does it for now),
+> spreading the nightly checks over the night, a second sync lane of one band never waiting on a busy
+> platform session (it is postponed a minute instead).
+
 **Goal**: many bands' work runs on one server, fairly, without one band's trouble holding the others.
 
 - **Browsers per account, with a limit**: `PlatformBrowser` per (band, platform) account — one session

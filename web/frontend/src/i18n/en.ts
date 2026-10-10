@@ -98,6 +98,7 @@ export const en = {
     onPlatform: '{{gig}} on {{platform}}', retry: 'Retry', openGig: 'Open gig', discard: 'Discard',
     discardTitle: 'Discard this update?', discardText: 'The platform is left as it is now. Re-sync the gig later if needed.',
     heldTitle: '{{platform}} is paused', heldBody: 'Paused after {{failures}} failures in a row — tries again at {{time}}. Last: {{last}}',
+    heldEveryoneTitle: '{{platform}} seems down', heldEveryoneBody: 'Many bands’ work failed there at once, so it is paused for everyone — tries again at {{time}}. Last: {{last}}',
     resume: 'Resume now', calNewBody: 'Looks like a gig that isn’t in your list yet.', calUnsureBody: 'Is it a gig?',
   },
   calendar: {

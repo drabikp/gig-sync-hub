@@ -10,7 +10,6 @@ import sk.drabikp.bzscraper.sync.domain.SyncTask;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Reading the sync outbox ({@link SyncOutbox}): its tasks and their history, without changing them — a
@@ -36,15 +35,6 @@ public interface SyncTaskQueries {
 
     /** The oldest PENDING task that is due, of any band. */
     Optional<SyncTask> nextDue(Instant now);
-
-    /**
-     * The next due task of any band but those {@code paused}, on a platform other than those held back by
-     * their breaker ({@code skipping}).
-     */
-    default Optional<SyncTask> nextDue(Instant now, Set<Platform> skipping, Set<BandId> paused) {
-        return skipping.isEmpty() && paused.isEmpty() ? nextDue(now) : due(now).stream()
-                .filter(t -> !skipping.contains(t.platform()) && !paused.contains(t.band())).findFirst();
-    }
 
     /** Every due task of any band, oldest first. */
     List<SyncTask> due(Instant now);

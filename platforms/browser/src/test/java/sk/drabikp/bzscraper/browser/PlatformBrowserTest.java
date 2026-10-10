@@ -30,7 +30,7 @@ class PlatformBrowserTest {
                     public void started(org.openqa.selenium.chrome.ChromeDriver driver) {
                         started.incrementAndGet();
                     }
-                });
+                }, new BrowserPool(2));
         return browser;
     }
 
@@ -140,7 +140,7 @@ class PlatformBrowserTest {
             assertThatThrownBy(() -> browser.open("a", Duration.ZERO, FAILURES, other -> "second"))
                     .isInstanceOfSatisfying(Failure.class, e -> {
                         assertThat(e.busy).isTrue();
-                        assertThat(e).hasMessage("Another Test operation is using the browser.");
+                        assertThat(e).hasMessageStartingWith("Another Test operation is using the browser");
                     });
             lease.keepWarm();
             return "first";

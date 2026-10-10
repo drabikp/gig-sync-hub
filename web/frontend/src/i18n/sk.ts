@@ -101,6 +101,7 @@ export const sk = {
     onPlatform: '{{gig}} na platforme {{platform}}', retry: 'Skúsiť znova', openGig: 'Otvoriť koncert', discard: 'Zahodiť',
     discardTitle: 'Zahodiť túto aktualizáciu?', discardText: 'Platforma zostane tak, ako je teraz. Ak treba, koncert neskôr aktualizuj znova.',
     heldTitle: 'Platforma {{platform}} je pozastavená', heldBody: 'Pozastavená po {{failures}} neúspešných pokusoch za sebou — znova skúsi o {{time}}. Naposledy: {{last}}',
+    heldEveryoneTitle: 'Platforma {{platform}} asi nefunguje', heldEveryoneBody: 'Práca viacerých kapiel tam naraz zlyhala, preto je pozastavená pre všetkých — znova skúsi o {{time}}. Naposledy: {{last}}',
     resume: 'Obnoviť teraz', calNewBody: 'Vyzerá ako koncert, ktorý ešte nemáš v zozname.', calUnsureBody: 'Je to koncert?',
   },
   calendar: {

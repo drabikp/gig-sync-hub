@@ -227,13 +227,16 @@ export function useInbox() {
   }
   for (const breaker of status.data?.breakers ?? []) {
     if (!breaker.held) continue;
+    const time = breaker.heldUntil ? new Date(breaker.heldUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    // held back for every band (the platform seems down): nothing one band can resume
     items.push({
-      key: `held-${breaker.platform}`,
+      key: `held-${breaker.platform}-${breaker.everyone ? 'everyone' : 'band'}`,
       kind: 'held',
       kicker: t('inbox.held'),
-      title: t('inbox.heldTitle', { platform: name(breaker.platform) }),
-      body: t('inbox.heldBody', { failures: breaker.failures, time: breaker.heldUntil ? new Date(breaker.heldUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '', last: breaker.lastFailure ?? '' }),
-      actions: [{
+      title: t(breaker.everyone ? 'inbox.heldEveryoneTitle' : 'inbox.heldTitle', { platform: name(breaker.platform) }),
+      body: breaker.everyone ? t('inbox.heldEveryoneBody', { time, last: breaker.lastFailure ?? '' })
+        : t('inbox.heldBody', { failures: breaker.failures, time, last: breaker.lastFailure ?? '' }),
+      actions: breaker.everyone ? [] : [{
         label: t('inbox.resume'),
         primary: true,
         run: () => sync.mutate({ kind: 'resumePlatform', platform: breaker.platform }, { onSuccess: () => done(t('toast.resumed', { platform: name(breaker.platform) })), onError: failed }),

@@ -80,7 +80,8 @@ function PlatformRow({ platform, account }: { platform: Platform; account: Platf
   const [editing, setEditing] = useState(false);
   const connected = account?.connected ?? false;
   const check = account?.lastCheck;
-  const breaker = status.data?.breakers.find((b) => b.platform === platform.id && b.heldUntil);
+  const breaker = status.data?.breakers.find((b) => b.platform === platform.id && b.held && b.everyone)
+    ?? status.data?.breakers.find((b) => b.platform === platform.id && b.heldUntil && !b.everyone);
   const login = account?.settings.login;
   const badge = !connected ? { color: 'gray', text: t('account.notConnected') }
     : breaker ? { color: 'orange', text: t('settings.heldBack') }
@@ -104,8 +105,13 @@ function PlatformRow({ platform, account }: { platform: Platform; account: Platf
       )}
       {breaker && (
         <Group justify="space-between" wrap="wrap" gap="xs">
-          <Text size="sm" c="orange.9">{t('inbox.heldBody', { failures: breaker.failures, time: clock(breaker.heldUntil), last: breaker.lastFailure ?? '' })}</Text>
-          <Button size="xs" onClick={() => sync.mutate({ kind: 'resumePlatform', platform: platform.id }, { onError: failed })}>{t('inbox.resume')}</Button>
+          <Text size="sm" c="orange.9">
+            {breaker.everyone ? t('inbox.heldEveryoneBody', { time: clock(breaker.heldUntil), last: breaker.lastFailure ?? '' })
+              : t('inbox.heldBody', { failures: breaker.failures, time: clock(breaker.heldUntil), last: breaker.lastFailure ?? '' })}
+          </Text>
+          {!breaker.everyone && (
+            <Button size="xs" onClick={() => sync.mutate({ kind: 'resumePlatform', platform: platform.id }, { onError: failed })}>{t('inbox.resume')}</Button>
+          )}
         </Group>
       )}
       {test.isPending && <Text size="sm" c="dimmed">{t('account.testing')}</Text>}

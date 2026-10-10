@@ -51,13 +51,11 @@ class JpaSyncOutboxTest {
     }
 
     @Test
-    void the_next_due_task_can_skip_platforms_held_back() {
+    void every_due_task_is_listed_oldest_first() {
         SyncTask onBit = queue(gig, BANDSINTOWN, SyncAction.UPDATE);
         SyncTask onBz = queue(other, BANDZONE, SyncAction.UPDATE);
 
         assertThat(outbox.due(NOW)).containsExactly(onBit, onBz);
-        assertThat(outbox.nextDue(NOW, Set.of(BANDSINTOWN), Set.of())).contains(onBz);
-        assertThat(outbox.nextDue(NOW, Set.of(BANDSINTOWN, BANDZONE), Set.of())).isEmpty();
     }
 
     @Test

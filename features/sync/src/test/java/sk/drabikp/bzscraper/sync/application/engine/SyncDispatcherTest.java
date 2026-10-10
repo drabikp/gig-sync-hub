@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.gig.domain.TestGigs;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.application.SyncFakes;
 import sk.drabikp.bzscraper.sync.application.SyncPause;
+import sk.drabikp.bzscraper.sync.domain.Lane;
 import sk.drabikp.bzscraper.sync.domain.StepOutcome;
 import sk.drabikp.bzscraper.sync.domain.StepType;
 import sk.drabikp.bzscraper.sync.domain.SyncAction;
@@ -51,10 +52,10 @@ class SyncDispatcherTest {
     }
 
     @Test
-    void a_platform_that_keeps_failing_is_held_back_while_the_others_go_on_then_tried_again() {
+    void a_bands_platform_that_keeps_failing_is_held_back_while_the_others_go_on_then_tried_again() {
         SyncFakes.Step bitRemove = new SyncFakes.Step(BANDSINTOWN, StepType.REMOVE, 1);
         bitRemove.outcome = item -> StepOutcome.failed("login page did not load");
-        PlatformBreakers breakers = new PlatformBreakers(2, Duration.ofMinutes(30), clock, signals, signals);
+        PlatformBreakers breakers = new PlatformBreakers(2, 3, Duration.ofMinutes(30), clock, signals, signals);
         SyncPause never = new SyncPause(signals, signals, new SyncFakes.Settings());
         SyncDispatcher guarded = SyncFakes.dispatcher(SyncFakes.engine(SyncFakes.registry(published, bzRemove, bitRemove),
                 gigs, published, outbox, signals, clock, never, breakers), outbox, signals, clock, never, breakers);
@@ -72,7 +73,7 @@ class SyncDispatcherTest {
 
         assertThat(bitRemove.ran()).as("held back after two failures in a row").hasSize(2);
         assertThat(outbox.find(onBandzone.id()).orElseThrow().status()).isEqualTo(SyncStatus.DONE);
-        assertThat(breakers.breakers()).singleElement().satisfies(b -> {
+        assertThat(breakers.breakers(BAND)).singleElement().satisfies(b -> {
             assertThat(b.platform()).isEqualTo(BANDSINTOWN);
             assertThat(b.held(clock.instant())).isTrue();
             assertThat(b.lastFailure()).contains("login page did not load");
@@ -81,15 +82,15 @@ class SyncDispatcherTest {
         clock.advance(Duration.ofMinutes(31));                       // the trial: one more failure holds it again
         guarded.runNext();
         assertThat(bitRemove.ran()).hasSize(3);
-        assertThat(breakers.held(BANDSINTOWN)).isTrue();
+        assertThat(breakers.held(new Lane(BAND, BANDSINTOWN))).isTrue();
 
         bitRemove.outcome = item -> StepOutcome.done(null);
-        breakers.resume(BANDSINTOWN);                                // the user fixed it
+        breakers.resume(BAND, BANDSINTOWN);                                // the user fixed it
         clock.advance(Duration.ofMinutes(20));                       // the failed ones are due again
         while (guarded.runNext()) {
             // the rest runs
         }
-        assertThat(breakers.breakers()).isEmpty();
+        assertThat(breakers.breakers(BAND)).isEmpty();
         assertThat(outbox.all()).allSatisfy(t -> assertThat(t.status()).isEqualTo(SyncStatus.DONE));
     }
 

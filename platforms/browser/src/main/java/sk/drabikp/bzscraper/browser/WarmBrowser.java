@@ -5,40 +5,44 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
- * Keeps a platform's browser open for a short while after a step is done with it, so the
- * next step for the same account (the next gig of a one-at-a-time run, the next task of the
- * pass) takes it over instead of starting a browser and checking the login again; one for
- * another account closes it (its profile is another one). Closed when nobody took it
- * within {@code idle}, and when the app (the JVM) shuts down. The platform's one browser at
- * a time is kept: a parked browser is only taken while holding {@code oneBrowser}, and only
- * closed by the idle timer when it can get it. Once closed, a browser handed back is closed
- * at once — nobody would take it any more.
+ * Keeps a platform's browsers open for a short while after a session is done with them, each for its
+ * account (a band's login): the account's next session (the next gig of a one-at-a-time run, the next task)
+ * takes its browser over instead of starting one and checking the login again. A parked browser is closed
+ * when nobody took it within {@code idle}, when the server needs room for another ({@link #closeOldest}),
+ * and when the app (the JVM) shuts down. Once closed, a browser handed back is closed at once.
  */
 final class WarmBrowser {
 
     private static final Logger logger = LoggerFactory.getLogger(WarmBrowser.class);
 
-    private final Semaphore oneBrowser;
+    private record Parked(WebDriver driver, Instant since, ScheduledFuture<?> closing) {
+    }
+
     private final Duration idle;
     private final String name;
+    private final Consumer<WebDriver> quit;
     private final ScheduledExecutorService timer;
-    private WebDriver parked;
-    private String parkedFor;
-    private ScheduledFuture<?> closing;
+    private final Map<String, Parked> parked = new HashMap<>();
     private boolean closed;
     private Thread shutdownHook;
 
-    public WarmBrowser(Semaphore oneBrowser, Duration idle, String name) {
-        this.oneBrowser = oneBrowser;
+    /** {@code quit} closes a browser for good (and frees its room on the server). */
+    WarmBrowser(Duration idle, String name, Consumer<WebDriver> quit) {
         this.idle = idle;
         this.name = name;
+        this.quit = quit;
         this.timer = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, name + "-browser-idle");
             thread.setDaemon(true);
@@ -46,52 +50,68 @@ final class WarmBrowser {
         });
     }
 
-    /**
-     * The parked browser if it is {@code account}'s and still answers, else null (another account's is
-     * closed). Call while holding {@code oneBrowser}.
-     */
-    public synchronized WebDriver take(String account) {
-        if (closing != null) {
-            closing.cancel(false);
-            closing = null;
-        }
-        WebDriver driver = parked;
-        boolean theirs = account.equals(parkedFor);
-        parked = null;
-        parkedFor = null;
-        if (driver != null && (!theirs || !alive(driver))) {
-            quit(driver);
+    /** The account's parked browser if it still answers, else null. */
+    synchronized WebDriver take(String account) {
+        Parked taken = parked.remove(account);
+        if (taken == null) {
             return null;
         }
-        return driver;
+        taken.closing().cancel(false);
+        if (!alive(taken.driver())) {
+            quit.accept(taken.driver());
+            return null;
+        }
+        return taken.driver();
     }
 
-    /**
-     * Keeps {@code account}'s browser for its next taker (call before releasing {@code oneBrowser}); closes it
-     * instead when this is already closed (the app is shutting down).
-     */
-    public synchronized void park(WebDriver driver, String account) {
+    /** Keeps the account's browser for its next session; closes it instead when this is closed (the app is stopping). */
+    synchronized void park(WebDriver driver, String account) {
         if (closed) {
-            quit(driver);
+            quit.accept(driver);
             return;
         }
-        if (parked != null && parked != driver) {
-            quit(parked);
+        Parked before = parked.remove(account);
+        if (before != null && before.driver() != driver) {
+            before.closing().cancel(false);
+            quit.accept(before.driver());
         }
-        parked = driver;
-        parkedFor = account;
         closeOnShutdown();
-        closing = timer.schedule(this::closeIfIdle, idle.toMillis(), TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> closing = timer.schedule(() -> closeIfIdle(account, driver), idle.toMillis(),
+                TimeUnit.MILLISECONDS);
+        parked.put(account, new Parked(driver, Instant.now(), closing));
     }
 
-    /** Closes the parked browser now, and every one handed back later (app shutdown). */
-    public synchronized void close() {
-        closed = true;
-        if (parked != null) {
-            quit(parked);
-            parked = null;
-            parkedFor = null;
+    /** Since when the longest idle browser waits; empty when none does. */
+    synchronized Optional<Instant> oldestParked() {
+        return parked.values().stream().map(Parked::since).min(Comparator.naturalOrder());
+    }
+
+    /** Closes the browser idle the longest (the server needs room); false when none is parked. */
+    synchronized boolean closeOldest() {
+        Optional<Map.Entry<String, Parked>> oldest = parked.entrySet().stream()
+                .min(Comparator.comparing(e -> e.getValue().since()));
+        if (oldest.isEmpty()) {
+            return false;
         }
+        parked.remove(oldest.get().getKey());
+        oldest.get().getValue().closing().cancel(false);
+        quit.accept(oldest.get().getValue().driver());
+        return true;
+    }
+
+    /** How many browsers are parked. */
+    synchronized int size() {
+        return parked.size();
+    }
+
+    /** Closes every parked browser now, and every one handed back later (app shutdown). */
+    synchronized void close() {
+        closed = true;
+        parked.values().forEach(p -> {
+            p.closing().cancel(false);
+            quit.accept(p.driver());
+        });
+        parked.clear();
         timer.shutdownNow();
         if (shutdownHook != null) {
             try {
@@ -116,24 +136,15 @@ final class WarmBrowser {
             Runtime.getRuntime().addShutdownHook(hook);
             shutdownHook = hook;
         } catch (IllegalStateException e) {
-            logger.debug("The JVM is shutting down; the {} browser is closed with the app", name);
+            logger.debug("The JVM is shutting down; the {} browsers are closed with the app", name);
         }
     }
 
-    private void closeIfIdle() {
-        if (!oneBrowser.tryAcquire()) {
-            return;                                     // in use: whoever has it parks it again
-        }
-        try {
-            synchronized (this) {
-                if (parked != null) {
-                    quit(parked);
-                    parked = null;
-                    parkedFor = null;
-                }
-            }
-        } finally {
-            oneBrowser.release();
+    private synchronized void closeIfIdle(String account, WebDriver driver) {
+        Parked now = parked.get(account);
+        if (now != null && now.driver() == driver) {
+            parked.remove(account);
+            quit.accept(driver);
         }
     }
 
@@ -143,14 +154,6 @@ final class WarmBrowser {
             return true;
         } catch (RuntimeException e) {
             return false;
-        }
-    }
-
-    private static void quit(WebDriver driver) {
-        try {
-            driver.quit();
-        } catch (RuntimeException e) {
-            logger.debug("Closing a parked browser failed", e);
         }
     }
 }

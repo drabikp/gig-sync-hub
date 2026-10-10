@@ -121,7 +121,7 @@ paths:
     post:
       tags: [Sync]
       operationId: resumePlatform
-      summary: Lets a platform held back by its circuit breaker run again now.
+      summary: Lets the band's work on a platform, held back by its circuit breaker, run again now.
       parameters:
         - name: platform
           in: path
@@ -201,10 +201,12 @@ components:
           type: string
     BreakerResponse:
       description: |
-        A platform whose breaker isn't plainly closed: `failures` in a row; `held` while its work
-        is held back (until heldUntil); `trial` when the next batch decides.
+        A breaker of the band's on a platform that isn't plainly closed: `failures` in a row; `held`
+        while its work is held back (until heldUntil); `trial` when the next batch decides.
+        `everyone`: the platform is held back for every band (many bands failing there at once —
+        it seems down); `failures` then counts those bands, and it can't be resumed by one band.
       type: object
-      required: [platform, failures, heldUntil, held, trial, lastFailure]
+      required: [platform, failures, heldUntil, held, trial, lastFailure, everyone]
       properties:
         platform:
           type: string
@@ -221,6 +223,8 @@ components:
         lastFailure:
           type: string
           nullable: true
+        everyone:
+          type: boolean
     SyncCountsResponse:
       description: The open tasks by what they are doing now.
       type: object

@@ -8,6 +8,7 @@ import sk.drabikp.bzscraper.bandsintown.BandsintownProperties;
 import sk.drabikp.bzscraper.bandsintown.RemovalReason;
 import sk.drabikp.bzscraper.bandsintown.portal.BitSession.Created;
 import sk.drabikp.bzscraper.bandsintown.portal.BitSession;
+import sk.drabikp.bzscraper.browser.BrowserPool;
 import sk.drabikp.bzscraper.browser.BrowserProperties;
 import sk.drabikp.bzscraper.browser.SeleniumOptions;
 import sk.drabikp.bzscraper.gig.domain.Admission;
@@ -72,12 +73,13 @@ class SeleniumBitPortalClientLiveTest {
         SeleniumBitPortalClient client = new SeleniumBitPortalClient(
                 new BandsintownProperties(null, null, null, null, null, null, false, new SeleniumOptions(true,
                         Boolean.parseBoolean(env("BIT_HEADLESS", "true")), env("BIT_CHROMIUM", "/usr/bin/chromium"),
-                        env("BIT_CHROMEDRIVER", "/usr/bin/chromedriver"), env("BIT_PROFILE", "")),
+                        env("BIT_CHROMEDRIVER", "/usr/bin/chromedriver"), env("BIT_PROFILE", ""), null),
                         new BandsintownProperties.Pacing(600L, 1500L)),
-                new BrowserProperties(env("BIT_PASSWORD_STORE", "auto"), null, null), Clock.systemDefaultZone(),
+                new BrowserProperties(env("BIT_PASSWORD_STORE", "auto"), null, null, null), Clock.systemDefaultZone(),
                 new AccountsFakes.Accounts().with(BandId.FIRST, BandsintownPlatform.PLATFORM,
                         Map.of("login", env("BIT_LOGIN", ""), "artistName", env("BIT_ARTIST_NAME", "")),
-                        Map.of("password", env("BIT_PASSWORD", ""), "totpSecret", env("BIT_TOTP", ""))));
+                        Map.of("password", env("BIT_PASSWORD", ""), "totpSecret", env("BIT_TOTP", ""))),
+                new BrowserPool(1));
 
         Gig gig = new Gig("BZSCRAPER TEST - please ignore",
                 GigSchedule.startingAt(ZonedDateTime.of(2027, 10, 7, 20, 0, 0, 0, BRATISLAVA)),

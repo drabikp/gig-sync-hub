@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformHealth;
 import sk.drabikp.bzscraper.sync.application.port.in.SyncStateUseCase;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncTaskQueries;
+import sk.drabikp.bzscraper.sync.domain.Lane;
 import sk.drabikp.bzscraper.sync.domain.SyncStatus;
 import sk.drabikp.bzscraper.sync.domain.SyncTask;
 
@@ -34,7 +35,7 @@ public class SyncState implements SyncStateUseCase {
     }
 
     @Override
-    public boolean heldBack(Platform platform) {
-        return health.held(platform);
+    public boolean heldBack(BandId band, Platform platform) {
+        return health.held(new Lane(band, platform));
     }
 }

@@ -10,16 +10,18 @@ import sk.drabikp.bzscraper.sync.application.port.in.DispatchSyncUseCase;
 import sk.drabikp.bzscraper.sync.application.port.in.SyncWorkSignal;
 import sk.drabikp.bzscraper.sync.config.SyncProperties;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Runs the sync outbox in the background on ONE thread — so platform work never
- * overlaps — until nothing is due. Woken when tasks are queued, and checks every
- * {@code bzscraper.sync.poll-seconds} anyway (retries come due by time). On start it first
- * settles tasks a previous run left RUNNING. Off with {@code bzscraper.sync.worker.enabled=false}
+ * Runs the sync outbox in the background on {@code bzscraper.sync.worker.threads} threads (2): each takes
+ * the next due run — the bands in turn, one run per lane (a band's account on a platform) at a time, so
+ * one band's slow or broken platform doesn't hold up the others — until nothing is due. Woken when tasks
+ * are queued, and checks every {@code bzscraper.sync.poll-seconds} anyway (retries come due by time). On
+ * start it first settles tasks a previous run left RUNNING. Off with {@code bzscraper.sync.worker.enabled=false}
  * (tests): tasks are then queued but never run.
  */
 @Component
@@ -30,19 +32,29 @@ class SyncWorker {
     private final DispatchSyncUseCase dispatcher;
     private final SyncWorkSignal workSignal;
     private final boolean enabled;
+    private final int threads;
     private final long pollSeconds;
-    private final ScheduledExecutorService thread = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "sync-worker");
+    private final ExecutorService workers;
+    private final ScheduledExecutorService ticker = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "sync-ticker");
         t.setDaemon(true);
         return t;
     });
-    private final AtomicBoolean wakeQueued = new AtomicBoolean();
+    /** Workers draining right now (at most {@link #threads}). */
+    private final AtomicInteger draining = new AtomicInteger();
 
     public SyncWorker(DispatchSyncUseCase dispatcher, SyncWorkSignal workSignal, SyncProperties properties) {
         this.dispatcher = dispatcher;
         this.workSignal = workSignal;
         this.enabled = properties.worker().enabled();
+        this.threads = properties.worker().threads();
         this.pollSeconds = properties.pollSeconds();
+        AtomicInteger number = new AtomicInteger();
+        this.workers = Executors.newFixedThreadPool(threads, r -> {
+            Thread t = new Thread(r, "sync-worker-" + number.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -51,42 +63,48 @@ class SyncWorker {
             log.info("Sync worker is off (bzscraper.sync.worker.enabled=false): platform tasks stay queued");
             return;
         }
-        thread.execute(this::recover);
-        thread.scheduleWithFixedDelay(this::drain, pollSeconds, pollSeconds, TimeUnit.SECONDS);
-        workSignal.onWork(this::wake);                  // work queued before now is drained by recover
+        draining.incrementAndGet();
+        workers.execute(() -> {
+            try {
+                dispatcher.recoverInterrupted();
+            } catch (RuntimeException e) {
+                log.error("Settling interrupted sync tasks failed", e);
+            } finally {
+                draining.decrementAndGet();
+            }
+            wake();
+            ticker.scheduleWithFixedDelay(this::wake, pollSeconds, pollSeconds, TimeUnit.SECONDS);
+            workSignal.onWork(this::wake);              // work queued before now is drained by this first wake
+        });
     }
 
-    /** New work was queued: drain now instead of at the next poll. */
+    /** New work was queued (or time passed): every idle worker drains. */
     public void wake() {
-        if (enabled && wakeQueued.compareAndSet(false, true)) {
-            thread.execute(() -> {
-                wakeQueued.set(false);
-                drain();
-            });
+        if (!enabled) {
+            return;
+        }
+        for (int busy = draining.get(); busy < threads; busy = draining.get()) {
+            if (draining.compareAndSet(busy, busy + 1)) {
+                workers.execute(this::drain);
+            }
         }
     }
 
     @PreDestroy
     public void stop() {
-        thread.shutdownNow();
-    }
-
-    private void recover() {
-        try {
-            dispatcher.recoverInterrupted();
-        } catch (RuntimeException e) {
-            log.error("Settling interrupted sync tasks failed", e);
-        }
-        drain();
+        ticker.shutdownNow();
+        workers.shutdownNow();
     }
 
     private void drain() {
         try {
             while (!Thread.currentThread().isInterrupted() && dispatcher.runNext()) {
-                // one task (or publish batch) per round
+                // one lane's due runs per round
             }
         } catch (RuntimeException e) {
             log.error("Sync worker round failed; next round in {} s", pollSeconds, e);
+        } finally {
+            draining.decrementAndGet();
         }
     }
 }
