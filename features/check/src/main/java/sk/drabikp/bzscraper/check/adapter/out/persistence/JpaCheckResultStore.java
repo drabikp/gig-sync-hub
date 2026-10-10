@@ -12,7 +12,7 @@ import java.util.Optional;
 
 /** {@link CheckResultStore} on JPA (table {@code band_check}): the check as JSON, one row per band. */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaCheckResultStore implements CheckResultStore {
 
     private final BandCheckJpaRepository checks;
@@ -25,13 +25,13 @@ class JpaCheckResultStore implements CheckResultStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<PlatformCheck> of(BandId band) {
         return checks.findById(band.value())
                 .map(entity -> mapper.toCheck(json.readValue(entity.getResult(), StoredCheck.class)));
     }
 
     @Override
+    @Transactional
     public void save(BandId band, PlatformCheck check) {
         BandCheckEntity entity = new BandCheckEntity();
         entity.setBandId(band.value());

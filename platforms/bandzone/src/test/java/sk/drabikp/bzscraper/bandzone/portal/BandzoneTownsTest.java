@@ -1,7 +1,7 @@
-package sk.drabikp.bzscraper.bandzone.portal.selenium;
+package sk.drabikp.bzscraper.bandzone.portal;
 
 import org.junit.jupiter.api.Test;
-import sk.drabikp.bzscraper.bandzone.portal.selenium.BandzoneTowns.Suggestion;
+import sk.drabikp.bzscraper.bandzone.portal.BandzoneTowns.Suggestion;
 import sk.drabikp.bzscraper.gig.domain.Country;
 
 import java.util.List;

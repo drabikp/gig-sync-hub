@@ -129,13 +129,16 @@ features/check      Reconciler, platform check service + nightly schedule, each 
 features/calendar   calendar domain (+ domain.event: the calendar's events; + domain.rules: profile
                     and classifier), review service, stores, iCal feed, profile file; /api/calendar;
                     shipped presets (calendar/*.profile)
-platforms/browser   PlatformBrowser (every lease names its account — a band's login — and gets that
+platforms/browser   PlatformClient (`bzscraper.<platform>.client`: off / http / selenium) + OnPlatformClient
+                    (a client bean exists only for its own setting); PlatformBrowser (every lease names its account — a band's login — and gets that
                     account's profile; one session per account, `max-sessions` per platform; warm browsers
                     per account), BrowserPool (the server's limit, `bzscraper.browser.max`, shared by the
                     platforms; the idlest warm browser closed to make room), BrowserProfile, WarmBrowser,
                     properties; test-jar: TestChromium
-platforms/bandzone      bandzone (traits, properties, exception) · scrape · portal (client API, stub)
-                        · portal.selenium (the Selenium client + page objects) · step · rest
+platforms/bandzone      bandzone (traits, properties, exception) · scrape · portal (client API, stub,
+                        BandzoneTowns, PosterDownloader — shared by both clients) · portal.http (no
+                        browser: NetteForm, Answer, BandzoneWeb, ConcertForm, LineupTab, session, client)
+                        · portal.selenium (the Chromium fallback + page objects) · step · rest
                         (the public `/gigs/{band_slug}` endpoint — any band, by its slug)
 platforms/bandsintown   bandsintown (traits, properties, exception, RemovalReason) · portal ·
                         portal.selenium (+ the event list → gig mapping) · step · importing · csv
@@ -214,7 +217,9 @@ enum `…Value` (inline enums are made named ones) — the names are the generat
   — entities are plain JPA classes with accessors (a public no-arg constructor for JPA and the mapper);
   what a row stores differently is a default method (the zone from the country, the lineup as one
   text, a change's fields by name); an entity's behaviour (the outbox task's status changes) stays on
-  it. Not mappers, so not MapStruct: the platforms' readers of scraped pages and portal JSON
+  it. A persistence adapter is `@Transactional(readOnly = true)` on the CLASS, and only the methods
+  that write carry a plain `@Transactional`: reading is the default everywhere, and a write says so.
+  Not mappers, so not MapStruct: the platforms' readers of scraped pages and portal JSON
   (`GigSummaryToGigMapper`, `BitEventMapper`) — they parse. What used to sit in endpoints is in the
   application: `ListGigsUseCase.gig` (→ `NotFoundException`, 404), `SyncLogUseCase.tasks/counts`,
   `ImportSessionUseCase` (`ImportSession`: the background read and the plan), `StartPlatformCheckUseCase`
@@ -592,17 +597,33 @@ exactly one fits name + country + postal area (`TownChoice`).
   publish the event's coordinates are compared with the town's (> 25 km → the task's note
   says "check the place there").
 
-## Bandzone (Selenium)
+## Bandzone (no browser needed)
 
 `BandzoneGigProvider`/`BandzoneGigImporter` scrape read-only (`BandzoneHtmlFetcher`, at
-`bzscraper.bandzone.base-url`, the year tabs read at once with a 60 s limit). Writes drive the
-band-admin pages with Selenium; off by default (stub). Enable + configure:
+`bzscraper.bandzone.base-url`, the year tabs read at once with a 60 s limit). Writes go through the
+band-admin pages; off by default (stub). Which client does them is
+`bzscraper.<platform>.client` (`PlatformClient`, `OnPlatformClient`; unset, the older
+`selenium.enabled=true` still means `selenium`):
 
 ```
-bzscraper.bandzone.selenium.enabled=true                    # this server drives Bandzone
-bzscraper.bandzone.selenium.chromium-binary / .chromedriver   # else bzscraper.browser.chromium-binary / .chromedriver
-bzscraper.bandzone.selenium.profile-dir              # default ~/.bzscraper/bandzone-browser (a directory per band's account in it)
+bzscraper.bandzone.client=http       # no browser: what the admin's own pages send (the default when driving)
+bzscraper.bandzone.client=selenium   # the fallback, drives the pages in Chromium
+bzscraper.bandzone.client=off        # the stub (default): this server doesn't drive Bandzone
+bzscraper.bandzone.selenium.chromium-binary / .chromedriver   # selenium only; else bzscraper.browser.*
+bzscraper.bandzone.selenium.profile-dir              # selenium only; default ~/.bzscraper/bandzone-browser (a directory per band's account in it)
 ```
+
+**The HTTP client** (`portal.http`, no Chromium): Bandzone's admin is plain server-rendered forms
+whose widgets post the whole form back over AJAX and get JSON, so the client sends exactly what the
+pages send — `NetteForm` (a form as a browser would send it: its fields in page order, its buttons
+pressed by name), `Answer` (the JSON: a picker's `items`, the re-rendered form's `snippets`, a
+finished form's `redirect`, its `flash` messages), `BandzoneWeb` (one account's cookies, the login,
+the AJAX posts, the poster's multipart upload), `ConcertForm` (the fields the wizard and the edit
+form share; a picker is the form's own search and pick buttons), `LineupTab`, `HttpBandzoneSession`.
+A field or button the page hasn't got is an error naming it, never a silent skip. Same rules as the
+Selenium client: the town is picked by name + country + district (`BandzoneTowns`, shared), a club
+matched exactly is linked and anything else kept as free text, a cancel is checked on the band's gig
+list and a delete on the concert's public page (404).
 
 Each band's account (login, password, the band's address `bandSlug`) is connected on the page
 (`BandzoneAccount`); "Test sign-in" logs in and reads the band's page (`BandzoneAccountCheck`).
@@ -797,11 +818,26 @@ concert's public page answering 404, the two-step wizard, the performers tab wit
 "band without profile" stub). Change a page object → run these first;
 the live tests below then confirm against the real sites.
 
+**The Bandzone HTTP client needs no browser, so its tests don't either**: `BandzoneHttpFixture`
+(bandzone test sources) talks as the admin's pages do — the login and its cookie, the pickers'
+`items`, a pick's re-rendered form, a finished form's `redirect`, the poster uploader, the wizard
+(with and without the "similar concerts?" step), the performers tab with its remove dialogs (which
+may answer only "go there" when the concert's address changed with its name), the delete tab, the
+band's gig list and a deleted concert's 404 — and keeps what it is sent, so the client's read-backs
+see what was stored. `HttpBandzonePortalClientTest` runs the whole cycle against it, plus a refused
+login, a town Bandzone knows several of, and a concert already gone. `PlatformClientTest` (browser)
+covers the client switch, the older `selenium.enabled` still meaning the browser, and an unknown
+value stopping the start.
+
 `SeleniumBandzonePortalClientLiveTest` creates, edits (every field, incl. lineup and
 poster), cancels, deletes and deletes again (already gone) a real Bandzone gig. Skipped unless `BZ_LIVE=true`; reads
 `BZ_LOGIN` / `BZ_PASSWORD` / `BZ_SLUG`, `BZ_LINEUP_BAND` (a real band that gets
 notified), optional `BZ_KEEP=true`, `BZ_CHROMIUM` / `BZ_CHROMEDRIVER`. Run it only
 against a test band.
+
+`HttpBandzonePortalClientLiveTest` does the same cycle as the Selenium one over plain HTTP, and
+checks the login is reused; same environment variables (`BZ_LIVE=true`, `BZ_LOGIN` / `BZ_PASSWORD` /
+`BZ_SLUG`, `BZ_LINEUP_BAND`, `BZ_KEEP`), no Chromium needed. Run it only against a test band.
 
 `SeleniumBitPortalClientLiveTest` creates a made-up Bandsintown event (published
 WITHOUT notifying followers), edits it and deletes it. Skipped unless `BIT_LIVE=true`;

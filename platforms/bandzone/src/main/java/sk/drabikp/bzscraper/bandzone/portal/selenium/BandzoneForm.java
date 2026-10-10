@@ -4,6 +4,7 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
+import sk.drabikp.bzscraper.bandzone.portal.BandzoneTowns;
 import sk.drabikp.bzscraper.gig.domain.EntryType;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.Location;

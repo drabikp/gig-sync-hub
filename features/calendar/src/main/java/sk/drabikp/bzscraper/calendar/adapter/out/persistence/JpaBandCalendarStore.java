@@ -18,7 +18,7 @@ import java.util.Optional;
  * sealed and opened, not copied.
  */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaBandCalendarStore implements BandCalendarStore {
 
     private final BandCalendarJpaRepository calendars;
@@ -32,12 +32,12 @@ class JpaBandCalendarStore implements BandCalendarStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<BandCalendar> of(BandId band) {
         return calendars.findById(band.value()).map(this::toCalendar);
     }
 
     @Override
+    @Transactional
     public void save(BandCalendar calendar) {
         SecretBox.Sealed sealed = box.seal(calendar.address(), context(calendar.band()));
         BandCalendarEntity entity = new BandCalendarEntity();
@@ -50,11 +50,13 @@ class JpaBandCalendarStore implements BandCalendarStore {
     }
 
     @Override
+    @Transactional
     public void delete(BandId band) {
         calendars.deleteById(band.value());
     }
 
     @Override
+    @Transactional
     public int reseal() {
         if (!box.ready()) {
             return 0;

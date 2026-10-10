@@ -1,4 +1,4 @@
-package sk.drabikp.bzscraper.bandzone.portal.selenium;
+package sk.drabikp.bzscraper.bandzone.portal;
 
 import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 import sk.drabikp.bzscraper.gig.application.PublicAddresses;
@@ -19,7 +19,7 @@ import java.time.Duration;
  * doesn't answer must not hold them: the connection and the whole request have time limits.
  * One HTTP client for the app. Only a public address is fetched (redirects too) — a band gives the address.
  */
-final class PosterDownloader {
+public final class PosterDownloader {
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
@@ -30,12 +30,12 @@ final class PosterDownloader {
     private final Duration requestTimeout;
     private final boolean publicOnly;
 
-    PosterDownloader() {
+    public PosterDownloader() {
         this(CONNECT_TIMEOUT, REQUEST_TIMEOUT, true);
     }
 
     /** {@code publicOnly} false: also the server's own network (tests, with a poster served on this machine). */
-    PosterDownloader(Duration connectTimeout, Duration requestTimeout, boolean publicOnly) {
+    public PosterDownloader(Duration connectTimeout, Duration requestTimeout, boolean publicOnly) {
         this.http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)    // followed by hand, checked
                 .connectTimeout(connectTimeout).build();
         this.requestTimeout = requestTimeout;
@@ -43,7 +43,7 @@ final class PosterDownloader {
     }
 
     /** The poster in a temp file (the caller deletes it), named with the image's own extension. */
-    Path download(String posterUrl) throws BandzonePortalException {
+    public Path download(String posterUrl) throws BandzonePortalException {
         Path file = null;
         try {
             URI uri = URI.create(posterUrl);
@@ -86,7 +86,7 @@ final class PosterDownloader {
         return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
     }
 
-    static void deleteQuietly(Path file) {
+    public static void deleteQuietly(Path file) {
         if (file == null) {
             return;
         }

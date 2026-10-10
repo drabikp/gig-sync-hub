@@ -24,7 +24,7 @@ import java.util.TreeMap;
  * sealed and opened, not copied.
  */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaPlatformAccountStore implements PlatformAccountStore {
 
     private static final TypeReference<TreeMap<String, String>> MAP = new TypeReference<>() {
@@ -42,18 +42,17 @@ class JpaPlatformAccountStore implements PlatformAccountStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<PlatformAccount> of(BandId band, Platform platform) {
         return accounts.findById(new PlatformAccountEntity.Key(band.value(), platform.id())).map(this::toAccount);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<PlatformAccount> ofBand(BandId band) {
         return accounts.findByBandIdOrderByPlatform(band.value()).stream().map(this::toAccount).toList();
     }
 
     @Override
+    @Transactional
     public void save(PlatformAccount account) {
         PlatformAccountEntity entity = new PlatformAccountEntity();
         entity.setBandId(account.band().value());
@@ -75,11 +74,13 @@ class JpaPlatformAccountStore implements PlatformAccountStore {
     }
 
     @Override
+    @Transactional
     public void delete(BandId band, Platform platform) {
         accounts.deleteById(new PlatformAccountEntity.Key(band.value(), platform.id()));
     }
 
     @Override
+    @Transactional
     public int reseal() {
         List<PlatformAccountEntity> old = accounts.findBySecretsIsNotNull().stream()
                 .filter(entity -> !box.current(new SecretBox.Sealed(entity.getKeyId(), entity.getSecrets())))

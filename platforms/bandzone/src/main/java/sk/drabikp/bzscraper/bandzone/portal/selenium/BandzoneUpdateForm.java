@@ -5,6 +5,7 @@ import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
+import sk.drabikp.bzscraper.bandzone.portal.PosterDownloader;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 
 import java.nio.file.Path;

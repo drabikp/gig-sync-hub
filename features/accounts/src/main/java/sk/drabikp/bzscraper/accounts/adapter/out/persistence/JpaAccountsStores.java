@@ -28,7 +28,7 @@ import java.util.UUID;
  * {@code audit_event}); a row's {@code created_at} is set when it is first saved and kept after.
  */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaAccountsStores implements UserStore, BandStore, MembershipStore, InvitationStore, AuditStore {
 
     private final AppUserJpaRepository users;
@@ -52,18 +52,17 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<User> bySubject(String subject) {
         return users.findByRauthySub(subject).map(mapper::toUser);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<User> byId(UserId id) {
         return users.findById(id.value()).map(mapper::toUser);
     }
 
     @Override
+    @Transactional
     public void save(User user) {
         AppUserEntity entity = mapper.toEntity(user);
         entity.setCreatedAt(users.findById(user.id().value()).map(AppUserEntity::getCreatedAt).orElse(clock.instant()));
@@ -71,30 +70,29 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
     }
 
     @Override
+    @Transactional
     public void delete(UserId user) {
         users.deleteById(user.value());
         users.flush();
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<Band> byId(BandId id) {
         return bands.findById(id.value()).map(mapper::toBand);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<Band> bySlug(String slug) {
         return bands.findBySlug(slug).map(mapper::toBand);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<Band> all() {
         return bands.findAll().stream().map(mapper::toBand).sorted(Comparator.comparing(Band::slug)).toList();
     }
 
     @Override
+    @Transactional
     public void save(Band band) {
         BandEntity entity = mapper.toEntity(band);
         entity.setCreatedAt(bands.findById(band.id().value()).map(BandEntity::getCreatedAt).orElse(clock.instant()));
@@ -102,30 +100,29 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
     }
 
     @Override
+    @Transactional
     public void delete(BandId band) {
         bands.deleteById(band.value());
         bands.flush();
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<Membership> of(UserId user, BandId band) {
         return memberships.findById(new MembershipEntity.Key(user.value(), band.value())).map(mapper::toMembership);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<Membership> ofUser(UserId user) {
         return memberships.findByUserId(user.value()).stream().map(mapper::toMembership).toList();
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<Membership> ofBand(BandId band) {
         return memberships.findByBandId(band.value()).stream().map(mapper::toMembership).toList();
     }
 
     @Override
+    @Transactional
     public void save(Membership membership) {
         MembershipEntity entity = mapper.toEntity(membership);
         entity.setCreatedAt(memberships.findById(new MembershipEntity.Key(membership.user().value(),
@@ -134,11 +131,13 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
     }
 
     @Override
+    @Transactional
     public void delete(UserId user, BandId band) {
         memberships.deleteById(new MembershipEntity.Key(user.value(), band.value()));
     }
 
     @Override
+    @Transactional
     public void save(Invitation invitation, String tokenHash) {
         InvitationEntity entity = mapper.toEntity(invitation);
         entity.setTokenHash(tokenHash);
@@ -146,6 +145,7 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
     }
 
     @Override
+    @Transactional
     public void save(Invitation invitation) {
         InvitationEntity entity = invitations.findById(invitation.id()).orElseThrow();
         entity.setAcceptedAt(invitation.acceptedAt());
@@ -153,36 +153,34 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<Invitation> byTokenHash(String tokenHash) {
         return invitations.findByTokenHash(tokenHash).map(mapper::toInvitation);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<Invitation> of(BandId band, UUID id) {
         return invitations.findByBandIdAndId(band.value(), id).map(mapper::toInvitation);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<Invitation> open(BandId band, Instant now) {
         return invitations.findByBandIdAndAcceptedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(band.value(), now)
                 .stream().map(mapper::toInvitation).toList();
     }
 
     @Override
+    @Transactional
     public void delete(UUID invitation) {
         invitations.deleteById(invitation);
     }
 
     @Override
+    @Transactional
     public void add(AuditEvent event) {
         audit.save(mapper.toEntity(event));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<AuditEvent> recent(BandId band, int limit) {
         return audit.findByBandIdOrderByAtDescIdDesc(band.value(), PageRequest.of(0, limit)).stream()
                 .map(mapper::toEvent).toList();

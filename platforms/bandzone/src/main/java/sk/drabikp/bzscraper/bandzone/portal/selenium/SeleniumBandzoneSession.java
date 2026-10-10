@@ -5,6 +5,7 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
+import sk.drabikp.bzscraper.bandzone.portal.PosterDownloader;
 import sk.drabikp.bzscraper.bandzone.portal.BandzoneSession;
 import sk.drabikp.bzscraper.browser.PlatformBrowser;
 import sk.drabikp.bzscraper.gig.domain.Gig;

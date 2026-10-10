@@ -18,7 +18,7 @@ import java.util.Optional;
  * application layers. {@code save} upserts by gig identity (assigned id).
  */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaGigRepository implements GigRepository {
 
     private final GigJpaRepository jpaRepository;
@@ -30,6 +30,7 @@ class JpaGigRepository implements GigRepository {
     }
 
     @Override
+    @Transactional
     public void save(BandId band, Gig gig) {
         GigEntity entity = mapper.toEntity(band, gig);
         // an update carries the version read in this transaction: if another transaction
@@ -39,19 +40,16 @@ class JpaGigRepository implements GigRepository {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<Gig> findById(BandId band, GigId id) {
         return jpaRepository.findById(key(band, id)).map(mapper::toDomain);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<Gig> findAll(BandId band) {
         return jpaRepository.findByBandId(band.value()).stream().map(mapper::toDomain).toList();
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<Gig> findStartingWithin(BandId band, DateRange range) {
         LocalDateTime fromInclusive = range.start().atStartOfDay();
         LocalDateTime toExclusive = range.end().plusDays(1).atStartOfDay();
@@ -62,6 +60,7 @@ class JpaGigRepository implements GigRepository {
     }
 
     @Override
+    @Transactional
     public void deleteById(BandId band, GigId id) {
         jpaRepository.deleteById(key(band, id));
     }

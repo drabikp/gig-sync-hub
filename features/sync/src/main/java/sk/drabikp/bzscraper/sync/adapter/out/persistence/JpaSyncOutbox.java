@@ -24,7 +24,7 @@ import java.util.Set;
  * an outbox. Every state change writes a log line.
  */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaSyncOutbox implements SyncOutbox {
 
     private static final List<String> OPEN = List.of(SyncStatus.PENDING.name(), SyncStatus.RUNNING.name());
@@ -42,6 +42,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public SyncTask enqueue(BandId band, GigId gigId, String gigLabel, Platform platform, SyncAction action,
                             Instant now) {
         SyncTaskEntity task = tasks.save(new SyncTaskEntity(band.value(), gigId.key(), gigLabel, platform,
@@ -51,42 +52,37 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<SyncTask> find(long id) {
         return tasks.findById(id).map(mapper::toTask);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<SyncTask> openFor(BandId band, GigId gigId) {
         return mapper.toTasks(tasks.findByBandIdAndGigIdAndStatusInOrderByIdAsc(band.value(), gigId.key(), OPEN));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<SyncTask> unfinished(BandId band) {
         return mapper.toTasks(tasks.findByBandIdAndStatusInOrderByIdAsc(band.value(), UNFINISHED));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<SyncTask> recent(BandId band, int limit) {
         return mapper.toTasks(tasks.findByBandIdOrderByIdDesc(band.value(), Limit.of(limit)));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<SyncTask> history(BandId band, GigId gigId, int limit) {
         return mapper.toTasks(tasks.findByBandIdAndGigIdOrderByIdDesc(band.value(), gigId.key(), Limit.of(limit)));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<SyncLogEntry> log(long taskId) {
         return mapper.toEntries(log.findByTaskIdOrderByIdAsc(taskId));
     }
 
     @Override
+    @Transactional
     public List<SyncTask> supersede(BandId band, GigId gigId, Platform platform, String why, Instant now) {
         List<SyncTaskEntity> pending = tasks.findByBandIdAndGigIdAndPlatformAndStatusOrderByIdAsc(
                 band.value(), gigId.key(), platform.id(), SyncStatus.PENDING.name());
@@ -98,6 +94,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public List<SyncTask> replaceFailed(BandId band, GigId gigId, Platform platform, Set<SyncAction> actions,
                                         String why, Instant now) {
         List<SyncTaskEntity> failed = tasks.findByBandIdAndGigIdAndPlatformAndStatusOrderByIdAsc(
@@ -112,6 +109,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public void move(BandId band, GigId from, GigId to, String newLabel) {
         for (SyncTaskEntity task : tasks.findByBandIdAndGigId(band.value(), from.key())) {
             task.moveTo(to.key(), newLabel);
@@ -119,32 +117,29 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<SyncTask> nextDue(Instant now) {
         return tasks.findFirstByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(SyncStatus.PENDING.name(), now)
                 .map(mapper::toTask);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<SyncTask> due(Instant now) {
         return mapper.toTasks(tasks.findByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(SyncStatus.PENDING.name(), now));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<SyncTask> due(BandId band, Platform platform, SyncAction action, Instant now) {
         return mapper.toTasks(tasks.findByBandIdAndPlatformAndActionAndStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(
                 band.value(), platform.id(), action.name(), SyncStatus.PENDING.name(), now));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<SyncTask> running() {
         return mapper.toTasks(tasks.findByStatusInOrderByIdAsc(List.of(SyncStatus.RUNNING.name())));
     }
 
     @Override
+    @Transactional
     public boolean markRunning(long id, Instant now) {
         SyncTaskEntity task = get(id);
         if (task.status() != SyncStatus.PENDING) {
@@ -156,6 +151,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public void markDone(long id, String message, Instant now) {
         SyncTaskEntity task = get(id);
         if (task.change(SyncStatus.DONE, null, message, now)) {
@@ -164,6 +160,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public void markRetry(long id, String error, Instant nextAttempt, Instant now) {
         SyncTaskEntity task = get(id);
         if (task.change(SyncStatus.PENDING, nextAttempt, error, now)) {
@@ -172,6 +169,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public void markFailed(long id, String error, Instant now) {
         SyncTaskEntity task = get(id);
         if (task.change(SyncStatus.FAILED, null, error, now)) {
@@ -180,6 +178,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public void postpone(long id, String why, Instant nextAttempt, Instant now) {
         SyncTaskEntity task = get(id);
         if (task.status() == SyncStatus.RUNNING && task.change(SyncStatus.PENDING, nextAttempt, why, now)) {
@@ -189,6 +188,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public void advance(long id, StepType next, String why, Instant now) {
         SyncTaskEntity task = get(id);
         if (task.advance(next, now)) {
@@ -197,6 +197,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public void requeue(long id, Instant now) {
         SyncTaskEntity task = get(id);
         if (task.change(SyncStatus.PENDING, now, null, now)) {
@@ -206,6 +207,7 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
     public void discard(long id, Instant now) {
         SyncTaskEntity task = get(id);
         if (task.change(SyncStatus.DISCARDED, null, "discarded by you", now)) {

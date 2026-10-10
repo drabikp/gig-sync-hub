@@ -1,4 +1,4 @@
-package sk.drabikp.bzscraper.bandzone.portal.selenium;
+package sk.drabikp.bzscraper.bandzone.portal;
 
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;

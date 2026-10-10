@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 
 /** JPA-backed {@link SettingsStore}: table {@code band_setting}. */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaSettingsStore implements SettingsStore {
 
     private final BandSettingJpaRepository jpaRepository;
@@ -21,12 +21,12 @@ class JpaSettingsStore implements SettingsStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<String> get(BandId band, String name) {
         return jpaRepository.findById(new BandSettingEntity.Key(band.value(), name)).map(BandSettingEntity::getValue);
     }
 
     @Override
+    @Transactional
     public void put(BandId band, String name, String value) {
         if (value == null) {
             jpaRepository.deleteById(new BandSettingEntity.Key(band.value(), name));
@@ -36,7 +36,6 @@ class JpaSettingsStore implements SettingsStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Map<BandId, String> all(String name) {
         return jpaRepository.findByName(name).stream()
                 .collect(Collectors.toMap(s -> new BandId(s.getBandId()), BandSettingEntity::getValue));

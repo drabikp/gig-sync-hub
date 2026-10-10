@@ -11,7 +11,7 @@ import java.util.List;
 
 /** JPA-backed {@link BandProfileStore}: rules in table {@code calendar_rule} (the shipped ones without a band), in insertion order. */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaBandProfileStore implements BandProfileStore {
 
     private final CalendarRuleJpaRepository jpaRepository;
@@ -23,12 +23,12 @@ class JpaBandProfileStore implements BandProfileStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<ProfileRule> rules(BandId band) {
         return mapper.toRules(jpaRepository.forBand(band.value()));
     }
 
     @Override
+    @Transactional
     public void replaceShipped(List<ProfileRule> rules) {
         requireOrigin(RuleOrigin.PRESET, rules);
         jpaRepository.deleteShipped(RuleOrigin.PRESET.name());
@@ -36,6 +36,7 @@ class JpaBandProfileStore implements BandProfileStore {
     }
 
     @Override
+    @Transactional
     public void replace(BandId band, RuleOrigin origin, List<ProfileRule> rules) {
         if (origin == RuleOrigin.PRESET) {
             throw new IllegalArgumentException("the shipped rules are everyone's, not a band's");

@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 
 /** JPA-backed {@link CalendarLinkStore}: table {@code calendar_link}. */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaCalendarLinkStore implements CalendarLinkStore {
 
     private final CalendarLinkJpaRepository jpaRepository;
@@ -25,23 +25,25 @@ class JpaCalendarLinkStore implements CalendarLinkStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Map<String, GigId> all(BandId band) {
         return jpaRepository.findByBandId(band.value()).stream().collect(Collectors.toMap(
                 CalendarLinkEntity::getEventUid, l -> GigId.fromKey(l.getGigId())));
     }
 
     @Override
+    @Transactional
     public void link(BandId band, String eventId, GigId gigId) {
         jpaRepository.save(new CalendarLinkEntity(band.value(), eventId, gigId.key(), clock.instant()));
     }
 
     @Override
+    @Transactional
     public void unlink(BandId band, String eventId) {
         jpaRepository.deleteById(new BandEventKey(band.value(), eventId));
     }
 
     @Override
+    @Transactional
     public void move(BandId band, GigId from, GigId to) {
         if (from.equals(to)) {
             return;

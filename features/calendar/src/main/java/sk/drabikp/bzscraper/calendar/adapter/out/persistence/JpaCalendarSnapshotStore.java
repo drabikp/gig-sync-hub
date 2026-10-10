@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 
 /** JPA-backed {@link CalendarSnapshotStore}: table {@code calendar_event}. */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaCalendarSnapshotStore implements CalendarSnapshotStore {
 
     private final CalendarEventJpaRepository jpaRepository;
@@ -28,19 +28,18 @@ class JpaCalendarSnapshotStore implements CalendarSnapshotStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Map<String, KnownCalendarEvent> all(BandId band) {
         return jpaRepository.findByBandId(band.value()).stream().map(mapper::toDomain)
                 .collect(Collectors.toMap(KnownCalendarEvent::id, Function.identity()));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<KnownCalendarEvent> find(BandId band, String eventId) {
         return jpaRepository.findById(new BandEventKey(band.value(), eventId)).map(mapper::toDomain);
     }
 
     @Override
+    @Transactional
     public void saveRead(BandId band, Collection<KnownCalendarEvent> events, Instant readAt) {
         Map<String, CalendarEventEntity> stored = jpaRepository.findByBandIdAndEventUidIn(band.value(),
                         events.stream().map(KnownCalendarEvent::id).toList()).stream()
@@ -56,6 +55,7 @@ class JpaCalendarSnapshotStore implements CalendarSnapshotStore {
     }
 
     @Override
+    @Transactional
     public void save(BandId band, KnownCalendarEvent event) {
         CalendarEventEntity entity = jpaRepository.findById(new BandEventKey(band.value(), event.id()))
                 .orElseGet(() -> new CalendarEventEntity(band.value(), event.id()));
@@ -65,12 +65,12 @@ class JpaCalendarSnapshotStore implements CalendarSnapshotStore {
     }
 
     @Override
+    @Transactional
     public void remove(BandId band, String eventId) {
         jpaRepository.deleteById(new BandEventKey(band.value(), eventId));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<Instant> lastRead(BandId band) {
         return Optional.ofNullable(jpaRepository.lastSeen(band.value()));
     }

@@ -2,16 +2,18 @@ package sk.drabikp.bzscraper.bandzone.portal.selenium;
 
 import jakarta.annotation.PreDestroy;
 import org.openqa.selenium.support.ui.WebDriverWait;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import sk.drabikp.bzscraper.accounts.application.port.in.PlatformAccounts;
 import sk.drabikp.bzscraper.bandzone.BandzoneAccount;
 import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
+import sk.drabikp.bzscraper.bandzone.portal.PosterDownloader;
 import sk.drabikp.bzscraper.bandzone.BandzoneProperties;
 import sk.drabikp.bzscraper.bandzone.portal.BandzonePortalClient;
 import sk.drabikp.bzscraper.bandzone.portal.BandzoneSession;
 import sk.drabikp.bzscraper.browser.BrowserPool;
 import sk.drabikp.bzscraper.browser.BrowserProperties;
+import sk.drabikp.bzscraper.browser.OnPlatformClient;
+import sk.drabikp.bzscraper.browser.PlatformClient;
 import sk.drabikp.bzscraper.browser.PlatformBrowser;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
@@ -21,9 +23,9 @@ import java.time.Duration;
  * Real Bandzone publisher: opens ONE headless-browser session per batch (single
  * login) and creates each gig through the band-admin 2-step wizard, edits it through
  * the concert's update form (details, venue, poster) and performing-bands tab (lineup),
- * and cancels/deletes it through the update delete tab. Active only
- * when {@code bzscraper.bandzone.selenium.enabled=true} (otherwise the stub is
- * used, so the app boots without a browser). The login is the band's own ({@link BandzoneAccount}).
+ * and cancels/deletes it through the update delete tab. The fallback to the HTTP client, active only
+ * with {@code bzscraper.bandzone.client=selenium} (or the older {@code selenium.enabled=true}). The
+ * login is the band's own ({@link BandzoneAccount}).
  *
  * The browser ({@link PlatformBrowser}: one at a time, kept warm, a private profile per band's
  * account) keeps a saved login: the password is used only when Bandzone ended that login
@@ -35,7 +37,7 @@ import java.time.Duration;
  * interactable — the approach that validated the flow manually.
  */
 @Component
-@ConditionalOnProperty(name = "bzscraper.bandzone.selenium.enabled", havingValue = "true")
+@OnPlatformClient(platform = "bandzone", value = PlatformClient.SELENIUM)
 class SeleniumBandzonePortalClient implements BandzonePortalClient {
 
     /** What a failure in Bandzone's browser means, as a {@link BandzonePortalException}. */

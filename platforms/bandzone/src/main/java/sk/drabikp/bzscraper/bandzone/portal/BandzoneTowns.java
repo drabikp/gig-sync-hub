@@ -1,4 +1,4 @@
-package sk.drabikp.bzscraper.bandzone.portal.selenium;
+package sk.drabikp.bzscraper.bandzone.portal;
 
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.TextFold;
@@ -14,10 +14,10 @@ import java.util.stream.Collectors;
  * the same country and — when the gig's town was picked from the place search — the same
  * district. Exactly one fit or an explanation: never the first one that starts alike.
  */
-final class BandzoneTowns {
+public final class BandzoneTowns {
 
     /** One suggestion: its position in the list, the name and the description. */
-    record Suggestion(int index, String name, String description) {
+    public record Suggestion(int index, String name, String description) {
 
         boolean slovak() {
             return TextFold.fold(description).contains("slovensko");
@@ -25,13 +25,13 @@ final class BandzoneTowns {
     }
 
     /** The suggestion to pick, or why there is none. */
-    record Choice(Suggestion pick, String problem) {
+    public record Choice(Suggestion pick, String problem) {
     }
 
     private BandzoneTowns() {
     }
 
-    static Choice choose(String city, Country country, String district, List<Suggestion> suggestions) {
+    public static Choice choose(String city, Country country, String district, List<Suggestion> suggestions) {
         List<Suggestion> fits = suggestions.stream()
                 .filter(s -> TextFold.fold(s.name()).equals(TextFold.fold(city)))
                 .filter(s -> country == null || s.slovak() == (country == Country.SLOVAKIA))

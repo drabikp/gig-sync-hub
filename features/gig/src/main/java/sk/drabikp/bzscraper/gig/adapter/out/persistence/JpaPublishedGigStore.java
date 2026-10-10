@@ -17,7 +17,7 @@ import java.util.Optional;
  * {@link sk.drabikp.bzscraper.gig.application.port.out.Transactions}).
  */
 @Component
-@Transactional
+@Transactional(readOnly = true)
 class JpaPublishedGigStore implements PublishedGigStore {
 
     private final PublishedGigJpaRepository jpaRepository;
@@ -29,13 +29,11 @@ class JpaPublishedGigStore implements PublishedGigStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public boolean isPublished(BandId band, Platform platform, GigId gigId) {
         return jpaRepository.existsById(key(band, platform, gigId));
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<String> externalRef(BandId band, Platform platform, GigId gigId) {
         return jpaRepository.findById(key(band, platform, gigId))
                 .map(PublishedGigEntity::getExternalRef)
@@ -43,16 +41,19 @@ class JpaPublishedGigStore implements PublishedGigStore {
     }
 
     @Override
+    @Transactional
     public void record(BandId band, Platform platform, GigId gigId, String externalRef) {
         jpaRepository.save(new PublishedGigEntity(key(band, platform, gigId), externalRef));
     }
 
     @Override
+    @Transactional
     public void remove(BandId band, Platform platform, GigId gigId) {
         jpaRepository.deleteById(key(band, platform, gigId));
     }
 
     @Override
+    @Transactional
     public void move(BandId band, GigId from, GigId to) {
         if (from.equals(to)) {
             return;
@@ -66,7 +67,6 @@ class JpaPublishedGigStore implements PublishedGigStore {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<Publication> all(BandId band) {
         return mapper.toDomain(jpaRepository.findByKeyBandId(band.value()));
     }
