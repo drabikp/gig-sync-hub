@@ -2,10 +2,10 @@ package sk.drabikp.bzscraper.places.adapter.in.rest;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import sk.drabikp.bzscraper.gig.api.CountryJson;
-import sk.drabikp.bzscraper.gig.api.GigDraftMapping;
+import sk.drabikp.bzscraper.gig.api.CountryValue;
+import sk.drabikp.bzscraper.gig.api.GigFormMapper;
 import sk.drabikp.bzscraper.places.adapter.in.rest.api.PlacesApi;
-import sk.drabikp.bzscraper.places.adapter.in.rest.api.TownJson;
+import sk.drabikp.bzscraper.places.adapter.in.rest.api.TownResponse;
 import sk.drabikp.bzscraper.places.application.port.in.FindPlacesUseCase;
 
 import java.util.List;
@@ -15,20 +15,24 @@ import java.util.List;
 class PlacesController implements PlacesApi {
 
     private final FindPlacesUseCase places;
+    private final TownMapper towns;
+    private final GigFormMapper forms;
 
-    PlacesController(FindPlacesUseCase places) {
+    PlacesController(FindPlacesUseCase places, TownMapper towns, GigFormMapper forms) {
         this.places = places;
+        this.towns = towns;
+        this.forms = forms;
     }
 
     @Override
-    public ResponseEntity<List<TownJson>> searchTowns(String q) {
-        return ResponseEntity.ok(TownMapping.toJson(places.search(q)));
+    public ResponseEntity<List<TownResponse>> searchTowns(String q) {
+        return ResponseEntity.ok(towns.toResponse(places.search(q)));
     }
 
     @Override
-    public ResponseEntity<TownJson> resolveTown(String name, CountryJson country, String postalCode) {
-        return places.resolve(name, GigDraftMapping.toCountry(country), postalCode)
-                .map(TownMapping::toJson).map(ResponseEntity::ok)
+    public ResponseEntity<TownResponse> resolveTown(String name, CountryValue country, String postalCode) {
+        return places.resolve(name, forms.toCountry(country), postalCode)
+                .map(towns::toResponse).map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 }

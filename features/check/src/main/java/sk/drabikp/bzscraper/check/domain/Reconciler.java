@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -52,12 +53,12 @@ public final class Reconciler {
                                      Collection<ImportedGig> onPlatform, Set<GigId> syncing) {
         Platform platform = traits.platform();
         Map<GigId, Gig> gigs = catalog.stream().collect(Collectors.toMap(Gig::id, Function.identity(), (a, b) -> a));
-        Map<String, ImportedGig> listed = onPlatform.stream().filter(i -> i.platform() == platform)
+        Map<String, ImportedGig> listed = onPlatform.stream().filter(i -> i.platform().equals(platform))
                 .collect(Collectors.toMap(ImportedGig::externalRef, Function.identity(), (a, b) -> a));
         List<Drift> drifts = new ArrayList<>();
         for (Publication record : records) {
             Gig gig = gigs.get(record.gigId());
-            if (record.platform() != platform || !record.hasExternalRef() || gig == null
+            if (!record.platform().equals(platform) || !record.hasExternalRef() || gig == null
                     || syncing.contains(record.gigId())) {
                 continue;
             }
@@ -80,9 +81,9 @@ public final class Reconciler {
 
     /** How many of the platform's events no publication record points to. */
     public static int unlinked(Platform platform, Collection<Publication> records, Collection<ImportedGig> onPlatform) {
-        Set<String> linked = records.stream().filter(r -> r.platform() == platform && r.hasExternalRef())
+        Set<String> linked = records.stream().filter(r -> r.platform().equals(platform) && r.hasExternalRef())
                 .map(Publication::externalRef).collect(Collectors.toSet());
-        return (int) onPlatform.stream().filter(i -> i.platform() == platform && !linked.contains(i.externalRef())).count();
+        return (int) onPlatform.stream().filter(i -> i.platform().equals(platform) && !linked.contains(i.externalRef())).count();
     }
 
     static List<Drift.Difference> differences(PlatformTraits traits, Gig gig, ImportedGig listed) {
@@ -138,11 +139,11 @@ public final class Reconciler {
      */
     private static Optional<Double> farFromTown(Gig gig, ImportedGig listed) {
         Address town = gig.location().address();
-        if (town == null || !town.resolved() || listed.latitude() == null) {
+        if (town == null || !town.resolved()) {
             return Optional.empty();
         }
-        double km = town.kilometresTo(listed.latitude(), listed.longitude());
-        return km > NEAR_KM ? Optional.of(km) : Optional.empty();
+        OptionalDouble km = listed.coordinates().map(town::kilometresTo).orElse(OptionalDouble.empty());
+        return km.isPresent() && km.getAsDouble() > NEAR_KM ? Optional.of(km.getAsDouble()) : Optional.empty();
     }
 
     /**

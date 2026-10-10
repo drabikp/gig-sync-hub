@@ -15,11 +15,15 @@ import sk.drabikp.bzscraper.sync.application.SyncPause;
 import sk.drabikp.bzscraper.sync.application.SyncRequests;
 import sk.drabikp.bzscraper.sync.application.SyncState;
 import sk.drabikp.bzscraper.sync.application.SyncWakeUp;
+import sk.drabikp.bzscraper.sync.application.engine.OutcomeSettlement;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformBreakers;
+import sk.drabikp.bzscraper.sync.application.engine.RecreateStep;
+import sk.drabikp.bzscraper.sync.application.engine.RunPreparation;
 import sk.drabikp.bzscraper.sync.application.engine.StepRegistry;
 import sk.drabikp.bzscraper.sync.application.engine.SyncDispatcher;
 import sk.drabikp.bzscraper.sync.application.engine.WorkflowEngine;
 import sk.drabikp.bzscraper.sync.application.port.out.SettingsStore;
+import sk.drabikp.bzscraper.sync.application.port.out.SyncFaults;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncOutbox;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncStep;
@@ -49,17 +53,21 @@ class SyncConfiguration {
     @Bean
     StepRegistry stepRegistry(List<SyncStep> steps, Platforms platforms, Transactions transactions,
                               PublishedGigStore publishedGigStore) {
-        return new StepRegistry(steps, platforms, transactions, publishedGigStore);
+        return new StepRegistry(steps, platforms, RecreateStep.recreator(transactions, publishedGigStore));
     }
 
     /** Runs the sync tasks through the platforms' steps — docs/sync-workflow-plan.md. */
     @Bean
     WorkflowEngine workflowEngine(StepRegistry stepRegistry, GigRepository gigRepository,
                                   PublishedGigStore publishedGigStore, SyncOutbox outbox, Transactions transactions,
-                                  SyncNotifier notifier, Clock clock, Platforms platforms, SyncPause syncPause,
-                                  PlatformBreakers platformBreakers) {
-        return new WorkflowEngine(stepRegistry, gigRepository, publishedGigStore, outbox, transactions, notifier, clock,
-                platforms, syncPause, platformBreakers);
+                                  SyncNotifier notifier, SyncFaults faults, Clock clock, Platforms platforms,
+                                  SyncPause syncPause, PlatformBreakers platformBreakers) {
+        RunPreparation preparation = new RunPreparation(stepRegistry, gigRepository, publishedGigStore, outbox,
+                platforms, clock);
+        OutcomeSettlement settlement = new OutcomeSettlement(stepRegistry, publishedGigStore, outbox, transactions,
+                platforms, clock);
+        return new WorkflowEngine(stepRegistry, preparation, settlement, outbox, notifier, faults, clock, syncPause,
+                platformBreakers);
     }
 
     /** A platform failing this many batches in a row is held back this long (then one trial batch). */

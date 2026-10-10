@@ -27,7 +27,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Town'
+                  $ref: '#/components/schemas/TownResponse'
   /api/places/resolve:
     get:
       tags: [Places]
@@ -42,7 +42,7 @@ paths:
         - name: country
           in: query
           schema:
-            $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/schemas/Country'
+            $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/schemas/CountryValue'
         - name: postalCode
           in: query
           schema:
@@ -53,12 +53,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Town'
+                $ref: '#/components/schemas/TownResponse'
         "204":
           description: None or several fit.
 components:
   schemas:
-    Town:
+    TownResponse:
       type: object
       required: [name, district, region, postalCode, country, latitude, longitude]
       properties:
@@ -76,7 +76,7 @@ components:
           nullable: true
         country:
           allOf:
-            - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/schemas/Country'
+            - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/schemas/CountryValue'
           nullable: true
         latitude:
           type: number

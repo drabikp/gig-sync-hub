@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application.port.out;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
@@ -15,5 +16,5 @@ public interface GigExporter {
 
     String mediaType();
 
-    String export(List<Gig> gigs);
+    String export(BandId band, List<Gig> gigs);
 }

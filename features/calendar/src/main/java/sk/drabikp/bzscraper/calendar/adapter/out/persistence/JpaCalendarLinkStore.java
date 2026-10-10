@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.calendar.adapter.out.persistence;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.bzscraper.calendar.application.port.out.CalendarLinkStore;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 
 import java.time.Clock;
@@ -25,27 +26,27 @@ class JpaCalendarLinkStore implements CalendarLinkStore {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<String, GigId> all() {
-        return jpaRepository.findAll().stream().collect(Collectors.toMap(
+    public Map<String, GigId> all(BandId band) {
+        return jpaRepository.findByBandId(band.value()).stream().collect(Collectors.toMap(
                 CalendarLinkEntity::getEventUid, l -> GigId.fromKey(l.getGigId())));
     }
 
     @Override
-    public void link(String eventId, GigId gigId) {
-        jpaRepository.save(new CalendarLinkEntity(eventId, gigId.key(), clock.instant()));
+    public void link(BandId band, String eventId, GigId gigId) {
+        jpaRepository.save(new CalendarLinkEntity(band.value(), eventId, gigId.key(), clock.instant()));
     }
 
     @Override
-    public void unlink(String eventId) {
-        jpaRepository.deleteById(eventId);
+    public void unlink(BandId band, String eventId) {
+        jpaRepository.deleteById(new BandEventKey(band.value(), eventId));
     }
 
     @Override
-    public void move(GigId from, GigId to) {
+    public void move(BandId band, GigId from, GigId to) {
         if (from.equals(to)) {
             return;
         }
-        for (CalendarLinkEntity link : jpaRepository.findByGigId(from.key())) {
+        for (CalendarLinkEntity link : jpaRepository.findByBandIdAndGigId(band.value(), from.key())) {
             link.moveTo(to.key());
         }
     }

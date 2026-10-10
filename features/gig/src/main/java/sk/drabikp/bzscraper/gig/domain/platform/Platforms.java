@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain.platform;
 
+import sk.drabikp.bzscraper.gig.domain.UnknownReferenceException;
+
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -44,9 +46,9 @@ public final class Platforms {
         return traits.keySet().stream().filter(p -> p.id().equals(id)).findFirst();
     }
 
-    /** The platform with this id; one that isn't there is a mistake of the caller. */
+    /** The platform with this id; {@link UnknownReferenceException} when no adapter provides it. */
     public Platform get(String id) {
-        return find(id).orElseThrow(() -> new IllegalArgumentException("not a platform: " + id));
+        return find(id).orElseThrow(() -> new UnknownReferenceException("not a platform: " + id));
     }
 
     /** The platforms with these ids, in the order given (none for null). */
@@ -57,7 +59,7 @@ public final class Platforms {
     public PlatformTraits traits(Platform platform) {
         PlatformTraits known = traits.get(platform);
         return known != null ? known
-                : new PlatformTraits(platform, platform.id(), true, false, true, Integer.MAX_VALUE, null);
+                : PlatformTraits.of(platform, platform.id()).build();
     }
 
     public String name(Platform platform) {

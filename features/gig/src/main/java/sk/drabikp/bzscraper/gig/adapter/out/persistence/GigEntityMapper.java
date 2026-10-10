@@ -1,88 +1,86 @@
 package sk.drabikp.bzscraper.gig.adapter.out.persistence;
 
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Admission;
-import sk.drabikp.bzscraper.gig.domain.EntryType;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.gig.domain.Slot;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
 
 /**
- * Translates between the {@link Gig} aggregate and its {@link GigEntity}. The only
- * class aware of both worlds. Schedule crosses as wall-clock {@code LocalDateTime}
- * plus country; the zone is rebuilt from the country on the way back.
+ * Translates between the {@link Gig} aggregate and its {@link GigEntity} (MapStruct). Schedule
+ * crosses as wall-clock {@code LocalDateTime} plus country; the zone is rebuilt from the country on
+ * the way back ({@link Location#zoneOf}). The lineup is one text, a band per line.
  */
-final class GigEntityMapper {
+@Mapper
+interface GigEntityMapper {
 
-    private static final String LINEUP_DELIMITER = "\n";
+    String LINEUP_DELIMITER = "\n";
 
-    private GigEntityMapper() {
+    @Mapping(target = "bandId", source = "band.value")
+    @Mapping(target = "id", expression = "java(gig.id().key())")
+    @Mapping(target = "version", ignore = true)
+    @Mapping(target = "startDateTime", source = "gig.schedule.start")
+    @Mapping(target = "endDateTime", source = "gig.schedule.end")
+    @Mapping(target = "slotStart", source = "gig.schedule.slot.start")
+    @Mapping(target = "slotEnd", source = "gig.schedule.slot.end")
+    @Mapping(target = "venue", source = "gig.location.venue")
+    @Mapping(target = "city", source = "gig.location.city")
+    @Mapping(target = "country", source = "gig.location.country")
+    @Mapping(target = "street", source = "gig.location.address.street")
+    @Mapping(target = "postalCode", source = "gig.location.address.postalCode")
+    @Mapping(target = "district", source = "gig.location.address.district")
+    @Mapping(target = "region", source = "gig.location.address.region")
+    @Mapping(target = "latitude", source = "gig.location.address.latitude")
+    @Mapping(target = "longitude", source = "gig.location.address.longitude")
+    @Mapping(target = "entryType", source = "gig.admission.type")
+    @Mapping(target = "entryFee", source = "gig.admission.amount")
+    GigEntity toEntity(BandId band, Gig gig);
+
+    @Mapping(target = "schedule", source = ".")
+    @Mapping(target = "location", source = ".")
+    @Mapping(target = "admission", source = ".")
+    @Mapping(target = "rescheduledTo", ignore = true)       // a method of Gig's that MapStruct takes for a setter
+    Gig toDomain(GigEntity entity);
+
+    default GigSchedule toSchedule(GigEntity e) {
+        ZoneId zone = Location.zoneOf(e.getCountry());
+        Slot slot = e.getSlotStart() == null ? null : new Slot(e.getSlotStart().atZone(zone), atZone(e.getSlotEnd(), zone));
+        return new GigSchedule(e.getStartDateTime().atZone(zone), atZone(e.getEndDateTime(), zone), slot);
     }
 
-    static GigEntity toEntity(Gig gig) {
-        ZonedDateTime end = gig.schedule().end();
-        GigEntity entity = new GigEntity(
-                gig.id().key(),
-                gig.title(),
-                gig.schedule().start().toLocalDateTime(),
-                end != null ? end.toLocalDateTime() : null,
-                gig.location().venue(),
-                gig.location().city(),
-                gig.location().country(),
-                String.join(LINEUP_DELIMITER, gig.lineup()),
-                gig.admission().type(),
-                gig.admission().amount(),
-                gig.description(),
-                gig.facebookUrl(),
-                gig.ticketUrl(),
-                gig.posterImageUrl(),
-                gig.cancelled());
-        entity.setAddress(gig.location().address());
-        Slot slot = gig.schedule().slot();
-        if (slot != null) {
-            entity.setSlot(slot.start().toLocalDateTime(), slot.end() != null ? slot.end().toLocalDateTime() : null);
-        }
-        return entity;
+    default Location toLocation(GigEntity e) {
+        return new Location(e.getVenue(), e.getCity(), e.getCountry(), Address.ofParts(e.getStreet(), e.getPostalCode(),
+                e.getDistrict(), e.getRegion(), e.getLatitude(), e.getLongitude()));
     }
 
-    static Gig toDomain(GigEntity e) {
-        ZoneId zone = e.getCountry() != null ? ZoneId.of(e.getCountry().timezone()) : ZoneId.systemDefault();
-        ZonedDateTime start = e.getStartDateTime().atZone(zone);
-        ZonedDateTime end = e.getEndDateTime() != null ? e.getEndDateTime().atZone(zone) : null;
-        Slot slot = e.getSlotStart() == null ? null : new Slot(e.getSlotStart().atZone(zone),
-                e.getSlotEnd() != null ? e.getSlotEnd().atZone(zone) : null);
-
-        return new Gig(
-                e.getTitle(),
-                new GigSchedule(start, end, slot),
-                new Location(e.getVenue(), e.getCity(), e.getCountry(), e.getAddress()),
-                splitLineup(e.getLineup()),
-                toAdmission(e.getEntryType(), e.getEntryFee()),
-                e.getDescription(),
-                e.getFacebookUrl(),
-                e.getTicketUrl(),
-                e.getPosterImageUrl(),
-                e.isCancelled());
+    default Admission toAdmission(GigEntity e) {
+        return Admission.of(e.getEntryType(), e.getEntryFee());
     }
 
-    private static Admission toAdmission(EntryType type, String fee) {
-        return switch (type) {
-            case FREE -> Admission.free();
-            case VOLUNTARY -> Admission.voluntary();
-            case PAID -> Admission.paid(fee);
-        };
+    default LocalDateTime toLocal(ZonedDateTime time) {
+        return time == null ? null : time.toLocalDateTime();
     }
 
-    private static List<String> splitLineup(String lineup) {
-        if (lineup == null || lineup.isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(lineup.split(LINEUP_DELIMITER)).filter(s -> !s.isBlank()).toList();
+    default String toLineup(List<String> lineup) {
+        return String.join(LINEUP_DELIMITER, lineup);
+    }
+
+    default List<String> toLineup(String lineup) {
+        return lineup == null || lineup.isBlank() ? List.of()
+                : Arrays.stream(lineup.split(LINEUP_DELIMITER)).filter(s -> !s.isBlank()).toList();
+    }
+
+    private static ZonedDateTime atZone(LocalDateTime time, ZoneId zone) {
+        return time == null ? null : time.atZone(zone);
     }
 }

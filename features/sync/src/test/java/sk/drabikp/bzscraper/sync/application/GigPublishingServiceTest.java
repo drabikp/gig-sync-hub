@@ -13,6 +13,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDSINTOWN;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
@@ -31,7 +32,7 @@ class GigPublishingServiceTest {
 
     @Test
     void queues_one_publish_per_gig_and_platform_in_one_transaction_and_wakes_the_worker() {
-        QueueResult result = service.publish(Set.copyOf(TestPlatforms.PLATFORMS.all()),
+        QueueResult result = service.publish(BAND, Set.copyOf(TestPlatforms.PLATFORMS.all()),
                 List.of(a, b));
 
         assertThat(result.queued()).extracting(SyncTask::platform, SyncTask::action).containsExactly(
@@ -43,11 +44,11 @@ class GigPublishingServiceTest {
 
     @Test
     void published_queued_and_cancelled_gigs_are_left_out_with_the_reason() {
-        published.record(BANDZONE, a.id(), "100");
-        service.publish(Set.of(BANDZONE), List.of(b));
+        published.record(BAND, BANDZONE, a.id(), "100");
+        service.publish(BAND, Set.of(BANDZONE), List.of(b));
         Gig cancelled = TestGigs.gig("C", "Fléda").cancel();
 
-        QueueResult result = service.publish(Set.of(BANDZONE), List.of(a, b, cancelled));
+        QueueResult result = service.publish(BAND, Set.of(BANDZONE), List.of(a, b, cancelled));
 
         assertThat(result.queued()).isEmpty();
         assertThat(result.notQueued()).containsExactly("A on Bandzone: already published",
@@ -56,9 +57,9 @@ class GigPublishingServiceTest {
 
     @Test
     void nothing_queued_does_not_wake_the_worker() {
-        published.record(BANDZONE, a.id(), "100");
+        published.record(BAND, BANDZONE, a.id(), "100");
 
-        service.publish(Set.of(BANDZONE), List.of(a));
+        service.publish(BAND, Set.of(BANDZONE), List.of(a));
 
         assertThat(signals.wakes).isZero();
     }

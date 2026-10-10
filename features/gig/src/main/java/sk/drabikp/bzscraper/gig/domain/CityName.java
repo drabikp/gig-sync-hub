@@ -1,7 +1,5 @@
 package sk.drabikp.bzscraper.gig.domain;
 
-import java.text.Normalizer;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -24,12 +22,7 @@ public final class CityName {
 
     /** A comparison key: equal keys = the same city. */
     public static String key(String city) {
-        if (city == null) {
-            return "";
-        }
-        String plain = Normalizer.normalize(city, Normalizer.Form.NFD).replaceAll("\\p{M}", "")
-                .toLowerCase(Locale.ROOT).trim().replaceAll("\\s+", " ")
-                .replaceAll(" \\d+$", "");
+        String plain = TextFold.fold(city).replaceAll(" \\d+$", "");
         return ENGLISH_NAMES.getOrDefault(plain, plain);
     }
 

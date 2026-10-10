@@ -10,7 +10,6 @@ import sk.drabikp.bzscraper.gig.domain.TextFold;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +17,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -96,7 +94,7 @@ public final class CalendarEventClassifier {
             case TITLE_CONTAINS -> contains(rule, event.title()).map(w -> new Reason(Why.TITLE_CONTAINS, w, weight));
             case NOTES_CONTAIN -> contains(rule, event.notes()).map(w -> new Reason(Why.NOTES_CONTAIN, w, weight));
             case NOTES_LABEL -> rule.alternatives().stream()
-                    .filter(label -> labelPattern(label).matcher(TextFold.fold(event.notes())).find())
+                    .filter(label -> NotesLabels.label(label).matcher(TextFold.fold(event.notes())).find())
                     .findFirst().map(label -> new Reason(Why.NOTES_LABEL, label, weight));
             case REPEATING -> event.repeating() ? Optional.of(Reason.of(Why.REPEATING, weight)) : Optional.empty();
             case LONGER_THAN_DAYS -> {
@@ -112,7 +110,9 @@ public final class CalendarEventClassifier {
                         : Optional.empty();
             }
             case TRAVEL_LEADS_TO -> travelTo(event, context).map(t -> new Reason(Why.TRAVEL_LEADS_TO, t.title(), weight));
-            default -> Optional.empty();
+            // the catalog's gig that day is scored by the classifier itself; role kinds carry no weight
+            case CATALOG_GIG_SAME_DAY, TRAVEL, CANCELLED_TITLE, CANCELLED_NOTES, TENTATIVE_TITLE, TENTATIVE_NOTES,
+                 CONFIRMED_FIELD, SHOWTIME_LABEL -> Optional.empty();
         };
     }
 
@@ -161,8 +161,7 @@ public final class CalendarEventClassifier {
     }
 
     private static Optional<Reason> unconfirmedField(ProfileRule rule, CalendarEvent event) {
-        Matcher field = Pattern.compile("(?<![\\p{L}\\p{N}])" + spaced(rule.fieldLabel()) + "\\s*:[ \\t]*(\\S+)")
-                .matcher(TextFold.fold(event.notes()));
+        Matcher field = NotesLabels.field(rule.fieldLabel()).matcher(TextFold.fold(event.notes()));
         if (field.find() && !field.group(1).startsWith(rule.fieldPrefix())) {
             return Optional.of(new Reason(Why.TENTATIVE_FIELD, rule.fieldLabel() + ": " + field.group(1), 0));
         }
@@ -190,12 +189,4 @@ public final class CalendarEventClassifier {
         return rule.alternatives().stream().filter(folded::contains).findFirst();
     }
 
-    /** {@code label:} at the start of a word; spaces inside the label are optional ("Čas predbežne" / "Časpredbežne"). */
-    private static Pattern labelPattern(String label) {
-        return Pattern.compile("(?<![\\p{L}\\p{N}])" + spaced(label) + "\\s*:");
-    }
-
-    private static String spaced(String folded) {
-        return Arrays.stream(folded.split(" ")).map(Pattern::quote).collect(Collectors.joining("\\s*"));
-    }
 }

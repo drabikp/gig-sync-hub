@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application.port.out;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 
 /**
@@ -9,5 +10,5 @@ import sk.drabikp.bzscraper.gig.domain.GigId;
  */
 public interface GigMovedListener {
 
-    void gigMoved(GigId from, GigId to);
+    void gigMoved(BandId band, GigId from, GigId to);
 }

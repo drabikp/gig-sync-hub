@@ -34,6 +34,7 @@ import {
   usePlatforms,
 } from '../api/hooks';
 import type { Country, EntryType, GigDraft } from '../api/types';
+import { useBandPath } from '../band/band';
 import { PageHeader } from '../components/PageHeader';
 import { TownPicker } from '../components/TownPicker';
 import { usePlatformName } from '../lib/attention';
@@ -120,6 +121,7 @@ function DateField({ value, onChange, ...field }: {
 
 /** New gig, an edit, or a gig from a calendar event (mode). */
 export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
+  const path = useBandPath();
   const { id, eventId } = useParams();
   const [params] = useSearchParams();
   const { t } = useTranslation();
@@ -196,9 +198,9 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
     setBand('');
   };
 
-  const back = mode === 'edit' ? `/gig/${id}` : mode === 'calendar' ? '/calendar' : '/';
+  const back = mode === 'edit' ? `/gig/${id}` : mode === 'calendar' ? '/calendar' : '/';   // within the band
   // opened from a view (the calendar's filter, the Inbox): back to it as it was
-  const leave = () => (origin ? navigate(-1) : navigate(back, { replace: true }));
+  const leave = () => (origin ? navigate(-1) : navigate(path(back), { replace: true }));
   const title = mode === 'edit' ? t('form.editTitle') : mode === 'calendar' ? t('form.fromCalendarTitle') : t('form.newTitle');
   const saving = add.isPending || edit.isPending || addFromCalendar.isPending;
 
@@ -230,7 +232,7 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
       add.mutate(send, {
         onSuccess: (gig) => {
           done(t('toast.saved'));
-          navigate(`/gig/${gig.id}`, { replace: true, state: { justAdded: true } });
+          navigate(path(`/gig/${gig.id}`), { replace: true, state: { justAdded: true } });
         },
         onError,
       });
@@ -239,7 +241,7 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
         onSuccess: (r) => {
           queued(t, t('toast.saved'), r.queued, name);
           if (fromEvent) calendarAction.mutate({ kind: 'seen', event: fromEvent });
-          navigate(`/gig/${r.gig.id}`, { replace: true });
+          navigate(path(`/gig/${r.gig.id}`), { replace: true });
         },
         onError,
       });
@@ -413,7 +415,7 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
             py={mobile ? 'sm' : 0}
             style={mobile ? { background: 'var(--mantine-color-body)', borderTop: '1px solid var(--mantine-color-default-border)', zIndex: 10 } : undefined}
           >
-            <Button variant="default" size="md" onClick={() => (origin ? leave() : navigate(back))}>
+            <Button variant="default" size="md" onClick={() => (origin ? leave() : navigate(path(back)))}>
               {t('common.cancel')}
             </Button>
             <Button type="submit" size="md" loading={saving} style={mobile ? { flex: 1 } : undefined}>

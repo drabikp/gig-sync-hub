@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.bandsintown.portal;
 
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Duration;
 
@@ -16,16 +17,18 @@ public interface BitPortalClient {
     Duration READ_WAIT = Duration.ofMinutes(10);
 
     /**
-     * For a sync step: logs in (or reuses a still-valid login) and opens a session; a browser
-     * busy with another operation is not waited for ({@link FailureKind#BUSY} — the step is
-     * postponed).
+     * For a sync step: logs in to the band's account (the one it connected, {@link
+     * sk.drabikp.bzscraper.bandsintown.BandsintownAccount} — or reuses a still-valid login) and opens a
+     * session; a browser busy with another operation is not waited for ({@link FailureKind#BUSY} — the step
+     * is postponed).
      *
-     * @throws BitUploadException if login fails (the whole batch then fails)
+     * @throws BitPortalException if login fails (the whole batch then fails), or needing the user when the
+     *                            band hasn't connected Bandsintown
      */
-    default BitSession openSession() throws BitUploadException {
-        return openSession(Duration.ZERO);
+    default BitSession openSession(BandId band) throws BitPortalException {
+        return openSession(band, Duration.ZERO);
     }
 
-    /** Like {@link #openSession()}, waiting up to {@code wait} for a busy browser. */
-    BitSession openSession(Duration wait) throws BitUploadException;
+    /** Like {@link #openSession(BandId)}, waiting up to {@code wait} for a busy browser. */
+    BitSession openSession(BandId band, Duration wait) throws BitPortalException;
 }

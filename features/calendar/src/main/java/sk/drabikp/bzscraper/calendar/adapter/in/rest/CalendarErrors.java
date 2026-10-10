@@ -4,18 +4,18 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import sk.drabikp.bzscraper.calendar.application.port.in.CalendarErrorCode;
 import sk.drabikp.bzscraper.calendar.application.port.out.CalendarUnavailableException;
-import sk.drabikp.bzscraper.gig.api.ProblemJson;
-
-import java.util.Map;
+import sk.drabikp.bzscraper.gig.api.ProblemResponse;
+import sk.drabikp.bzscraper.gig.api.Problems;
 
 /** The calendar couldn't be read (unreachable, not a calendar): 502, code {@code calendarUnavailable}. */
 @RestControllerAdvice(assignableTypes = CalendarController.class)
 class CalendarErrors {
 
     @ExceptionHandler(CalendarUnavailableException.class)
-    ResponseEntity<ProblemJson> unavailable(CalendarUnavailableException e) {
+    ResponseEntity<ProblemResponse> unavailable(CalendarUnavailableException e) {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                .body(new ProblemJson("calendarUnavailable", Map.of(), e.getMessage()));
+                .body(Problems.of(CalendarErrorCode.CALENDAR_UNAVAILABLE, e.getMessage()));
     }
 }

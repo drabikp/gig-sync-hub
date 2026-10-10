@@ -15,6 +15,7 @@ import {
   useSyncTasks,
 } from '../api/hooks';
 import type { CalendarRow, Drift } from '../api/types';
+import { useBandPath } from '../band/band';
 import { done, failed, queued } from './notify';
 import { hhmm, shortDate, timeOfDay } from './format';
 
@@ -89,6 +90,7 @@ export function driftText(t: TFunction, d: Drift['differences'][number], platfor
  * gig; mark a change seen. {@code full}: also the quieter ones (unlink, undo) for the calendar page.
  */
 export function useCalendarRowActions() {
+  const path = useBandPath();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -109,7 +111,7 @@ export function useCalendarRowActions() {
       if (has('DATE') || has('SHOW_TIME')) {
         const params = new URLSearchParams({ fromEvent: row.eventId, day: row.draft.date, moveDay: has('DATE') ? '1' : '0' });
         if (row.draft.showTime) params.set('time', hhmm(row.draft.showTime));
-        actions.push({ label: t('calendar.updateGig'), primary: true, run: () => navigate(`/gig/${gig.id}/edit?${params}`, from) });
+        actions.push({ label: t('calendar.updateGig'), primary: true, run: () => navigate(path(`/gig/${gig.id}/edit?${params}`), from) });
       }
       if ((has('CANCELLED') || has('REMOVED')) && !gig.cancelled) {
         actions.push({
@@ -142,7 +144,7 @@ export function useCalendarRowActions() {
         actions.push({ label: t('calendar.keepGig'), run: () => call({ kind: 'seen', event: row.eventId }, t('toast.done')) });
       }
     } else if (row.missingFromCatalog && row.status !== 'CANCELLED') {
-      actions.push({ label: t('calendar.addGig'), primary: true, run: () => navigate(`/calendar/${encodeURIComponent(row.eventId)}/add`, from) });
+      actions.push({ label: t('calendar.addGig'), primary: true, run: () => navigate(path(`/calendar/${encodeURIComponent(row.eventId)}/add`), from) });
       if (match.state === 'SAME_DAY' && match.gig) {
         actions.push({
           label: t('calendar.linkTo', { title: match.gig.title }),
@@ -185,6 +187,7 @@ export function calendarRowBody(t: TFunction, row: CalendarRow): string {
 
 /** Everything that needs the user now, newest first, each with its fixes. */
 export function useInbox() {
+  const path = useBandPath();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const name = usePlatformName();
@@ -213,7 +216,7 @@ export function useInbox() {
           primary: true,
           run: () => sync.mutate({ kind: 'retry', task: task.id }, { onSuccess: () => done(t('toast.retrying', { platform: name(task.platform) })), onError: failed }),
         },
-        { label: t('inbox.openGig'), run: () => navigate(`/gig/${task.gigId}`) },
+        { label: t('inbox.openGig'), run: () => navigate(path(`/gig/${task.gigId}`)) },
         {
           label: t('inbox.discard'),
           confirm: { title: t('inbox.discardTitle'), text: t('inbox.discardText'), yes: t('inbox.discard') },

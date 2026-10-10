@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.bzscraper.calendar.application.port.out.CalendarDecisionStore;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -25,18 +26,18 @@ class JpaCalendarDecisionStore implements CalendarDecisionStore {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<String, CalendarEventKind> all() {
-        return jpaRepository.findAll().stream().collect(Collectors.toMap(
+    public Map<String, CalendarEventKind> all(BandId band) {
+        return jpaRepository.findByBandId(band.value()).stream().collect(Collectors.toMap(
                 CalendarDecisionEntity::getEventUid, d -> CalendarEventKind.valueOf(d.getVerdict())));
     }
 
     @Override
-    public void decide(String eventId, CalendarEventKind verdict) {
-        jpaRepository.save(new CalendarDecisionEntity(eventId, verdict.name(), LocalDateTime.now(clock)));
+    public void decide(BandId band, String eventId, CalendarEventKind verdict) {
+        jpaRepository.save(new CalendarDecisionEntity(band.value(), eventId, verdict.name(), LocalDateTime.now(clock)));
     }
 
     @Override
-    public void forget(String eventId) {
-        jpaRepository.deleteById(eventId);
+    public void forget(BandId band, String eventId) {
+        jpaRepository.deleteById(new BandEventKey(band.value(), eventId));
     }
 }

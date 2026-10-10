@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.check.domain;
 
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
 import java.time.Instant;
@@ -20,5 +21,12 @@ public record PlatformCheck(Instant checkedAt, List<Drift> drifts, Map<Platform,
         drifts = List.copyOf(drifts);
         unreadable = Map.copyOf(unreadable);
         unlinked = Map.copyOf(unlinked);
+    }
+
+    /** This check without the gig's difference on the platform (fixed, or not worth fixing). */
+    public PlatformCheck without(Platform platform, GigId gigId) {
+        return new PlatformCheck(checkedAt, drifts.stream()
+                .filter(d -> !d.platform().equals(platform) || !d.gigId().equals(gigId)).toList(),
+                unreadable, unlinked);
     }
 }

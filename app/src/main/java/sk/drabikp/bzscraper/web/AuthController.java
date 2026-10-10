@@ -4,34 +4,30 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import sk.drabikp.bzscraper.web.api.AuthApi;
-import sk.drabikp.bzscraper.web.api.CsrfTokenJson;
-import sk.drabikp.bzscraper.web.api.LoginJson;
-import sk.drabikp.bzscraper.web.api.MeJson;
+import sk.drabikp.bzscraper.web.api.CsrfTokenResponse;
+import sk.drabikp.bzscraper.web.api.MeResponse;
 
-/** Serves signing in from the page (auth.yaml); signing out is the security filter's ({@link SecurityConfiguration}). */
+/**
+ * Serves the page's questions about signing in (auth.yaml); signing in is Rauthy's and the security
+ * filter's, signing out the filter's ({@link SecurityConfiguration}).
+ */
 @RestController
 class AuthController implements AuthApi {
 
-    private final SignIn signIn;
+    private final CurrentUser currentUser;
 
-    AuthController(SignIn signIn) {
-        this.signIn = signIn;
+    AuthController(CurrentUser currentUser) {
+        this.currentUser = currentUser;
     }
 
     @Override
-    public ResponseEntity<CsrfTokenJson> csrfToken() {
-        return ResponseEntity.ok(signIn.csrfToken());
+    public ResponseEntity<CsrfTokenResponse> csrfToken() {
+        return ResponseEntity.ok(currentUser.csrfToken());
     }
 
     @Override
-    public ResponseEntity<MeJson> currentUser() {
-        return signIn.currentUser().map(name -> ResponseEntity.ok(new MeJson(name)))
+    public ResponseEntity<MeResponse> currentUser() {
+        return currentUser.me().map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
-    }
-
-    @Override
-    public ResponseEntity<MeJson> login(LoginJson login) {
-        return ResponseEntity.ok(new MeJson(signIn.signIn(login.getUsername(), login.getPassword(),
-                Boolean.TRUE.equals(login.getRemember()))));
     }
 }

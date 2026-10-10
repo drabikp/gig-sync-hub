@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.bandzone.portal;
 
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Duration;
 
@@ -14,15 +15,17 @@ import java.time.Duration;
 public interface BandzonePortalClient {
 
     /**
-     * For a sync step: logs in and opens a session; a browser busy with another operation is
-     * not waited for ({@link FailureKind#BUSY} — the step is postponed).
+     * For a sync step: logs in to the band's account (the one it connected, {@link
+     * sk.drabikp.bzscraper.bandzone.BandzoneAccount}) and opens a session; a browser busy with another
+     * operation is not waited for ({@link FailureKind#BUSY} — the step is postponed).
      *
-     * @throws BandzoneUploadException if login fails (the whole batch then fails)
+     * @throws BandzonePortalException if login fails (the whole batch then fails), or needing the user
+     *                                 when the band hasn't connected Bandzone
      */
-    default BandzoneSession openSession() throws BandzoneUploadException {
-        return openSession(Duration.ZERO);
+    default BandzoneSession openSession(BandId band) throws BandzonePortalException {
+        return openSession(band, Duration.ZERO);
     }
 
-    /** Like {@link #openSession()}, waiting up to {@code wait} for a busy browser. */
-    BandzoneSession openSession(Duration wait) throws BandzoneUploadException;
+    /** Like {@link #openSession(BandId)}, waiting up to {@code wait} for a busy browser. */
+    BandzoneSession openSession(BandId band, Duration wait) throws BandzonePortalException;
 }

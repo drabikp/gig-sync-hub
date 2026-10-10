@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.importing.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.importing.domain.ImportDecision;
 import sk.drabikp.bzscraper.importing.domain.ImportPlan;
@@ -19,7 +20,7 @@ public interface ImportGigsUseCase {
     Set<Platform> importablePlatforms();
 
     /** Reads the given platforms; a platform that can't be read is reported, not fatal. */
-    ImportPlan plan(Set<Platform> platforms);
+    ImportPlan plan(BandId band, Set<Platform> platforms);
 
-    ImportResult apply(List<ImportDecision> decisions);
+    ImportResult apply(BandId band, List<ImportDecision> decisions);
 }

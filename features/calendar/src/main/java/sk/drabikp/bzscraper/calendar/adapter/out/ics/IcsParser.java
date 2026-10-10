@@ -15,6 +15,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -204,9 +205,9 @@ final class IcsParser {
         for (int i = 1; i < head.length; i++) {
             int eq = head[i].indexOf('=');
             if (eq > 0) {
-                params.put(head[i].substring(0, eq).toUpperCase(), head[i].substring(eq + 1));
+                params.put(head[i].substring(0, eq).toUpperCase(Locale.ROOT), head[i].substring(eq + 1));
             }
         }
-        return new Property(head[0].toUpperCase().strip(), params, line.substring(colon + 1));
+        return new Property(head[0].toUpperCase(Locale.ROOT).strip(), params, line.substring(colon + 1));
     }
 }

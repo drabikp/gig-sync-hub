@@ -22,6 +22,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDSINTOWN;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
@@ -62,9 +63,9 @@ class SyncRequestsTest {
             ZonedDateTime.of(2026, 11, 20, 20, 0, 0, 0, ZoneId.of("Europe/Prague"))));
 
     private Gig onBoth(Gig gig) {
-        gigs.save(gig);
-        published.record(BANDZONE, gig.id(), "bz-" + gig.title());
-        published.record(BANDSINTOWN, gig.id(), "bit-" + gig.title());
+        gigs.save(BAND, gig);
+        published.record(BAND, BANDZONE, gig.id(), "bz-" + gig.title());
+        published.record(BAND, BANDSINTOWN, gig.id(), "bit-" + gig.title());
         return gig;
     }
 
@@ -76,24 +77,24 @@ class SyncRequestsTest {
     @Test
     void a_new_publish_replaces_the_failed_one_so_it_stops_waiting_for_the_user() {
         Gig fresh = TestGigs.gig("SNP", "Secret Garden");
-        gigs.save(fresh);
-        SyncTask failed = publishing.publish(Set.of(BANDZONE), List.of(fresh)).queued().getFirst();
+        gigs.save(BAND, fresh);
+        SyncTask failed = publishing.publish(BAND, Set.of(BANDZONE), List.of(fresh)).queued().getFirst();
         outbox.markRunning(failed.id(), clock.instant());
         outbox.markFailed(failed.id(), "Bandzone doesn't know the city", clock.instant());
 
-        SyncTask again = publishing.publish(Set.of(BANDZONE), List.of(fresh)).queued().getFirst();
+        SyncTask again = publishing.publish(BAND, Set.of(BANDZONE), List.of(fresh)).queued().getFirst();
 
         assertThat(outbox.find(failed.id())).get().satisfies(t -> {
             assertThat(t.status()).isEqualTo(SyncStatus.DISCARDED);
             assertThat(t.message()).contains("replaced", "#" + again.id());
         });
-        assertThat(outbox.unfinished()).extracting(SyncTask::id).containsExactly(again.id());
+        assertThat(outbox.unfinished(BAND)).extracting(SyncTask::id).containsExactly(again.id());
     }
 
     @Test
     void an_edit_no_step_of_the_platform_takes_is_not_queued_and_says_why() {
-        QueueResult pastEdit = requests.update(renamed(past));
-        QueueResult upcomingEdit = requests.update(renamed(upcoming));
+        QueueResult pastEdit = requests.update(BAND, renamed(past));
+        QueueResult upcomingEdit = requests.update(BAND, renamed(upcoming));
 
         assertThat(pastEdit.queued()).extracting(SyncTask::platform).containsExactly(BANDZONE);
         assertThat(pastEdit.notQueued()).singleElement().asString()
@@ -104,8 +105,8 @@ class SyncRequestsTest {
 
     @Test
     void cancelling_a_past_gig_is_left_out_where_the_platform_cant_and_deleting_it_forgets_the_copy() {
-        QueueResult cancelled = requests.cancel(past.cancel());
-        QueueResult deleted = requests.delete(past.id(), past);
+        QueueResult cancelled = requests.cancel(BAND, past.cancel());
+        QueueResult deleted = requests.delete(BAND, past.id(), past);
 
         assertThat(cancelled.queued()).extracting(SyncTask::platform).containsExactly(BANDZONE);
         assertThat(cancelled.notQueued()).singleElement().asString()
@@ -114,15 +115,15 @@ class SyncRequestsTest {
                 .containsExactly(tuple(BANDZONE, SyncAction.DELETE));
         assertThat(deleted.notQueued()).singleElement().asString()
                 .contains("Bandsintown", "by hand", "remove: doesn't take past events");
-        assertThat(published.isPublished(BANDSINTOWN, past.id())).as("nothing left to track").isFalse();
+        assertThat(published.isPublished(BAND, BANDSINTOWN, past.id())).as("nothing left to track").isFalse();
     }
 
     @Test
     void an_edit_queued_before_the_gig_was_over_waits_for_the_user_without_being_tried() {
         SyncRequests everything = SyncFakes.requests(outbox, published, signals, clock);
-        gigs.save(renamed(past));
-        SyncTask update = everything.update(renamed(past)).queued().stream()
-                .filter(t -> t.platform() == BANDSINTOWN).findFirst().orElseThrow();
+        gigs.save(BAND, renamed(past));
+        SyncTask update = everything.update(BAND, renamed(past)).queued().stream()
+                .filter(t -> t.platform().equals(BANDSINTOWN)).findFirst().orElseThrow();
         SyncDispatcher dispatcher = SyncFakes.dispatcher(engine, outbox, signals, clock);
 
         while (dispatcher.runNext()) {

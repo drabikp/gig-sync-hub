@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.gig.domain.platform.Publication;
 import sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 
 @SpringBootTest
 @Transactional
@@ -23,71 +24,71 @@ class JpaPublishedGigStoreTest {
 
     @Test
     void records_and_reads_back_a_published_gig_per_platform() {
-        store.record(TestPlatforms.BANDZONE, klub, "100");
+        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
 
-        assertThat(store.isPublished(TestPlatforms.BANDZONE, klub)).isTrue();
-        assertThat(store.externalRef(TestPlatforms.BANDZONE, klub)).contains("100");
-        assertThat(store.isPublished(TestPlatforms.BANDSINTOWN, klub)).isFalse();
-        assertThat(store.isPublished(TestPlatforms.BANDZONE, barrak)).isFalse();
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDZONE, klub)).isTrue();
+        assertThat(store.externalRef(BAND, TestPlatforms.BANDZONE, klub)).contains("100");
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDSINTOWN, klub)).isFalse();
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDZONE, barrak)).isFalse();
     }
 
     @Test
     void a_publish_without_an_external_id_is_published_but_has_no_ref() {
-        store.record(TestPlatforms.BANDSINTOWN, klub, null);
+        store.record(BAND, TestPlatforms.BANDSINTOWN, klub, null);
 
-        assertThat(store.isPublished(TestPlatforms.BANDSINTOWN, klub)).isTrue();
-        assertThat(store.externalRef(TestPlatforms.BANDSINTOWN, klub)).isEmpty();
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDSINTOWN, klub)).isTrue();
+        assertThat(store.externalRef(BAND, TestPlatforms.BANDSINTOWN, klub)).isEmpty();
     }
 
     @Test
     void recording_again_replaces_the_ref() {
-        store.record(TestPlatforms.BANDZONE, klub, "100");
-        store.record(TestPlatforms.BANDZONE, klub, "200");
+        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
+        store.record(BAND, TestPlatforms.BANDZONE, klub, "200");
 
-        assertThat(store.externalRef(TestPlatforms.BANDZONE, klub)).contains("200");
+        assertThat(store.externalRef(BAND, TestPlatforms.BANDZONE, klub)).contains("200");
     }
 
     @Test
     void remove_forgets_the_gig_on_that_platform_only() {
-        store.record(TestPlatforms.BANDZONE, klub, "100");
-        store.record(TestPlatforms.BANDSINTOWN, klub, null);
+        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
+        store.record(BAND, TestPlatforms.BANDSINTOWN, klub, null);
 
-        store.remove(TestPlatforms.BANDZONE, klub);
+        store.remove(BAND, TestPlatforms.BANDZONE, klub);
 
-        assertThat(store.isPublished(TestPlatforms.BANDZONE, klub)).isFalse();
-        assertThat(store.isPublished(TestPlatforms.BANDSINTOWN, klub)).isTrue();
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDZONE, klub)).isFalse();
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDSINTOWN, klub)).isTrue();
     }
 
     @Test
     void move_re_keys_every_platform_record_and_keeps_the_refs() {
-        store.record(TestPlatforms.BANDZONE, klub, "100");
-        store.record(TestPlatforms.BANDSINTOWN, klub, null);
+        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
+        store.record(BAND, TestPlatforms.BANDSINTOWN, klub, null);
 
-        store.move(klub, barrak);
+        store.move(BAND, klub, barrak);
 
-        assertThat(store.isPublished(TestPlatforms.BANDZONE, klub)).isFalse();
-        assertThat(store.isPublished(TestPlatforms.BANDSINTOWN, klub)).isFalse();
-        assertThat(store.externalRef(TestPlatforms.BANDZONE, barrak)).contains("100");
-        assertThat(store.isPublished(TestPlatforms.BANDSINTOWN, barrak)).isTrue();
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDZONE, klub)).isFalse();
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDSINTOWN, klub)).isFalse();
+        assertThat(store.externalRef(BAND, TestPlatforms.BANDZONE, barrak)).contains("100");
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDSINTOWN, barrak)).isTrue();
     }
 
     @Test
     void move_of_an_unpublished_gig_or_to_the_same_id_changes_nothing() {
-        store.record(TestPlatforms.BANDZONE, klub, "100");
+        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
 
-        store.move(barrak, klub);
-        store.move(klub, klub);
+        store.move(BAND, barrak, klub);
+        store.move(BAND, klub, klub);
 
-        assertThat(store.externalRef(TestPlatforms.BANDZONE, klub)).contains("100");
-        assertThat(store.isPublished(TestPlatforms.BANDZONE, barrak)).isFalse();
+        assertThat(store.externalRef(BAND, TestPlatforms.BANDZONE, klub)).contains("100");
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDZONE, barrak)).isFalse();
     }
 
     @Test
     void lists_every_publication_with_its_gig_identity() {
-        store.record(TestPlatforms.BANDZONE, klub, "100");
-        store.record(TestPlatforms.BANDSINTOWN, barrak, null);
+        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
+        store.record(BAND, TestPlatforms.BANDSINTOWN, barrak, null);
 
-        assertThat(store.all()).containsExactlyInAnyOrder(
+        assertThat(store.all(BAND)).containsExactlyInAnyOrder(
                 new Publication(TestPlatforms.BANDZONE, klub, "100"),
                 new Publication(TestPlatforms.BANDSINTOWN, barrak, null));
     }

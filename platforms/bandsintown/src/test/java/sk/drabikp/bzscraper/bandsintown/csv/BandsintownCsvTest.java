@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.bandsintown.csv;
 
 import com.opencsv.CSVReader;
 import org.junit.jupiter.api.Test;
+import sk.drabikp.bzscraper.bandsintown.portal.BitSession.EventEdit;
 import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -15,7 +16,6 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,7 +33,7 @@ class BandsintownCsvTest {
     void new_events_use_the_28_template_columns() throws Exception {
         List<String[]> rows = parse(BandsintownCsv.newEvents(List.of(gig), "Eufory (Band)", true));
 
-        assertThat(rows.get(0)).containsExactly(BandsintownCsv.TEMPLATE_HEADER);
+        assertThat(rows.get(0)).containsExactly(BandsintownCsv.header(BandsintownCsv.Column.TEMPLATE));
         assertThat(rows.get(1)).hasSize(28);
         assertThat(rows.get(1)[0]).isEqualTo("Eufory (Band)");
         assertThat(rows.get(1)[20]).isEqualTo("Fest");
@@ -47,7 +47,7 @@ class BandsintownCsvTest {
 
     @Test
     void updates_append_event_id_and_status_and_are_never_announced() throws Exception {
-        List<String[]> rows = parse(BandsintownCsv.updates(Map.of("109006286", gig), "Eufory (Band)"));
+        List<String[]> rows = parse(BandsintownCsv.updates(List.of(new EventEdit("109006286", gig)), "Eufory (Band)"));
 
         assertThat(rows.get(0)).hasSize(30);
         assertThat(rows.get(0)[28]).isEqualTo("Event Id");
@@ -93,5 +93,30 @@ class BandsintownCsvTest {
         assertThat(row[6]).isEqualTo("753 01");
         assertThat(parse(BandsintownCsv.newEvents(List.of(gig), "X", false)).get(1)[5]).isEmpty();
         assertThat(parse(BandsintownCsv.newEvents(List.of(gig), "X", false)).get(1)[6]).isEmpty();
+    }
+
+    @Test
+    void the_columns_come_in_the_templates_order_and_an_update_appends_event_id_and_status() throws Exception {
+        String[] template = {"Artist Name", "Venue*", "Country*", "Address", "City*", "Region*", "Postal Code",
+                "Timezone*", "Start Date* (yyyy-mm-dd)", "Start Time* (HH:MM)", "End Date", "End Time", "Streaming Link",
+                "Ticket Link", "Ticket Type", "Ticket Link 2", "Ticket Type 2", "On-Sale Date", "On-Sale Time", "Lineup",
+                "Event Name", "Event Display Format", "Description", "Schedule Date", "Schedule Time", "Do Not Announce",
+                "Setlist", "Event Image"};
+
+        assertThat(parse(BandsintownCsv.newEvents(List.of(gig), "X", true)).get(0)).containsExactly(template);
+        assertThat(parse(BandsintownCsv.updates(List.of(), "X")).get(0)).startsWith(template)
+                .endsWith("Event Id", "Status").hasSize(30);
+    }
+
+    @Test
+    void every_edit_is_a_row_of_its_own_even_two_of_one_event() throws Exception {
+        Gig other = TestGigs.gig("Other", "Barrák");
+
+        List<String[]> rows = parse(BandsintownCsv.updates(List.of(new EventEdit("101", gig), new EventEdit("101", other)),
+                "X"));
+
+        assertThat(rows).hasSize(3);
+        assertThat(rows.get(1)[20]).isEqualTo("Fest");
+        assertThat(rows.get(2)[20]).isEqualTo("Other");
     }
 }

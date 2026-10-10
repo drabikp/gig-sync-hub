@@ -1,12 +1,18 @@
 package sk.drabikp.bzscraper.sync.application.port.out;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
+
+import java.util.Map;
 import java.util.Optional;
 
-/** Small settings the app keeps across restarts (e.g. the sync paused by the user). */
+/** A band's small settings that survive restarts (e.g. its sync paused by the user). */
 public interface SettingsStore {
 
-    Optional<String> get(String name);
+    Optional<String> get(BandId band, String name);
 
-    /** Sets {@code name}; {@code null} removes it. */
-    void put(String name, String value);
+    /** Sets the band's {@code name}; {@code null} removes it. */
+    void put(BandId band, String name, String value);
+
+    /** Every band's value of {@code name} (the bands without it left out). */
+    Map<BandId, String> all(String name);
 }

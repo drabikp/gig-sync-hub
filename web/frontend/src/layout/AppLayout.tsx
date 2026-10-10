@@ -1,4 +1,4 @@
-import { AppShell, Avatar, Badge, Box, Group, NavLink, SegmentedControl, Stack, Text, ThemeIcon, UnstyledButton } from '@mantine/core';
+import { AppShell, Avatar, Badge, Box, Group, NavLink, SegmentedControl, Stack, Text, UnstyledButton } from '@mantine/core';
 import {
   IconActivity,
   IconAdjustmentsHorizontal,
@@ -8,13 +8,14 @@ import {
   IconInbox,
   IconListCheck,
   IconTicket,
-  IconWaveSine,
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { useMe } from '../api/hooks';
 import { useLiveUpdates } from '../api/live';
+import { useBand, useBandPath } from '../band/band';
+import { BandSwitcher } from '../components/BandSwitcher';
 import { LANGUAGES, setLanguage } from '../i18n';
 import { useInbox } from '../lib/attention';
 import { useIsMobile } from '../lib/useIsMobile';
@@ -26,15 +27,17 @@ interface Item {
   badge?: number;
 }
 
-function section(pathname: string): string {
-  if (pathname === '/' || pathname.startsWith('/gig')) return '/';
-  if (pathname.startsWith('/calendar')) return '/calendar';
-  return '/' + pathname.split('/')[1];
+/** Which menu place an address within the band is ('/gig/x' → '/'). */
+function section(within: string): string {
+  if (within === '/' || within === '' || within.startsWith('/gig')) return '/';
+  if (within.startsWith('/calendar')) return '/calendar';
+  return '/' + within.split('/')[1];
 }
 
 /**
- * Around every page. Desktop: the menu on the left. Phone: a bottom bar with the four places
- * used day to day (Gigs, Inbox, Calendar, More), the rest under More.
+ * Around every band page. Desktop: the band (and the way to another) and the menu on the left.
+ * Phone: a bottom bar with the four places used day to day (Gigs, Inbox, Calendar, More), the rest
+ * — the band switcher too — under More.
  */
 export function AppLayout() {
   const { t, i18n } = useTranslation();
@@ -42,10 +45,12 @@ export function AppLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const me = useMe();
-  useLiveUpdates(!!me.data);
+  const band = useBand();
+  const path = useBandPath();
+  useLiveUpdates(band.id);
   const inbox = useInbox();
   const count = inbox.items.length;
-  const current = section(pathname);
+  const current = section(pathname.substring(path('/').length));
 
   const main: Item[] = [
     { to: '/', label: t('nav.gigs'), icon: <IconTicket size={22} stroke={1.8} /> },
@@ -74,7 +79,7 @@ export function AppLayout() {
               return (
                 <UnstyledButton
                   key={tab.to}
-                  onClick={() => navigate(tab.to)}
+                  onClick={() => navigate(path(tab.to))}
                   aria-current={active ? 'page' : undefined}
                   h={64}
                   c={active ? 'brand.8' : 'dimmed'}
@@ -109,7 +114,7 @@ export function AppLayout() {
     <NavLink
       key={item.to}
       component={Link}
-      to={item.to}
+      to={path(item.to)}
       label={item.label}
       leftSection={item.icon}
       active={current === item.to}
@@ -122,14 +127,9 @@ export function AppLayout() {
   return (
     <AppShell navbar={{ width: 264, breakpoint: 'sm' }} padding="xl">
       <AppShell.Navbar p="md" component="nav" aria-label={t('nav.label')}>
-        <Group gap="sm" px="xs" pb="lg" pt={4}>
-          <ThemeIcon size={36} radius="md">
-            <IconWaveSine size={22} />
-          </ThemeIcon>
-          <Text fw={800} fz={17}>
-            Gig sync hub
-          </Text>
-        </Group>
+        <Box pb="md">
+          <BandSwitcher />
+        </Box>
         <Stack gap={2}>{main.map(link)}</Stack>
         <Box my="sm" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }} />
         <Stack gap={2}>{more.map(link)}</Stack>
@@ -144,10 +144,10 @@ export function AppLayout() {
           />
           <Group gap="sm" px={4}>
             <Avatar color="brand" radius="xl" size={32}>
-              {(me.data?.username ?? '?').substring(0, 2).toUpperCase()}
+              {(me.data?.name ?? '?').substring(0, 2).toUpperCase()}
             </Avatar>
-            <Text size="sm" fw={600}>
-              {me.data?.username}
+            <Text size="sm" fw={600} truncate style={{ flex: 1, minWidth: 0 }}>
+              {me.data?.name}
             </Text>
           </Group>
         </Stack>

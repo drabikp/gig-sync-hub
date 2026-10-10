@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.gig.adapter.out.persistence;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Admission;
@@ -12,6 +13,7 @@ import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.gig.domain.Slot;
+import sk.drabikp.bzscraper.gig.domain.TestBands;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -20,6 +22,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.OTHER;
 
 @SpringBootTest
 @Transactional
@@ -27,6 +31,9 @@ class JpaGigRepositoryTest {
 
     @Autowired
     private JpaGigRepository repository;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private static Gig fullGig() {
         return Gig.create("The Legends Rock Fest",
@@ -41,11 +48,27 @@ class JpaGigRepositoryTest {
     }
 
     @Test
+    void the_same_gig_in_two_bands_is_two_gigs_and_each_band_sees_only_its_own() {
+        jdbc.update(TestBands.INSERT_OTHER);
+        Gig gig = fullGig();
+        repository.save(BAND, gig);
+        repository.save(OTHER, new Gig("Their title", gig.schedule(), gig.location(), gig.lineup(), gig.admission(),
+                null, null, null, null, false));
+
+        assertThat(repository.findById(BAND, gig.id())).get().extracting(Gig::title).isEqualTo(gig.title());
+        assertThat(repository.findById(OTHER, gig.id())).get().extracting(Gig::title).isEqualTo("Their title");
+        assertThat(repository.findAll(OTHER)).extracting(Gig::title).containsExactly("Their title");
+
+        repository.deleteById(OTHER, gig.id());
+        assertThat(repository.findById(BAND, gig.id())).isPresent();
+    }
+
+    @Test
     void round_trips_a_full_gig_through_the_database() {
         Gig gig = fullGig();
 
-        repository.save(gig);
-        Optional<Gig> found = repository.findById(gig.id());
+        repository.save(BAND, gig);
+        Optional<Gig> found = repository.findById(BAND, gig.id());
 
         assertThat(found).isPresent();
         Gig reloaded = found.get();
@@ -69,12 +92,12 @@ class JpaGigRepositoryTest {
         Gig gig = new Gig("Moto Fest", festival, new Location("Camp", "Stará Turá", Country.CZECHIA), List.of(),
                 Admission.free(), null, null, null, null, false);
 
-        repository.save(gig);
+        repository.save(BAND, gig);
 
-        assertThat(repository.findById(gig.id())).get().extracting(Gig::schedule).isEqualTo(festival);
-        repository.save(new Gig("Moto Fest", festival.withSlot(null), gig.location(), List.of(), Admission.free(),
+        assertThat(repository.findById(BAND, gig.id())).get().extracting(Gig::schedule).isEqualTo(festival);
+        repository.save(BAND, new Gig("Moto Fest", festival.withSlot(null), gig.location(), List.of(), Admission.free(),
                 null, null, null, null, false));
-        assertThat(repository.findById(gig.id()).orElseThrow().schedule().hasSlot()).as("slot removed").isFalse();
+        assertThat(repository.findById(BAND, gig.id()).orElseThrow().schedule().hasSlot()).as("slot removed").isFalse();
     }
 
     @Test
@@ -84,46 +107,46 @@ class JpaGigRepositoryTest {
                 new Location("Zámecký klub", "Hranice", Country.CZECHIA, address), List.of(), Admission.free(),
                 null, null, null, null, false);
 
-        repository.save(gig);
+        repository.save(BAND, gig);
 
-        assertThat(repository.findById(gig.id()).orElseThrow().location()).isEqualTo(gig.location());
-        assertThat(repository.findById(fullGig().id())).isEmpty();
+        assertThat(repository.findById(BAND, gig.id()).orElseThrow().location()).isEqualTo(gig.location());
+        assertThat(repository.findById(BAND, fullGig().id())).isEmpty();
     }
 
     @Test
     void save_upserts_by_identity_same_date_and_venue() {
         Gig original = fullGig();
-        repository.save(original);
+        repository.save(BAND, original);
         // same id (date + venue), different title/admission
         Gig edited = Gig.create("Renamed Fest", original.schedule(), original.location(),
                 original.lineup(), Admission.free(), null, null, null, null);
 
-        repository.save(edited);
+        repository.save(BAND, edited);
 
-        assertThat(repository.findAll()).hasSize(1);
-        assertThat(repository.findById(original.id())).get()
+        assertThat(repository.findAll(BAND)).hasSize(1);
+        assertThat(repository.findById(BAND, original.id())).get()
                 .extracting(Gig::title).isEqualTo("Renamed Fest");
     }
 
     @Test
     void finds_gigs_starting_within_a_date_range_inclusive() {
-        repository.save(fullGig()); // starts 2026-09-15
+        repository.save(BAND, fullGig()); // starts 2026-09-15
 
-        assertThat(repository.findStartingWithin(
+        assertThat(repository.findStartingWithin(BAND, 
                 new DateRange(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))).hasSize(1);
-        assertThat(repository.findStartingWithin(
+        assertThat(repository.findStartingWithin(BAND, 
                 new DateRange(LocalDate.of(2026, 9, 15), LocalDate.of(2026, 9, 15)))).hasSize(1); // boundary
-        assertThat(repository.findStartingWithin(
+        assertThat(repository.findStartingWithin(BAND, 
                 new DateRange(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)))).isEmpty();
     }
 
     @Test
     void deletes_by_identity() {
         Gig gig = fullGig();
-        repository.save(gig);
+        repository.save(BAND, gig);
 
-        repository.deleteById(gig.id());
+        repository.deleteById(BAND, gig.id());
 
-        assertThat(repository.findById(gig.id())).isEmpty();
+        assertThat(repository.findById(BAND, gig.id())).isEmpty();
     }
 }

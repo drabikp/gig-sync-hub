@@ -19,6 +19,7 @@ import java.time.ZonedDateTime;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDSINTOWN;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
@@ -35,7 +36,7 @@ class JpaSyncOutboxTest {
     private final Gig other = TestGigs.gig("Other", "Barrák");
 
     private SyncTask queue(Gig g, Platform platform, SyncAction action) {
-        return outbox.enqueue(g.id(), SyncTask.labelOf(g), platform, action, NOW);
+        return outbox.enqueue(BAND, g.id(), SyncTask.labelOf(g), platform, action, NOW);
     }
 
     @Test
@@ -45,7 +46,7 @@ class JpaSyncOutboxTest {
         assertThat(task.status()).isEqualTo(SyncStatus.PENDING);
         assertThat(task.gigId()).isEqualTo(gig.id());
         assertThat(outbox.nextDue(NOW)).contains(task);
-        assertThat(outbox.openFor(gig.id())).containsExactly(task);
+        assertThat(outbox.openFor(BAND, gig.id())).containsExactly(task);
         assertThat(outbox.log(task.id())).extracting(SyncLogEntry::message).containsExactly("queued");
     }
 
@@ -55,8 +56,8 @@ class JpaSyncOutboxTest {
         SyncTask onBz = queue(other, BANDZONE, SyncAction.UPDATE);
 
         assertThat(outbox.due(NOW)).containsExactly(onBit, onBz);
-        assertThat(outbox.nextDue(NOW, Set.of(BANDSINTOWN))).contains(onBz);
-        assertThat(outbox.nextDue(NOW, Set.of(BANDSINTOWN, BANDZONE))).isEmpty();
+        assertThat(outbox.nextDue(NOW, Set.of(BANDSINTOWN), Set.of())).contains(onBz);
+        assertThat(outbox.nextDue(NOW, Set.of(BANDSINTOWN, BANDZONE), Set.of())).isEmpty();
     }
 
     @Test
@@ -84,7 +85,7 @@ class JpaSyncOutboxTest {
         SyncTask task = queue(gig, BANDZONE, SyncAction.PUBLISH);
         outbox.markRunning(task.id(), NOW);
         outbox.markFailed(task.id(), "wizard broke", NOW);
-        assertThat(outbox.unfinished()).extracting(SyncTask::id).contains(task.id());
+        assertThat(outbox.unfinished(BAND)).extracting(SyncTask::id).contains(task.id());
 
         outbox.discard(task.id(), NOW);
         assertThat(outbox.markRunning(task.id(), NOW)).isFalse();
@@ -117,7 +118,7 @@ class JpaSyncOutboxTest {
         queue(gig, BANDZONE, SyncAction.PUBLISH);
         SyncTask b = queue(other, BANDSINTOWN, SyncAction.PUBLISH);
 
-        assertThat(outbox.due(BANDSINTOWN, SyncAction.PUBLISH, NOW)).extracting(SyncTask::id)
+        assertThat(outbox.due(BAND, BANDSINTOWN, SyncAction.PUBLISH, NOW)).extracting(SyncTask::id)
                 .containsExactly(a.id(), b.id());
     }
 
@@ -128,7 +129,7 @@ class JpaSyncOutboxTest {
         outbox.markRunning(running.id(), NOW);
         SyncTask elsewhere = queue(gig, BANDSINTOWN, SyncAction.UPDATE);
 
-        assertThat(outbox.supersede(gig.id(), BANDZONE, "the gig was deleted", NOW)).extracting(SyncTask::id)
+        assertThat(outbox.supersede(BAND, gig.id(), BANDZONE, "the gig was deleted", NOW)).extracting(SyncTask::id)
                 .containsExactly(pending.id());
         assertThat(outbox.find(pending.id()).orElseThrow().status()).isEqualTo(SyncStatus.DISCARDED);
         assertThat(outbox.find(running.id()).orElseThrow().status()).isEqualTo(SyncStatus.RUNNING);
@@ -141,10 +142,10 @@ class JpaSyncOutboxTest {
         Gig moved = TestGigs.gig("Fest", "Klub 007",
                 ZonedDateTime.of(2026, 10, 1, 20, 0, 0, 0, ZoneId.of("Europe/Prague")));
 
-        outbox.move(gig.id(), moved.id(), SyncTask.labelOf(moved));
+        outbox.move(BAND, gig.id(), moved.id(), SyncTask.labelOf(moved));
 
-        assertThat(outbox.openFor(moved.id())).extracting(SyncTask::id).containsExactly(task.id());
-        assertThat(outbox.openFor(gig.id())).isEmpty();
+        assertThat(outbox.openFor(BAND, moved.id())).extracting(SyncTask::id).containsExactly(task.id());
+        assertThat(outbox.openFor(BAND, gig.id())).isEmpty();
     }
 
     @Test
@@ -152,7 +153,7 @@ class JpaSyncOutboxTest {
         SyncTask first = queue(gig, BANDZONE, SyncAction.UPDATE);
         SyncTask second = queue(other, BANDZONE, SyncAction.UPDATE);
 
-        assertThat(outbox.recent(1)).extracting(SyncTask::id).containsExactly(second.id());
-        assertThat(outbox.recent(10)).extracting(SyncTask::id).containsSubsequence(second.id(), first.id());
+        assertThat(outbox.recent(BAND, 1)).extracting(SyncTask::id).containsExactly(second.id());
+        assertThat(outbox.recent(BAND, 10)).extracting(SyncTask::id).containsSubsequence(second.id(), first.id());
     }
 }

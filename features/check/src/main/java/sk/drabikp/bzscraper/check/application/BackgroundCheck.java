@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.check.application;
 
 import sk.drabikp.bzscraper.check.application.port.in.CheckPlatformsUseCase;
 import sk.drabikp.bzscraper.check.application.port.in.StartPlatformCheckUseCase;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.util.concurrent.Executor;
 
@@ -22,15 +23,15 @@ public class BackgroundCheck implements StartPlatformCheckUseCase {
     }
 
     @Override
-    public void start() {
-        if (check.running()) {
+    public void start(BandId band) {
+        if (check.running(band)) {
             return;
         }
         executor.execute(() -> {
             try {
-                check.check();
+                check.check(band);
             } catch (RuntimeException e) {
-                log.log(System.Logger.Level.ERROR, "The platform check failed", e);
+                log.log(System.Logger.Level.ERROR, "The platform check of band " + band + " failed", e);
             }
         });
     }

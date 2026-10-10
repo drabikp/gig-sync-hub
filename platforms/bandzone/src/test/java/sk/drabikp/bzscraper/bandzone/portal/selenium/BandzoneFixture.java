@@ -12,10 +12,13 @@ import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,12 +30,19 @@ import java.util.stream.Collectors;
  * A stand-in for Bandzone's band admin, for the page objects' tests: copies of its concert
  * forms ({@code src/test/resources/bandzone-admin}) that keep what is posted to them, so the
  * edit form shows the stored concert again, as Bandzone does, and the lineup tab its performing
- * bands (with the band search and its "band without a profile" stubs). In a headless Chromium; skipped
- * where none is installed.
+ * bands (with the band search and its "band without a profile" stubs). The delete tab cancels or
+ * deletes the concert; the band's gig list ({@code /testband?at=gig[&gy=<year>]}) shows the
+ * planned or played concerts, a cancelled one marked as such; a concert's public page
+ * ({@code /koncert/<id>}) leads to its full page, or answers "not found" once it is deleted (its
+ * admin pages too). In a headless Chromium; skipped where none is installed.
  */
 final class BandzoneFixture implements AutoCloseable {
 
     private static final Pattern CONCERT = Pattern.compile("/koncert/(\\d+)/update\\?(.*)");
+    private static final Pattern BAND_PAGE = Pattern.compile("/testband(\\?at=gig(&gy=(\\d+))?)?");
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d.M.yyyy");
+    /** On every page of the logged-in band admin. */
+    private static final String LOGOUT = "<a href=\"/logout\">Odhlásit</a>";
     private static final List<String> FIELDS = List.of("start[date]", "start[time]", "end[date]", "end[time]", "cityId",
             "cityId__container[textInput]", "venueId", "venueId__container[textInput]", "name", "entry", "info",
             "facebookUrl", "entryType");
@@ -60,8 +70,14 @@ final class BandzoneFixture implements AutoCloseable {
     private final Map<String, String> stubs = new ConcurrentHashMap<>();
     private final AtomicInteger ids = new AtomicInteger(500);
     final List<Post> posts = new CopyOnWriteArrayList<>();
+    /** The concerts deleted (or never there): their pages are "not found". */
+    final Set<String> deleted = ConcurrentHashMap.newKeySet();
+    /** The concerts cancelled, as the band's gig list marks them. */
+    final Set<String> cancelled = ConcurrentHashMap.newKeySet();
     /** Whether the wizard asks "is it one of these similar concerts?" before its second step. */
     boolean similarConcerts;
+    /** Whether the delete tab's cancel is (wrongly) ignored. */
+    boolean cancelIgnored;
     final ChromeDriver driver;
     final BandzoneBrowser browser;
 
@@ -98,8 +114,14 @@ final class BandzoneFixture implements AutoCloseable {
             return;
         }
         Matcher concert = CONCERT.matcher(path);
+        Matcher bandPage = BAND_PAGE.matcher(path);
         if (path.equals("/widgets.js")) {
             send(exchange, "text/javascript", resource("widgets.js"));
+        } else if (concert.matches() && deleted.contains(concert.group(1))) {
+            send(exchange, 404, "text/html; charset=utf-8", "<!doctype html><html><body>" + LOGOUT
+                    + "<h1>Stránka nenalezena</h1></body></html>");
+        } else if (bandPage.matches()) {
+            send(exchange, "text/html; charset=utf-8", bandPage(bandPage.group(3)));
         } else if (concert.matches() && concert.group(2).contains("profileDeleteForm")) {
             send(exchange, "text/html; charset=utf-8", resource("delete.html").replace("{{id}}", concert.group(1)));
         } else if (concert.matches() && concert.group(2).startsWith("do=addBandForm-bandIds-addCompleter-search")) {
@@ -111,6 +133,13 @@ final class BandzoneFixture implements AutoCloseable {
                     concerts.getOrDefault(concert.group(1), Map.of())));
         } else if (path.startsWith("/koncert/zalozit.html")) {
             send(exchange, "text/html; charset=utf-8", page("wizard1.html", "", Map.of()));
+        } else if (path.matches("/koncert/\\d+")) {
+            String id = path.substring("/koncert/".length());
+            if (deleted.contains(id)) {
+                send(exchange, 404, "text/html; charset=utf-8", "<!doctype html><html><body>Nenalezeno</body></html>");
+            } else {
+                redirect(exchange, "/koncert/" + id + "-koncert/");
+            }
         } else if (path.matches("/koncert/\\d+-.*")) {
             send(exchange, "text/html; charset=utf-8", "<!doctype html><html><body>Koncert</body></html>");
         } else {
@@ -127,6 +156,14 @@ final class BandzoneFixture implements AutoCloseable {
         } else if (concert.matches() && concert.group(2).equals("updateForm")) {
             concerts.computeIfAbsent(concert.group(1), id -> new ConcurrentHashMap<>()).putAll(fields);
             redirect(exchange, "/koncert/" + concert.group(1) + "/update?updateTabs-at=updateForm");
+        } else if (concert.matches() && concert.group(2).equals("profileDeleteForm")) {
+            if (fields.containsKey("delete")) {
+                concerts.remove(concert.group(1));
+                deleted.add(concert.group(1));
+            } else if (fields.containsKey("cancelGig") && !cancelIgnored) {
+                cancelled.add(concert.group(1));
+            }
+            redirect(exchange, "/testband");
         } else if (concert.matches()) {
             redirect(exchange, "/" + "testband");
         } else if (path.endsWith("step=1") && similarConcerts) {
@@ -186,6 +223,26 @@ final class BandzoneFixture implements AutoCloseable {
         return resource("lineup.html").replace("{{BANDS}}", bands).replace("{{id}}", id);
     }
 
+    /**
+     * The band's gig list: the planned concerts (today or later), or those played in {@code year};
+     * each an article linking to its concert, a cancelled one marked so.
+     */
+    private String bandPage(String year) {
+        StringBuilder articles = new StringBuilder();
+        concerts.forEach((id, fields) -> {
+            LocalDate start = LocalDate.parse(fields.getOrDefault("start[date]", "1.1.2000"), DATE);
+            boolean planned = !start.isBefore(LocalDate.now());
+            if (year == null ? planned : !planned && start.getYear() == Integer.parseInt(year)) {
+                articles.append("<article class=\"gig").append(cancelled.contains(id) ? " gig--canceled" : "")
+                        .append("\"><a class=\"gig__link\" href=\"/koncert/").append(id).append("-koncert/\"></a>")
+                        .append("<h3 class=\"gig__title\">").append(escape(fields.getOrDefault("name", "")))
+                        .append("</h3></article>\n");
+            }
+        });
+        return "<!doctype html><html><head><meta charset=\"utf-8\"><title>Testband</title></head><body>" + LOGOUT
+                + "\n" + articles + "</body></html>";
+    }
+
     /** A form page with the stored values filled in, as Bandzone renders it. */
     private String page(String name, String id, Map<String, String> stored) throws IOException {
         String html = resource(name).replace("{{FIELDS}}", resource("fields.html")).replace("{{INFO}}", resource("info.html"))
@@ -222,9 +279,13 @@ final class BandzoneFixture implements AutoCloseable {
     }
 
     private static void send(HttpExchange exchange, String type, String body) throws IOException {
+        send(exchange, 200, type, body);
+    }
+
+    private static void send(HttpExchange exchange, int status, String type, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", type);
-        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.sendResponseHeaders(status, bytes.length);
         exchange.getResponseBody().write(bytes);
         exchange.close();
     }

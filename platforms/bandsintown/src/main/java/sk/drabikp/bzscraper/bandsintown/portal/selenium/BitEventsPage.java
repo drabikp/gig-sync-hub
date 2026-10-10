@@ -5,7 +5,7 @@ import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -61,28 +61,28 @@ final class BitEventsPage {
     }
 
     /** The upcoming (published) events, in the order the page lists them. */
-    public List<BitEvent> upcoming() throws BitUploadException {
+    public List<BitEvent> upcoming() throws BitPortalException {
         open("upcoming");
-        PortalReply reply = portal.replies.await(0, r -> !r.write() && r.urlContains("past=false"), "the event list");
+        PortalReply reply = portal.replies().await(0, r -> !r.write() && r.urlContains("past=false"), "the event list");
         if (reply.status() != 200) {
-            throw new BitUploadException("Could not read the Bandsintown event list — " + reply.describe());
+            throw BitPortalException.temporary("Could not read the Bandsintown event list — " + reply.describe());
         }
         return reply.events();
     }
 
     /** Every past event: the first page comes with the tab, the rest load as the list is scrolled. */
-    public List<BitEvent> past() throws BitUploadException {
+    public List<BitEvent> past() throws BitPortalException {
         open("past");
         Predicate<PortalReply> pastList = r -> !r.write() && r.urlContains("past=true");
-        PortalReply reply = portal.replies.await(0, pastList, "the past events");
+        PortalReply reply = portal.replies().await(0, pastList, "the past events");
         List<BitEvent> events = new ArrayList<>(reply.events());
         for (int page = 1; reply.hasNextPage() && page < MAX_PAST_PAGES; page++) {
-            int mark = portal.replies.count();
+            int mark = portal.replies().count();
             portal.pause();
             loadMore();
             try {
-                reply = portal.replies.await(mark, pastList, "more past events", Duration.ofSeconds(30));
-            } catch (BitUploadException e) {
+                reply = portal.replies().await(mark, pastList, "more past events", Duration.ofSeconds(30));
+            } catch (BitPortalException e) {
                 logger.warn("Bandsintown: stopped after {} past events — the list did not load more", events.size());
                 break;
             }
@@ -92,7 +92,7 @@ final class BitEventsPage {
     }
 
     /** The event among both lists, upcoming first; empty when neither lists it. */
-    public Optional<BitEvent> find(String eventId) throws BitUploadException {
+    public Optional<BitEvent> find(String eventId) throws BitPortalException {
         Optional<BitEvent> upcoming = upcoming().stream().filter(e -> eventId.equals(e.id())).findFirst();
         if (upcoming.isPresent()) {
             return upcoming;
@@ -106,19 +106,19 @@ final class BitEventsPage {
      * index in the {@code listed} upcoming events and checked (city, day) before anything is
      * clicked.
      */
-    public BitDeleteDialog delete(BitEvent event, List<BitEvent> listed) throws BitUploadException {
+    public BitDeleteDialog delete(BitEvent event, List<BitEvent> listed) throws BitPortalException {
         int index = listed.indexOf(event);
         String[] check = new String[1];
         try {
-            portal.wait.until(d -> "ok".equals(check[0] = String.valueOf(
+            portal.until(d -> "ok".equals(check[0] = String.valueOf(
                     portal.js(MARK_ROW, index, event.venueCity(), event.day(), listed.size()))));
         } catch (TimeoutException e) {
-            throw new BitUploadException("Could not find event " + event.id() + " in the Bandsintown list ("
+            throw BitPortalException.temporary("Could not find event " + event.id() + " in the Bandsintown list ("
                     + check[0] + ") — nothing was deleted.");
         }
         portal.pause();
-        portal.click(portal.driver.findElement(By.cssSelector("[data-bz-kebab]")));
-        portal.click(portal.wait.until(d -> portal.firstVisible(By.xpath("//*[normalize-space(text())='Delete']"))));
+        portal.click(portal.find(By.cssSelector("[data-bz-kebab]")));
+        portal.click(portal.until(d -> portal.firstVisible(By.xpath("//*[normalize-space(text())='Delete']"))));
         return new BitDeleteDialog(portal);
     }
 
@@ -131,8 +131,8 @@ final class BitEventsPage {
 
     private void open(String tab) {
         portal.open("events/" + tab);
-        portal.wait.until(d -> portal.firstVisible(By.xpath("//a[normalize-space()='Upcoming Events']")));
-        portal.replies.install();
+        portal.until(d -> portal.firstVisible(By.xpath("//a[normalize-space()='Upcoming Events']")));
+        portal.replies().install();
         portal.pause();
         portal.closePopups();
     }
@@ -140,7 +140,7 @@ final class BitEventsPage {
     /** Scrolls to the end of the list (and presses "load more" if there is such a button). */
     private void loadMore() {
         portal.js(SCROLL_TO_END);
-        for (WebElement button : portal.driver.findElements(By.xpath(
+        for (WebElement button : portal.findAll(By.xpath(
                 "//button[contains(translate(normalize-space(),'LOADMORESHW','loadmoreshw'),'more')]"))) {
             if (button.isDisplayed()) {
                 portal.click(button);

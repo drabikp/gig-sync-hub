@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>sk.drabik</groupId>
+		<artifactId>bzscraper</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+	<artifactId>bzscraper-accounts</artifactId>
+	<name>bzscraper-accounts</name>
+	<description>Who uses the app: users (Rauthy logins), bands, and who manages which band as what (memberships).</description>
+	<dependencies>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>bzscraper-gig</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>bzscraper-gig</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- the tests' database: PostgreSQL in Docker (jdbc:tc: URL) -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+	<build>
+		<plugins>
+			<plugin>
+				<!-- the API this module serves: src/main/openapi/accounts.yaml → sk.drabikp.bzscraper.accounts.adapter.in.rest.api -->
+				<groupId>org.openapitools</groupId>
+				<artifactId>openapi-generator-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>api</id>
+						<configuration>
+							<inputSpec>${project.basedir}/src/main/openapi/accounts.yaml</inputSpec>
+							<apiPackage>sk.drabikp.bzscraper.accounts.adapter.in.rest.api</apiPackage>
+							<modelPackage>sk.drabikp.bzscraper.accounts.adapter.in.rest.api</modelPackage>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<!-- AccountsFakes is shared with the other modules' tests -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>test-jar</goal>
+						</goals>
+						<configuration>
+							<includes>
+								<include>**/AccountsFakes*</include>
+							</includes>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>

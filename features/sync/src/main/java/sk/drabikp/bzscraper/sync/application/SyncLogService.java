@@ -1,6 +1,10 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import sk.drabikp.bzscraper.gig.application.NotFoundException;
 import sk.drabikp.bzscraper.gig.application.UserFacingException;
+import sk.drabikp.bzscraper.gig.domain.BandId;
+import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.sync.application.port.in.SyncErrorCode;
 import sk.drabikp.bzscraper.sync.application.port.in.SyncLogUseCase;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncOutbox;
@@ -12,6 +16,7 @@ import sk.drabikp.bzscraper.sync.domain.SyncTask;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Map;
 
 /** The sync log for the user: reading it, and retrying or discarding what the worker gave up on. */
 public class SyncLogService implements SyncLogUseCase {
@@ -32,52 +37,65 @@ public class SyncLogService implements SyncLogUseCase {
     }
 
     @Override
-    public List<SyncTask> unfinished() {
-        return outbox.unfinished();
+    public List<SyncTask> unfinished(BandId band) {
+        return outbox.unfinished(band);
     }
 
     @Override
-    public List<SyncTask> recent(int limit) {
-        return outbox.recent(limit);
+    public List<SyncTask> history(BandId band, GigId gigId, int limit) {
+        return outbox.history(band, gigId, limit);
     }
 
     @Override
-    public List<SyncTask> tasks(Show show) {
+    public List<SyncTask> tasks(BandId band, Show show) {
         return switch (show) {
-            case ALL -> outbox.recent(LATEST);
-            case OPEN -> outbox.unfinished().reversed();
-            case FAILED -> outbox.unfinished().stream().filter(t -> t.status() == SyncStatus.FAILED).toList().reversed();
+            case ALL -> outbox.recent(band, LATEST);
+            case OPEN -> outbox.unfinished(band).reversed();
+            case FAILED -> outbox.unfinished(band).stream().filter(t -> t.status() == SyncStatus.FAILED).toList().reversed();
         };
     }
 
     @Override
-    public SyncCounts counts() {
-        return SyncCounts.of(outbox.unfinished());
+    public SyncCounts counts(BandId band) {
+        return SyncCounts.of(outbox.unfinished(band));
     }
 
     @Override
-    public List<SyncLogEntry> log(long taskId) {
+    public List<SyncLogEntry> log(BandId band, long taskId) {
+        task(band, taskId);
         return outbox.log(taskId);
     }
 
     @Override
-    public void retry(long taskId) {
-        SyncTask task = outbox.find(taskId).orElseThrow(() -> new IllegalArgumentException("no sync task " + taskId));
+    public void retry(BandId band, long taskId) {
+        SyncTask task = task(band, taskId);
         if (task.status() != SyncStatus.FAILED && task.status() != SyncStatus.DISCARDED) {
-            throw new UserFacingException("Only a failed or discarded task can be retried — it has moved on meanwhile.");
+            throw movedOn(task, "Only a failed or discarded task can be retried — it has moved on meanwhile.");
         }
         outbox.requeue(taskId, clock.instant());
         trigger.wake();
-        notifier.changed();
+        notifier.changed(band);
     }
 
     @Override
-    public void discard(long taskId) {
-        SyncTask task = outbox.find(taskId).orElseThrow(() -> new IllegalArgumentException("no sync task " + taskId));
+    public void discard(BandId band, long taskId) {
+        SyncTask task = task(band, taskId);
         if (task.status() != SyncStatus.FAILED && task.status() != SyncStatus.PENDING) {
-            throw new UserFacingException("Only a waiting or failed task can be discarded — it has moved on meanwhile.");
+            throw movedOn(task, "Only a waiting or failed task can be discarded — it has moved on meanwhile.");
         }
         outbox.discard(taskId, clock.instant());
-        notifier.changed();
+        notifier.changed(band);
+    }
+
+    /** The band's task — another band's is "not there" for it. */
+    private SyncTask task(BandId band, long taskId) {
+        return outbox.find(taskId).filter(t -> t.band().equals(band))
+                .orElseThrow(() -> new NotFoundException("no sync task " + taskId));
+    }
+
+    /** The task is no longer where the user saw it; {@code status} is where it is now. */
+    private static UserFacingException movedOn(SyncTask task, String message) {
+        return new UserFacingException(SyncErrorCode.TASK_MOVED_ON,
+                Map.of("gig", task.gigLabel(), "status", task.status().name()), message);
     }
 }

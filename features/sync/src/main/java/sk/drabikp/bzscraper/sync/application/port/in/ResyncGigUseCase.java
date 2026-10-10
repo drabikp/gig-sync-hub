@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.sync.domain.QueueResult;
 
@@ -11,5 +12,5 @@ import java.util.Collection;
  */
 public interface ResyncGigUseCase {
 
-    QueueResult resync(Collection<GigId> gigs);
+    QueueResult resync(BandId band, Collection<GigId> gigs);
 }

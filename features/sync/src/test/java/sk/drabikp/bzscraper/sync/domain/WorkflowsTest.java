@@ -2,22 +2,20 @@ package sk.drabikp.bzscraper.sync.domain;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class WorkflowsTest {
 
     @Test
     void every_action_has_its_steps_in_order_and_each_step_belongs_to_its_action() {
-        assertThat(Workflows.of(SyncAction.PUBLISH)).contains(List.of(StepType.BULK_CREATE, StepType.FORM_CREATE));
-        assertThat(Workflows.of(SyncAction.UPDATE)).contains(List.of(StepType.BULK_EDIT, StepType.FORM_EDIT));
-        assertThat(Workflows.of(SyncAction.CANCEL)).contains(List.of(StepType.CANCEL, StepType.FORM_CANCEL));
-        assertThat(Workflows.of(SyncAction.DELETE)).contains(List.of(StepType.REMOVE, StepType.FORM_REMOVE));
-        assertThat(Workflows.of(SyncAction.REACTIVATE)).contains(List.of(StepType.RECREATE));
+        assertThat(Workflows.of(SyncAction.PUBLISH)).containsExactly(StepType.BULK_CREATE, StepType.FORM_CREATE);
+        assertThat(Workflows.of(SyncAction.UPDATE)).containsExactly(StepType.BULK_EDIT, StepType.FORM_EDIT);
+        assertThat(Workflows.of(SyncAction.CANCEL)).containsExactly(StepType.CANCEL, StepType.FORM_CANCEL);
+        assertThat(Workflows.of(SyncAction.DELETE)).containsExactly(StepType.REMOVE, StepType.FORM_REMOVE);
+        assertThat(Workflows.of(SyncAction.REACTIVATE)).containsExactly(StepType.RECREATE);
         for (SyncAction action : SyncAction.values()) {
-            assertThat(Workflows.of(action)).as(action.name()).isPresent();
-            Workflows.of(action).orElseThrow().forEach(step -> assertThat(step.action()).isEqualTo(action));
+            assertThat(Workflows.of(action)).as(action.name()).isNotEmpty()
+                    .allSatisfy(step -> assertThat(step.action()).isEqualTo(action));
         }
     }
 

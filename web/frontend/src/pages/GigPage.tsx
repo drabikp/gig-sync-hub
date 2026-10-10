@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { useCalendar, useGig, useGigAction, usePlatforms, usePublish, useResync, useSyncAction } from '../api/hooks';
 import type { Gig, Platform, PlatformState } from '../api/types';
+import { useBandPath } from '../band/band';
 import { DateBlock } from '../components/DateBlock';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
@@ -122,6 +123,7 @@ function PlatformCard({ gig, state, platform }: { gig: Gig; state: PlatformState
 }
 
 export function GigPage() {
+  const path = useBandPath();
   const { id } = useParams();
   const { t } = useTranslation();
   const mobile = useIsMobile();
@@ -174,7 +176,7 @@ export function GigPage() {
       onSuccess: (r) => {
         setSheet(null);
         queued(t, t(`toast.${what === 'delete' ? 'deleted' : what === 'cancel' ? 'cancelled' : 'reactivated'}`), r, name);
-        if (what === 'delete') navigate('/', { replace: true });
+        if (what === 'delete') navigate(path('/'), { replace: true });
       },
       onError: failed,
     });
@@ -186,7 +188,7 @@ export function GigPage() {
       backLabel={t('nav.gigs')}
       actions={
         <>
-          <Button leftSection={<IconPencil size={18} />} onClick={() => navigate(`/gig/${gig.id}/edit`)}>
+          <Button leftSection={<IconPencil size={18} />} onClick={() => navigate(path(`/gig/${gig.id}/edit`))}>
             {t('gig.edit')}
           </Button>
           <ActionIcon variant="default" size={42} aria-label={t('gig.moreActions')} onClick={() => setSheet('actions')}>
@@ -310,7 +312,7 @@ export function GigPage() {
           </Stack>
         </Group>
         {mobile && (
-          <Button fullWidth mt="md" variant="light" leftSection={<IconPencil size={18} />} onClick={() => navigate(`/gig/${gig.id}/edit`)}>
+          <Button fullWidth mt="md" variant="light" leftSection={<IconPencil size={18} />} onClick={() => navigate(path(`/gig/${gig.id}/edit`))}>
             {t('gig.edit')}
           </Button>
         )}
@@ -334,7 +336,7 @@ export function GigPage() {
 
       <Sheet opened={sheet === 'actions'} onClose={() => setSheet(null)} title={d.title}>
         <Stack gap={4}>
-          <Button variant="subtle" justify="flex-start" size="md" onClick={() => navigate(`/gig/${gig.id}/edit`)}>
+          <Button variant="subtle" justify="flex-start" size="md" onClick={() => navigate(path(`/gig/${gig.id}/edit`))}>
             {t('gig.edit')}
           </Button>
           {published.length > 0 && !d.cancelled && (

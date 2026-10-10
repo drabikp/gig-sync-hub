@@ -1,4 +1,5 @@
 import createClient from 'openapi-fetch';
+import type { paths as AccountsPaths } from './generated/accounts';
 import type { paths as AuthPaths } from './generated/auth';
 import type { paths as CalendarPaths } from './generated/calendar';
 import type { paths as CatalogPaths } from './generated/catalog';
@@ -6,6 +7,7 @@ import type { paths as CheckPaths } from './generated/check';
 import type { paths as ImportPaths } from './generated/import';
 import type { paths as PlacesPaths } from './generated/places';
 import type { paths as SyncPaths } from './generated/sync';
+import type { Problem, ProblemCode } from './types';
 
 /**
  * Calls the app's API, typed by its OpenAPI specs (src/api/generated, from every module's
@@ -13,10 +15,11 @@ import type { paths as SyncPaths } from './generated/sync';
  * A refusal or failure throws an {@link ApiError}; a 401 tells the page the session is gone.
  */
 
+/** What the API said no with; `unanswered` when it gave no ProblemResponse (a proxy's error page, a lost session). */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
-    readonly code: string,
+    readonly code: ProblemCode | 'unanswered',
     readonly args: Record<string, string>,
     message: string,
   ) {
@@ -45,10 +48,10 @@ async function csrfToken(fresh = false): Promise<string> {
 
 async function problem(response: Response): Promise<ApiError> {
   try {
-    const p = (await response.json()) as { code?: string; args?: Record<string, string>; message?: string };
-    return new ApiError(response.status, p.code ?? 'error', p.args ?? {}, p.message ?? response.statusText);
+    const p = (await response.json()) as Partial<Problem>;
+    return new ApiError(response.status, p.code ?? 'unanswered', p.args ?? {}, p.message ?? response.statusText);
   } catch {
-    return new ApiError(response.status, response.status === 401 ? 'unauthorized' : 'error', {}, response.statusText);
+    return new ApiError(response.status, 'unanswered', {}, response.statusText);
   }
 }
 
@@ -67,7 +70,7 @@ async function apiFetch(request: Request, retried = false): Promise<Response> {
   return response;
 }
 
-type Paths = AuthPaths & CatalogPaths & PlacesPaths & SyncPaths & CalendarPaths & CheckPaths & ImportPaths;
+type Paths = AuthPaths & AccountsPaths & CatalogPaths & PlacesPaths & SyncPaths & CalendarPaths & CheckPaths & ImportPaths;
 
 export const api = createClient<Paths>({
   baseUrl: window.location.origin,

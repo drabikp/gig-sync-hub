@@ -3,13 +3,11 @@ package sk.drabikp.bzscraper.bandzone;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import sk.drabikp.bzscraper.browser.SeleniumOptions;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * {@code bzscraper.bandzone.*}. The band ({@code band-slug}) is read by the importer; the login
- * only when Bandzone is driven ({@code selenium.enabled}) — then the app doesn't start without
- * it. Secrets never leave this record ({@link #toString} hides them).
+ * {@code bzscraper.bandzone.*}: where Bandzone is and whether this server drives it
+ * ({@code selenium.enabled}). Each band connects its own account on the page; {@code login},
+ * {@code password} and {@code band-slug} are band #1's from before that, kept once on start
+ * ({@link BandzonePlatform}). Secrets never leave this record ({@link #toString} hides them).
  */
 @ConfigurationProperties("bzscraper.bandzone")
 public record BandzoneProperties(String baseUrl, String login, String password, String bandSlug,
@@ -17,28 +15,10 @@ public record BandzoneProperties(String baseUrl, String login, String password, 
 
     public BandzoneProperties {
         baseUrl = baseUrl == null || baseUrl.isBlank() ? "https://bandzone.cz" : baseUrl;
-        login = login == null ? "" : login;
+        login = login == null ? "" : login.strip();
         password = password == null ? "" : password;
-        bandSlug = bandSlug == null ? "" : bandSlug;
+        bandSlug = bandSlug == null ? "" : bandSlug.strip();
         selenium = selenium == null ? SeleniumOptions.OFF : selenium;
-    }
-
-    /** Refuses to go on when Bandzone is switched on without its login and band. */
-    public void requireLogin() {
-        List<String> missing = new ArrayList<>();
-        if (login.isBlank()) {
-            missing.add("bzscraper.bandzone.login");
-        }
-        if (password.isBlank()) {
-            missing.add("bzscraper.bandzone.password");
-        }
-        if (bandSlug.isBlank()) {
-            missing.add("bzscraper.bandzone.band-slug");
-        }
-        if (!missing.isEmpty()) {
-            throw new IllegalStateException("Bandzone is switched on (bzscraper.bandzone.selenium.enabled) but "
-                    + String.join(", ", missing) + " not set.");
-        }
     }
 
     @Override

@@ -56,12 +56,14 @@ data/
 # private iCal address of the band calendar (never commit)
 /calendar
 
-# the app's sign-in password for the local run (never commit)
+# the old sign-in password (before Rauthy; never commit)
 .app-login
 
 # Docker: the secrets (docker/make-secrets.sh) and the settings (never commit)
 /secrets/
 /.env
+# the sign-in's (Rauthy's) cache — sessions; its data is in PostgreSQL
+/auth-data/
 
 # the page's API types, generated from the OpenAPI specs (npm run generate)
 web/frontend/src/api/generated/

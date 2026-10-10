@@ -12,6 +12,7 @@ import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
@@ -23,8 +24,8 @@ import sk.drabikp.bzscraper.sync.domain.QueueResult;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 
 /**
  * Manages the local gig catalog (the source of truth) over the {@link GigRepository}.
@@ -58,81 +59,60 @@ public class GigCatalogService
     }
 
     @Override
-    public void add(Gig gig) {
-        transactions.inTransaction(() -> writes.add(gig));
-        live.changed(LiveUpdates.Topic.GIGS);
+    public void add(BandId band, Gig gig) {
+        transactions.inTransaction(() -> writes.add(band, gig));
+        live.changed(band, LiveUpdates.Topic.GIGS);
     }
 
     @Override
-    public Gig gig(GigId id) {
-        return gigRepository.findById(id).orElseThrow(() -> new NotFoundException("No such gig."));
+    public Gig gig(BandId band, GigId id) {
+        return gigRepository.findById(band, id).orElseThrow(() -> new NotFoundException("No such gig."));
     }
 
     @Override
-    public List<Gig> allGigs() {
-        return gigRepository.findAll();
+    public List<Gig> allGigs(BandId band) {
+        return gigRepository.findAll(band);
     }
 
     @Override
-    public List<Gig> gigsStartingWithin(DateRange range) {
-        return gigRepository.findStartingWithin(range);
+    public List<Gig> gigsStartingWithin(BandId band, DateRange range) {
+        return gigRepository.findStartingWithin(band, range);
     }
 
     @Override
-    public Map<GigId, Map<Platform, Publication>> publicationsByGig() {
+    public Map<GigId, Map<Platform, Publication>> publicationsByGig(BandId band) {
         Map<GigId, Map<Platform, Publication>> byGig = new HashMap<>();
-        for (Publication p : publishedGigStore.all()) {
+        for (Publication p : publishedGigStore.all(band)) {
             byGig.computeIfAbsent(p.gigId(), id -> new TreeMap<>()).put(p.platform(), p);
         }
         return byGig;
     }
 
     @Override
-    public QueueResult delete(GigId id) {
-        QueueResult queued = transactions.computeInTransaction(() -> {
-            Gig gig = gigRepository.findById(id).orElse(null);
-            if (gig != null) {
-                writes.requireNotBusy(gig);
-            }
-            gigRepository.deleteById(id);
-            return sync.delete(id, gig);
-        });
-        sync.signal(queued);
-        live.changed(LiveUpdates.Topic.GIGS);
-        return queued;
+    public QueueResult delete(BandId band, GigId id) {
+        return written(band, () -> writes.delete(band, id));
     }
 
     @Override
-    public QueueResult update(Gig seen, Gig updated) {
-        QueueResult queued = transactions.computeInTransaction(() -> writes.replace(seen, updated));
-        sync.signal(queued);
-        live.changed(LiveUpdates.Topic.GIGS);
-        return queued;
+    public QueueResult update(BandId band, Gig seen, Gig updated) {
+        return written(band, () -> writes.replace(band, seen, updated));
     }
 
     @Override
-    public QueueResult cancel(GigId id) {
-        return lifecycle(id, true);
+    public QueueResult cancel(BandId band, GigId id) {
+        return written(band, () -> writes.cancel(band, id));
     }
 
     @Override
-    public QueueResult reactivate(GigId id) {
-        return lifecycle(id, false);
+    public QueueResult reactivate(BandId band, GigId id) {
+        return written(band, () -> writes.reactivate(band, id));
     }
 
-    private QueueResult lifecycle(GigId id, boolean cancel) {
-        QueueResult queued = transactions.computeInTransaction(() -> {
-            Optional<Gig> stored = gigRepository.findById(id);
-            if (stored.isEmpty() || stored.get().cancelled() == cancel) {
-                return QueueResult.NOTHING;
-            }
-            writes.requireNotBusy(stored.get());
-            Gig changed = cancel ? stored.get().cancel() : stored.get().reactivate();
-            gigRepository.save(changed);
-            return cancel ? sync.cancel(changed) : sync.reactivate(changed);
-        });
-        sync.signal(queued);
-        live.changed(LiveUpdates.Topic.GIGS);
+    /** Writes in one transaction, then tells the sync and the band's pages. */
+    private QueueResult written(BandId band, Supplier<QueueResult> write) {
+        QueueResult queued = transactions.computeInTransaction(write);
+        sync.signal(band, queued);
+        live.changed(band, LiveUpdates.Topic.GIGS);
         return queued;
     }
 }

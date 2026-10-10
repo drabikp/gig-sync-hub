@@ -6,6 +6,8 @@ import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
+import java.util.UUID;
+
 /**
  * JPA persistence model for one published-gig record: a catalog gig (by serialized
  * {@link sk.drabikp.bzscraper.gig.domain.GigId}, same format as {@link GigEntity}'s id)
@@ -38,6 +40,7 @@ class PublishedGigEntity {
 
     @Embeddable
     public record Key(
+            @Column(name = "band_id") UUID bandId,
             String platform,
             @Column(name = "gig_id") String gigId) {
     }

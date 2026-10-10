@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.importing.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.importing.domain.ImportPlan;
 import sk.drabikp.bzscraper.importing.domain.ImportResult;
@@ -17,13 +18,13 @@ import java.util.Set;
 public interface ImportSessionUseCase {
 
     /** What can be read, whether a read runs (or why the last one failed), and the plan. */
-    State state();
+    State state(BandId band);
 
     /** Starts reading the platforms (nothing when a read already runs); none picked is refused. */
-    void read(Collection<Platform> platforms);
+    void read(BandId band, Collection<Platform> platforms);
 
     /** Imports what the user decided about the plan's proposals; nothing chosen is refused. */
-    ImportResult apply(List<Choice> choices);
+    ImportResult apply(BandId band, List<Choice> choices);
 
     /** @param plan null until a read ended, and again after applying */
     record State(Set<Platform> platforms, boolean reading, String readError, ImportPlan plan) {

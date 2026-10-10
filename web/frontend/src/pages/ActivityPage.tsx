@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { useSyncAction, useSyncStatus, useSyncTasks, useTaskLog } from '../api/hooks';
 import type { Task } from '../api/types';
+import { useBandPath } from '../band/band';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { usePlatformName } from '../lib/attention';
@@ -27,6 +28,7 @@ function look(task: Task): { color: string; icon: React.ReactNode } {
 }
 
 function TaskRow({ task }: { task: Task }) {
+  const path = useBandPath();
   const { t } = useTranslation();
   const name = usePlatformName();
   const sync = useSyncAction();
@@ -59,7 +61,7 @@ function TaskRow({ task }: { task: Task }) {
             <Text key={i} size="sm"><Text span c="dimmed">{when(e.at)}</Text> {e.message}</Text>
           ))}
           <Group gap="xs" mt="xs">
-            <Anchor component={Link} to={`/gig/${task.gigId}`} size="sm">{t('activity.openGig')}</Anchor>
+            <Anchor component={Link} to={path(`/gig/${task.gigId}`)} size="sm">{t('activity.openGig')}</Anchor>
             {(task.status === 'FAILED' || task.status === 'DISCARDED') && (
               <Button size="xs" onClick={() => sync.mutate({ kind: 'retry', task: task.id }, { onSuccess: () => done(t('toast.retrying', { platform: name(task.platform) })), onError: failed })}>
                 {t('activity.retry')}

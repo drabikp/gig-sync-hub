@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.gig.adapter.out.persistence;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
@@ -21,44 +22,51 @@ import java.util.Optional;
 class JpaGigRepository implements GigRepository {
 
     private final GigJpaRepository jpaRepository;
+    private final GigEntityMapper mapper;
 
-    public JpaGigRepository(GigJpaRepository jpaRepository) {
+    public JpaGigRepository(GigJpaRepository jpaRepository, GigEntityMapper mapper) {
         this.jpaRepository = jpaRepository;
+        this.mapper = mapper;
     }
 
     @Override
-    public void save(Gig gig) {
-        GigEntity entity = GigEntityMapper.toEntity(gig);
+    public void save(BandId band, Gig gig) {
+        GigEntity entity = mapper.toEntity(band, gig);
         // an update carries the version read in this transaction: if another transaction
         // saved the gig meanwhile, the commit fails instead of overwriting its change
-        jpaRepository.findById(entity.getId()).ifPresent(existing -> entity.setVersion(existing.getVersion()));
+        jpaRepository.findById(key(band, gig.id())).ifPresent(existing -> entity.setVersion(existing.getVersion()));
         jpaRepository.save(entity);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Gig> findById(GigId id) {
-        return jpaRepository.findById(id.key()).map(GigEntityMapper::toDomain);
+    public Optional<Gig> findById(BandId band, GigId id) {
+        return jpaRepository.findById(key(band, id)).map(mapper::toDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Gig> findAll() {
-        return jpaRepository.findAll().stream().map(GigEntityMapper::toDomain).toList();
+    public List<Gig> findAll(BandId band) {
+        return jpaRepository.findByBandId(band.value()).stream().map(mapper::toDomain).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Gig> findStartingWithin(DateRange range) {
+    public List<Gig> findStartingWithin(BandId band, DateRange range) {
         LocalDateTime fromInclusive = range.start().atStartOfDay();
         LocalDateTime toExclusive = range.end().plusDays(1).atStartOfDay();
         return jpaRepository
-                .findByStartDateTimeGreaterThanEqualAndStartDateTimeLessThan(fromInclusive, toExclusive)
-                .stream().map(GigEntityMapper::toDomain).toList();
+                .findByBandIdAndStartDateTimeGreaterThanEqualAndStartDateTimeLessThan(band.value(), fromInclusive,
+                        toExclusive)
+                .stream().map(mapper::toDomain).toList();
     }
 
     @Override
-    public void deleteById(GigId id) {
-        jpaRepository.deleteById(id.key());
+    public void deleteById(BandId band, GigId id) {
+        jpaRepository.deleteById(key(band, id));
+    }
+
+    private static GigEntity.Key key(BandId band, GigId id) {
+        return new GigEntity.Key(band.value(), id.key());
     }
 }

@@ -1,14 +1,18 @@
 package sk.drabikp.bzscraper.bandzone.scrape;
 
 import org.junit.jupiter.api.Test;
+import sk.drabikp.bzscraper.accounts.application.AccountsFakes;
 import sk.drabikp.bzscraper.bandzone.BandzonePlatform;
-import sk.drabikp.bzscraper.bandzone.BandzoneProperties;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.importing.domain.ImportedGig;
+import sk.drabikp.bzscraper.sync.application.port.out.FailureKind;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,18 +35,20 @@ class BandzoneGigImporterTest {
                 .build();
     }
 
-    private static BandzoneProperties band(String slug) {
-        return new BandzoneProperties(null, null, null, slug, null);
+    /** Band #1 with its Bandzone account at {@code slug}. */
+    private static AccountsFakes.Accounts band(String slug) {
+        return new AccountsFakes.Accounts().with(BandId.FIRST, BandzonePlatform.PLATFORM,
+                Map.of("login", "band@x.test", "bandSlug", slug), Map.of("password", "p"));
     }
 
     @Test
     void each_gig_keeps_its_bandzone_concert_id_and_cancelled_state() throws Exception {
         when(provider.findByBand("eufory")).thenReturn(List.of(summary("556604", false), summary("556605", true)));
 
-        List<ImportedGig> gigs = new BandzoneGigImporter(provider, band("eufory")).importGigs();
+        List<ImportedGig> gigs = new BandzoneGigImporter(provider, band("eufory")).importGigs(BandId.FIRST);
 
         assertThat(gigs).extracting(ImportedGig::externalRef).containsExactly("556604", "556605");
-        assertThat(gigs).allMatch(g -> g.platform() == BandzonePlatform.PLATFORM);
+        assertThat(gigs).allMatch(g -> g.platform().equals(BandzonePlatform.PLATFORM));
         assertThat(gigs.get(1).gig().cancelled()).isTrue();
     }
 
@@ -50,12 +56,23 @@ class BandzoneGigImporterTest {
     void a_concert_listed_twice_is_imported_once() throws Exception {
         when(provider.findByBand("eufory")).thenReturn(List.of(summary("556604", false), summary("556604", false)));
 
-        assertThat(new BandzoneGigImporter(provider, band("eufory")).importGigs()).hasSize(1);
+        assertThat(new BandzoneGigImporter(provider, band("eufory")).importGigs(BandId.FIRST)).hasSize(1);
     }
 
     @Test
-    void needs_the_band_slug() {
-        assertThatThrownBy(() -> new BandzoneGigImporter(provider, band("")).importGigs())
-                .isInstanceOf(BandzoneUploadException.class);
+    void reads_the_page_of_the_bands_own_account_and_needs_one() throws Exception {
+        BandId other = new BandId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+        AccountsFakes.Accounts accounts = band("eufory").with(other, BandzonePlatform.PLATFORM,
+                Map.of("login", "other@x.test", "bandSlug", "Other-Band"), Map.of("password", "p"));
+        when(provider.findByBand("other-band")).thenReturn(List.of(summary("1", false)));
+
+        assertThat(new BandzoneGigImporter(provider, accounts).importGigs(other)).extracting(ImportedGig::externalRef)
+                .containsExactly("1");
+        assertThatThrownBy(() -> new BandzoneGigImporter(provider, new AccountsFakes.Accounts())
+                .importGigs(BandId.FIRST))
+                .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
+                    assertThat(e.getMessage()).contains("isn't connected for this band");
+                    assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER);
+                });
     }
 }

@@ -6,6 +6,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 
 @SpringBootTest
 @Transactional
@@ -16,13 +17,13 @@ class JpaSettingsStoreTest {
 
     @Test
     void keeps_replaces_and_removes_a_setting() {
-        assertThat(settings.get("sync.paused")).isEmpty();
+        assertThat(settings.get(BAND, "sync.paused")).isEmpty();
 
-        settings.put("sync.paused", "true");
-        settings.put("sync.paused", "false");
-        assertThat(settings.get("sync.paused")).contains("false");
+        settings.put(BAND, "sync.paused", "true");
+        settings.put(BAND, "sync.paused", "false");
+        assertThat(settings.get(BAND, "sync.paused")).contains("false");
 
-        settings.put("sync.paused", null);
-        assertThat(settings.get("sync.paused")).isEmpty();
+        settings.put(BAND, "sync.paused", null);
+        assertThat(settings.get(BAND, "sync.paused")).isEmpty();
     }
 }

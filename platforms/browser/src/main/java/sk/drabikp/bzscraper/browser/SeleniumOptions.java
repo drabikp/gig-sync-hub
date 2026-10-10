@@ -2,9 +2,9 @@ package sk.drabikp.bzscraper.browser;
 
 /**
  * A platform's browser switches, {@code bzscraper.<platform>.selenium.*}: whether the platform
- * is driven at all, headless (default) or visible, its own Chromium/chromedriver (blank: the
- * shared {@link BrowserProperties}) and profile directory (blank: one per account, see
- * {@link BrowserProfile#dir}).
+ * is driven at all on this server, headless (default) or visible, its own Chromium/chromedriver
+ * (blank: the shared {@link BrowserProperties}) and where its accounts' profiles go (blank:
+ * {@code ~/.bzscraper/<platform>-browser}; one directory per account in it, see {@link BrowserProfile#dir}).
  */
 public record SeleniumOptions(boolean enabled, Boolean headless, String chromiumBinary, String chromedriver,
                               String profileDir) {
@@ -19,10 +19,9 @@ public record SeleniumOptions(boolean enabled, Boolean headless, String chromium
         profileDir = profileDir == null ? "" : profileDir;
     }
 
-    /** The {@link PlatformBrowser} settings for {@code platform}, its profile the {@code account}'s own. */
-    public PlatformBrowser.Settings browser(String platform, String account, BrowserProperties shared,
-                                            String windowSize) {
-        return new PlatformBrowser.Settings(platform, BrowserProfile.dir(profileDir, platform, account), headless,
+    /** The {@link PlatformBrowser} settings for {@code platform}. */
+    public PlatformBrowser.Settings browser(String platform, BrowserProperties shared, String windowSize) {
+        return new PlatformBrowser.Settings(platform, profileDir, headless,
                 chromiumBinary.isBlank() ? shared.chromiumBinary() : chromiumBinary,
                 chromedriver.isBlank() ? shared.chromedriver() : chromedriver, shared.passwordStore(), windowSize);
     }

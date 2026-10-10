@@ -6,6 +6,10 @@ apis:
     root: ../../features/gig/src/main/openapi/gig.yaml
     x-openapi-ts:
       output: ./src/api/generated/gig.ts
+  accounts:
+    root: ../../features/accounts/src/main/openapi/accounts.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/accounts.ts
   auth:
     root: ../../app/src/main/openapi/auth.yaml
     x-openapi-ts:

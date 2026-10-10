@@ -4,6 +4,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import sk.drabikp.bzscraper.gig.domain.TestBands;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncOutbox;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncOutboxContract;
 
@@ -21,12 +23,15 @@ class JpaOutboxContractTest extends SyncOutboxContract {
     private SyncTaskJpaRepository tasks;
     @Autowired
     private SyncLogJpaRepository log;
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @BeforeEach
     @AfterEach
     void empty() {
         log.deleteAll();
         tasks.deleteAll();
+        jdbc.update(TestBands.INSERT_OTHER);
     }
 
     @Override

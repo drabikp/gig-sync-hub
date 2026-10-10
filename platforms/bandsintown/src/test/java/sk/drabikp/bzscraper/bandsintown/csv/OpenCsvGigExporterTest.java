@@ -2,8 +2,12 @@ package sk.drabikp.bzscraper.bandsintown.csv;
 
 import com.opencsv.CSVReader;
 import org.junit.jupiter.api.Test;
-import sk.drabikp.bzscraper.bandsintown.BandsintownProperties;
+import sk.drabikp.bzscraper.accounts.application.AccountsFakes;
+import sk.drabikp.bzscraper.bandsintown.BandsintownPlatform;
+import sk.drabikp.bzscraper.gig.application.GigErrorCode;
+import sk.drabikp.bzscraper.gig.application.UserFacingException;
 import sk.drabikp.bzscraper.gig.domain.Admission;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
@@ -13,8 +17,11 @@ import java.io.StringReader;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class OpenCsvGigExporterTest {
 
@@ -26,8 +33,8 @@ class OpenCsvGigExporterTest {
             "Do Not Announce", "Setlist", "Event Image"
     };
 
-    private final OpenCsvGigExporter exporter = new OpenCsvGigExporter(new BandsintownProperties(null, null, null,
-            null, null, "Eufory (Band)", false, null, null));
+    private final OpenCsvGigExporter exporter = new OpenCsvGigExporter(new AccountsFakes.Accounts()
+            .with(BandId.FIRST, BandsintownPlatform.PLATFORM, Map.of("artistName", "Eufory (Band)"), Map.of()));
 
     private static List<String[]> parse(String csv) throws Exception {
         try (CSVReader reader = new CSVReader(new StringReader(csv))) {
@@ -40,8 +47,20 @@ class OpenCsvGigExporterTest {
     }
 
     @Test
+    void each_band_exports_as_its_own_artist_and_one_without_an_artist_name_cant() {
+        BandId other = new BandId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+        OpenCsvGigExporter twoBands = new OpenCsvGigExporter(new AccountsFakes.Accounts()
+                .with(other, BandsintownPlatform.PLATFORM, Map.of("artistName", "Other Band"), Map.of()));
+
+        assertThat(twoBands.export(other, List.of())).isNotBlank();
+        assertThatThrownBy(() -> twoBands.export(BandId.FIRST, List.of()))
+                .isInstanceOfSatisfying(UserFacingException.class,
+                        e -> assertThat(e.code()).isEqualTo(GigErrorCode.NOT_CONFIGURED));
+    }
+
+    @Test
     void header_matches_bandsintown_template_exactly() throws Exception {
-        List<String[]> rows = parse(exporter.export(List.of()));
+        List<String[]> rows = parse(exporter.export(BandId.FIRST, List.of()));
 
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0)).containsExactly(EXPECTED_HEADER);
@@ -55,7 +74,7 @@ class OpenCsvGigExporterTest {
                 Admission.paid("150 Kč"), "A fun night",
                 null, "https://tickets.example/legends", "https://img.example/poster.jpg");
 
-        String[] row = parse(exporter.export(List.of(g))).get(1);
+        String[] row = parse(exporter.export(BandId.FIRST, List.of(g))).get(1);
 
         assertThat(row[0]).isEqualTo("Eufory (Band)");
         assertThat(row[1]).isEqualTo("Klub 007");
@@ -78,7 +97,7 @@ class OpenCsvGigExporterTest {
                 new Location(null, "Martin", Country.SLOVAKIA), List.of(), Admission.free(),
                 null, null, null, null);
 
-        String[] row = parse(exporter.export(List.of(g))).get(1);
+        String[] row = parse(exporter.export(BandId.FIRST, List.of(g))).get(1);
 
         assertThat(row[1]).isEqualTo("TBA");
         assertThat(row[2]).isEqualTo("Slovakia");
@@ -92,7 +111,7 @@ class OpenCsvGigExporterTest {
         Gig g = Gig.create("Somewhere", GigSchedule.startingAt(prague(2026, 7, 1, 20, 0)),
                 new Location("Hall", "Vienna", null), List.of(), Admission.free(), null, null, null, null);
 
-        String[] row = parse(exporter.export(List.of(g))).get(1);
+        String[] row = parse(exporter.export(BandId.FIRST, List.of(g))).get(1);
 
         assertThat(row[2]).isEmpty();
         assertThat(row[7]).isEmpty();
@@ -103,7 +122,7 @@ class OpenCsvGigExporterTest {
         Gig g = Gig.create("Free show", GigSchedule.startingAt(prague(2026, 9, 1, 20, 0)),
                 new Location("Klub", "Praha", Country.CZECHIA), List.of(), Admission.free(), null, null, null, null);
 
-        String[] row = parse(exporter.export(List.of(g))).get(1);
+        String[] row = parse(exporter.export(BandId.FIRST, List.of(g))).get(1);
 
         assertThat(row[13]).isEmpty();
         assertThat(row[14]).isEmpty();
@@ -116,7 +135,7 @@ class OpenCsvGigExporterTest {
                 new Location("Camp", "Stará Turá", Country.SLOVAKIA), List.of(), Admission.free(),
                 null, null, null, null);
 
-        String[] row = parse(exporter.export(List.of(g))).get(1);
+        String[] row = parse(exporter.export(BandId.FIRST, List.of(g))).get(1);
 
         assertThat(row[10]).isEqualTo("2026-08-30");
         assertThat(row[11]).isEqualTo("23:00");

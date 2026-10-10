@@ -4,7 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 import sk.drabikp.bzscraper.bandsintown.RemovalReason;
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Country;
@@ -90,7 +90,7 @@ class BitPortalPagesTest {
                 "Secret Garden", "Praha", "Czechia", null, null, null);
 
         assertThatThrownBy(() -> events.delete(elsewhere, List.of(listed.get(0), elsewhere)))
-                .isInstanceOf(BitUploadException.class).hasMessageContaining("nothing was deleted");
+                .isInstanceOf(BitPortalException.class).hasMessageContaining("nothing was deleted");
         assertThat(portal.writes()).isEmpty();
     }
 

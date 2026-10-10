@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -123,18 +124,28 @@ class H2Import implements Callback {
         if (columns.isEmpty()) {
             return 0;                                   // an older database without this table
         }
-        columns.retainAll(columns(target, table));
+        List<String> targetColumns = columns(target, table);
+        columns.retainAll(targetColumns);
+        // the H2 database knew one band: its rows are band #1's (the shipped calendar rules nobody's)
+        boolean toFirstBand = targetColumns.contains("band_id") && !columns.contains("band_id");
         String list = String.join(", ", columns);
         String marks = String.join(", ", columns.stream().map(c -> "?").toList());
+        String insertSql = toFirstBand
+                ? "insert into " + table + " (" + list + ", band_id) values (" + marks + ", ?)"
+                : "insert into " + table + " (" + list + ") values (" + marks + ")";
+        int origin = columns.indexOf("origin") + 1;
         int count = 0;
         try (Statement read = source.createStatement();
              ResultSet rows = read.executeQuery("select " + list + " from " + table);
-             PreparedStatement insert = target.prepareStatement(
-                     "insert into " + table + " (" + list + ") values (" + marks + ")")) {
+             PreparedStatement insert = target.prepareStatement(insertSql)) {
             ResultSetMetaData meta = rows.getMetaData();
             while (rows.next()) {
                 for (int i = 1; i <= columns.size(); i++) {
                     insert.setObject(i, value(rows, i, meta.getColumnType(i)));
+                }
+                if (toFirstBand) {
+                    boolean preset = origin > 0 && "PRESET".equals(rows.getString(origin));
+                    insert.setObject(columns.size() + 1, preset ? null : BandId.FIRST.value());
                 }
                 insert.addBatch();
                 if (++count % 500 == 0) {

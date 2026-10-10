@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.bandsintown.portal.selenium;
 
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.interactions.Actions;
@@ -53,6 +54,21 @@ final class HumanPacer {
         typeIntoFocused(driver, text);
     }
 
+    /** Clicks into the field, selects what it holds and deletes it, then types the text key by key. */
+    public void clearAndType(WebDriver driver, WebElement field, String text) {
+        click(driver, field);
+        sleep(between(80, 260));
+        field.sendKeys(Keys.chord(Keys.CONTROL, "a"), Keys.BACK_SPACE);
+        sleep(between(60, 190));
+        typeIntoFocused(driver, text);
+    }
+
+    /** Leaves the field with Tab, after a moment. */
+    public void pressTab(WebElement field) {
+        sleep(between(60, 190));
+        field.sendKeys(Keys.TAB);
+    }
+
     /** Types into whatever has focus (e.g. auto-advancing code boxes). */
     public void typeIntoFocused(WebDriver driver, String text) {
         for (char c : text.toCharArray()) {
@@ -70,7 +86,11 @@ final class HumanPacer {
         return max <= min ? min : ThreadLocalRandom.current().nextLong(min, max + 1);
     }
 
-    private static void sleep(long ms) {
+    /**
+     * An interrupt (the worker stopping) ends the operation: the flag stays set, so the browser
+     * reports it as busy — postponed, not a failed attempt (see {@code PlatformBrowser}).
+     */
+    static void sleep(long ms) {
         try {
             Thread.sleep(ms);
         } catch (InterruptedException e) {

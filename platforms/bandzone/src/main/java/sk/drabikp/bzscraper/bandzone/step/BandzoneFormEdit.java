@@ -2,7 +2,7 @@ package sk.drabikp.bzscraper.bandzone.step;
 
 import org.springframework.stereotype.Component;
 import sk.drabikp.bzscraper.bandzone.BandzonePlatform;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 import sk.drabikp.bzscraper.bandzone.portal.BandzonePortalClient;
 import sk.drabikp.bzscraper.bandzone.portal.BandzoneSession;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
@@ -36,10 +36,10 @@ class BandzoneFormEdit implements OneAtATimeStep {
 
     @Override
     public StepOutcome runOne(Item item) {
-        try (BandzoneSession session = portalClient.openSession()) {
+        try (BandzoneSession session = portalClient.openSession(item.band())) {
             session.updateGig(item.externalRef(), item.gig());
             return StepOutcome.done(null);
-        } catch (BandzoneUploadException e) {
+        } catch (BandzonePortalException e) {
             return e.outcome();
         }
     }

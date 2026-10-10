@@ -12,7 +12,7 @@ import java.util.Map;
 public class GigIdentityTakenException extends UserFacingException {
 
     public GigIdentityTakenException(Gig gig) {
-        super("gigIdentityTaken", Map.of("date", gig.schedule().startDate().toString(), "venue",
+        super(CatalogErrorCode.GIG_IDENTITY_TAKEN, Map.of("date", gig.schedule().startDate().toString(), "venue",
                 gig.location().displayVenue()), "The catalog already has a gig on " + gig.schedule().startDate() + " at "
                 + gig.location().displayVenue() + " — edit that one instead.");
     }

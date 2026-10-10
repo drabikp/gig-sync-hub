@@ -98,4 +98,16 @@ class BitEventMapperTest {
         assertThat(BitEventMapper.country("Czech Republic")).isEqualTo(Country.CZECHIA);
         assertThat(BitEventMapper.country("Germany")).isNull();
     }
+
+    @Test
+    void an_unknown_time_zone_is_read_in_the_countrys_and_an_unreadable_date_leaves_the_event_out() {
+        Map<String, Object> unknownZone = event();
+        unknownZone.put("venue_timezone", "Europe/Atlantis");
+        Map<String, Object> badDate = event();
+        badDate.put("start_date", "27.08.2026");
+
+        assertThat(BitEventMapper.toImported(BitEvent.of(unknownZone)).orElseThrow().gig().schedule().start())
+                .isEqualTo(ZonedDateTime.parse("2026-08-27T00:00+02:00[Europe/Bratislava]"));
+        assertThat(BitEventMapper.toImported(BitEvent.of(badDate))).isEmpty();
+    }
 }

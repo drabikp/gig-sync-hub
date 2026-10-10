@@ -7,6 +7,7 @@ import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { type InboxItem, useInbox } from '../lib/attention';
 import { relative } from '../lib/format';
+import { useBandPath } from '../band/band';
 
 const LOOK: Record<InboxItem['kind'], { color: string; icon: React.ReactNode }> = {
   failed: { color: 'red', icon: <IconAlertTriangle size={18} /> },
@@ -17,6 +18,7 @@ const LOOK: Record<InboxItem['kind'], { color: string; icon: React.ReactNode }> 
 
 /** Everything that needs the user, each with its fix: one place instead of four pages. */
 export function InboxPage() {
+  const path = useBandPath();
   const { t } = useTranslation();
   const inbox = useInbox();
   return (
@@ -48,7 +50,7 @@ export function InboxPage() {
               </Group>
               <Title order={3} fz={17}>
                 {item.gigId ? (
-                  <Anchor component={Link} to={`/gig/${item.gigId}`} c="var(--mantine-color-text)" inherit>
+                  <Anchor component={Link} to={path(`/gig/${item.gigId}`)} c="var(--mantine-color-text)" inherit>
                     {item.title}
                   </Anchor>
                 ) : item.title}

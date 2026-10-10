@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
 import java.util.List;
@@ -10,7 +11,7 @@ public interface ExportGigsUseCase {
     /** The platforms there is an export for. */
     List<Platform> exportable();
 
-    ExportFile export(Platform platform);
+    ExportFile export(BandId band, Platform platform);
 
     record ExportFile(String fileName, String mediaType, String content) {
     }

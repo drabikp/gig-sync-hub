@@ -30,7 +30,7 @@ class BandzoneHtmlParser {
     }
 
     List<GigSummary> parse(Elements elements) {
-        return elements.stream().parallel().map(this::parseGig).flatMap(Optional::stream)
+        return elements.stream().map(this::parseGig).flatMap(Optional::stream)
                 .sorted(Comparator.comparing(GigSummary::start, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
     }

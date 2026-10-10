@@ -3,12 +3,10 @@ package sk.drabikp.bzscraper.bandzone.portal.selenium;
 import org.openqa.selenium.By;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
-import org.openqa.selenium.support.ui.WebDriverWait;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 import sk.drabikp.bzscraper.gig.domain.EntryType;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.Location;
-import sk.drabikp.bzscraper.sync.application.port.out.FailureKind;
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
@@ -48,10 +46,10 @@ final class BandzoneForm {
      * district ({@link BandzoneTowns}); several fits or none → the user corrects the town,
      * never a guess. Then waits for {@code cityId} to take the picked town.
      */
-    void selectCity(Location location) throws BandzoneUploadException {
+    void selectCity(Location location) throws BandzonePortalException {
         String city = location.city();
-        String currentText = browser.driver.findElement(By.name("cityId__container[textInput]")).getDomProperty("value");
-        String previousId = browser.driver.findElement(By.name("cityId")).getDomProperty("value");
+        String currentText = browser.find(By.name("cityId__container[textInput]")).getDomProperty("value");
+        String previousId = browser.find(By.name("cityId")).getDomProperty("value");
         // The form shows only the town's name, and a name may be the wrong town of several
         // (once: a Czech village for Košice) — a town picked from the place search is
         // therefore chosen again every time; only a merely typed one is kept as it is.
@@ -64,20 +62,19 @@ final class BandzoneForm {
 
         List<BandzoneTowns.Suggestion> suggestions;
         try {
-            suggestions = browser.wait.until(d -> townSuggestions());
+            suggestions = browser.until(d -> townSuggestions());
         } catch (TimeoutException e) {
-            throw new BandzoneUploadException("Bandzone's city search gave nothing for '" + city
-                    + "' — correct the gig's city (the town's name, not a district) and try again.", e,
-                    FailureKind.NEEDS_USER);
+            throw BandzonePortalException.needsUser("Bandzone's city search gave nothing for '" + city
+                    + "' — correct the gig's city (the town's name, not a district) and try again.", e);
         }
         BandzoneTowns.Choice choice = BandzoneTowns.choose(city, location.country(), location.district(), suggestions);
         if (choice.pick() == null) {
-            throw BandzoneUploadException.needsUser(choice.problem());
+            throw BandzonePortalException.needsUser(choice.problem());
         }
-        WebElement cityIdInput = browser.driver.findElement(By.name("cityId"));
-        browser.click(browser.driver.findElement(By.cssSelector("li[data-bz-town='" + choice.pick().index() + "']")));
+        WebElement cityIdInput = browser.find(By.name("cityId"));
+        browser.click(browser.find(By.cssSelector("li[data-bz-town='" + choice.pick().index() + "']")));
         browser.awaitReload(cityIdInput);
-        browser.wait.until(d -> {
+        browser.until(d -> {
             String v = d.findElement(By.name("cityId")).getDomProperty("value");
             return v != null && !v.isBlank();
         });
@@ -113,7 +110,7 @@ final class BandzoneForm {
      * club; anything else is kept as free text, which Bandzone accepts. No venue clears it.
      */
     void selectVenue(String venue) {
-        String currentText = browser.driver.findElement(By.name("venueId__container[textInput]")).getDomProperty("value");
+        String currentText = browser.find(By.name("venueId__container[textInput]")).getDomProperty("value");
         if (venue != null && venue.equalsIgnoreCase(currentText)) {
             return;
         }
@@ -127,14 +124,14 @@ final class BandzoneForm {
                         + "t.focus();t.value=arguments[0];t.dispatchEvent(new Event('input',{bubbles:true}));",
                 venue);
         try {
-            new WebDriverWait(browser.driver, SUGGESTION_WAIT).until(d -> (Boolean) browser.js(
+            browser.until(SUGGESTION_WAIT, d -> (Boolean) browser.js(
                     "return Array.from(document.querySelectorAll('ul.ui-autocomplete'))"
                             + ".some(u=>u.offsetParent!==null&&u.querySelector('li'));"));
         } catch (TimeoutException e) {
             keepFreeTextVenue(venue); // no club suggestions
             return;
         }
-        WebElement venueIdInput = browser.driver.findElement(By.name("venueId"));
+        WebElement venueIdInput = browser.find(By.name("venueId"));
         Boolean linked = (Boolean) browser.js("var n=arguments[0].toLowerCase();"
                         + "var m=Array.from(document.querySelectorAll('ul.ui-autocomplete li'))"
                         + ".filter(l=>l.offsetParent!==null)"
@@ -143,7 +140,7 @@ final class BandzoneForm {
                 venue);
         if (Boolean.TRUE.equals(linked)) {
             browser.awaitReload(venueIdInput);
-            browser.wait.until(d -> {
+            browser.until(d -> {
                 String v = d.findElement(By.name("venueId")).getDomProperty("value");
                 return v != null && !v.isBlank();
             });

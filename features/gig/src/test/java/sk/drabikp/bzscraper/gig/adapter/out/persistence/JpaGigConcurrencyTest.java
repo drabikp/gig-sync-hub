@@ -14,6 +14,7 @@ import sk.drabikp.bzscraper.gig.domain.TestGigs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 
 /** Optimistic locking of gigs across real transactions (so not @Transactional itself). */
 @SpringBootTest
@@ -32,7 +33,7 @@ class JpaGigConcurrencyTest {
 
     @AfterEach
     void cleanUp() {
-        repository.deleteById(gig.id());
+        repository.deleteById(BAND, gig.id());
     }
 
     private static Gig titled(Gig gig, String title) {
@@ -41,24 +42,24 @@ class JpaGigConcurrencyTest {
 
     @Test
     void two_saves_of_the_same_gig_at_the_same_time_cant_both_win() {
-        repository.save(gig);
+        repository.save(BAND, gig);
         TransactionTemplate other = new TransactionTemplate(transactionManager);
         other.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         assertThatThrownBy(() -> transactions.inTransaction(() -> {
-            repository.save(titled(gig, "Mine"));                                  // read version 0
-            other.executeWithoutResult(s -> repository.save(titled(gig, "Theirs"))); // commits version 1
+            repository.save(BAND, titled(gig, "Mine"));                                  // read version 0
+            other.executeWithoutResult(s -> repository.save(BAND, titled(gig, "Theirs"))); // commits version 1
         })).isInstanceOf(ConcurrentChangeException.class);
 
-        assertThat(repository.findById(gig.id())).get().extracting(Gig::title).isEqualTo("Theirs");
+        assertThat(repository.findById(BAND, gig.id())).get().extracting(Gig::title).isEqualTo("Theirs");
     }
 
     @Test
     void saves_one_after_another_each_build_on_the_last() {
-        repository.save(gig);
-        transactions.inTransaction(() -> repository.save(titled(gig, "Second")));
-        transactions.inTransaction(() -> repository.save(titled(gig, "Third")));
+        repository.save(BAND, gig);
+        transactions.inTransaction(() -> repository.save(BAND, titled(gig, "Second")));
+        transactions.inTransaction(() -> repository.save(BAND, titled(gig, "Third")));
 
-        assertThat(repository.findById(gig.id())).get().extracting(Gig::title).isEqualTo("Third");
+        assertThat(repository.findById(BAND, gig.id())).get().extracting(Gig::title).isEqualTo("Third");
     }
 }

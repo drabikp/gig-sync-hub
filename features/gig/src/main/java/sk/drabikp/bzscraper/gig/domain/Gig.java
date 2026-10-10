@@ -4,6 +4,8 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Aggregate root: a gig to publish. Always valid — the compact constructor enforces
@@ -70,6 +72,21 @@ public record Gig(
     public Gig cancel() {
         return new Gig(title, schedule, location, lineup, admission, description, facebookUrl,
                 ticketUrl, posterImageUrl, true);
+    }
+
+    /**
+     * Everything the gig says as one text, in a fixed order the gig owns (not {@code toString},
+     * whose form is unspecified): equal gigs, equal texts — what a revision is made from.
+     */
+    public String fingerprint() {
+        Slot slot = schedule.slot();
+        Address address = location.address() != null ? location.address() : Address.NONE;
+        return Stream.of(title, schedule.start(), schedule.end(), slot == null ? null : slot.start(),
+                        slot == null ? null : slot.end(), location.venue(), location.city(), location.country(),
+                        address.street(), address.postalCode(), address.district(), address.region(),
+                        address.latitude(), address.longitude(), String.join("\n", lineup), admission.type(),
+                        admission.amount(), description, facebookUrl, ticketUrl, posterImageUrl, cancelled)
+                .map(String::valueOf).collect(Collectors.joining("\u001f"));
     }
 
     public Gig reactivate() {

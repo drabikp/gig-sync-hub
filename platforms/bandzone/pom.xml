@@ -18,6 +18,10 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
+			<artifactId>bzscraper-accounts</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
 			<artifactId>bzscraper-sync</artifactId>
 		</dependency>
 		<dependency>
@@ -47,6 +51,12 @@
 		<dependency>
 			<groupId>org.seleniumhq.selenium</groupId>
 			<artifactId>selenium-java</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>bzscraper-accounts</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>

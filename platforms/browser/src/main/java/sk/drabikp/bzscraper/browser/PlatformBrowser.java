@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
@@ -27,11 +28,16 @@ import java.util.function.Function;
  * <ul>
  *   <li>one browser at a time — a profile can't be opened twice, and a person has one tab
  *       open; {@link #acquire} waits for it as long as the caller is willing to;</li>
- *   <li>kept warm a minute after a session ({@link WarmBrowser}) for the next one;</li>
- *   <li>a private profile per account holding the saved login ({@link BrowserProfile});</li>
+ *   <li>a private profile per account (a band's login there) holding its saved login
+ *       ({@link BrowserProfile}): every lease names its account, and the browser is that
+ *       account's — never another band's;</li>
+ *   <li>kept warm a minute after a session ({@link WarmBrowser}) for the account's next one;</li>
  *   <li>the same Chromium options for every platform, plus what {@link Customizer} adds;</li>
  *   <li>a screenshot of the page an operation failed on, in the temp directory
- *       ({@code bzscraper-<platform>-<step>.png}).</li>
+ *       ({@code bzscraper-<platform>-<step>.png});</li>
+ *   <li>what a failure in the browser means, in the platform's own exception ({@link Failures}):
+ *       an unexpected browser error is temporary; a busy browser, or an operation interrupted
+ *       (the app is stopping), is busy — again later.</li>
  * </ul>
  * The platform's client keeps only what is its own: logging in and its pages.
  */
@@ -40,8 +46,11 @@ public final class PlatformBrowser {
     private static final Logger logger = LoggerFactory.getLogger(PlatformBrowser.class);
     private static final Duration KEEP_WARM = Duration.ofSeconds(60);
 
-    /** Where the browser is and how it starts; {@code profileDir} is the account's own (see {@link BrowserProfile#dir}). */
-    public record Settings(String platform, Path profileDir, boolean headless, String chromiumBinary,
+    /**
+     * Where the browser is and how it starts; {@code profileRoot} holds a directory per account (blank: the
+     * default, see {@link BrowserProfile#dir}).
+     */
+    public record Settings(String platform, String profileRoot, boolean headless, String chromiumBinary,
                            String chromedriverPath, String passwordStore, String windowSize) {
     }
 
@@ -61,6 +70,22 @@ public final class PlatformBrowser {
         T run() throws E;
     }
 
+    /** Logs in in a leased browser (or finds the saved login still valid) and makes the platform's session of it. */
+    @FunctionalInterface
+    public interface Login<S, E extends Exception> {
+        S open(Lease lease) throws E;
+    }
+
+    /**
+     * The platform's own exception for what the browser can fail with: a {@code temporary}
+     * failure (a missing element, a timeout — this step again, later) and {@code busy} (not
+     * done: the browser is in use, or the operation was interrupted — again later, no attempt
+     * used). {@code platform} is its name in the messages.
+     */
+    public record Failures<E extends Exception>(String platform, BiFunction<String, RuntimeException, E> temporary,
+                                                Function<String, E> busy) {
+    }
+
     private final Settings settings;
     private final Customizer customizer;
     private final Semaphore oneBrowser = new Semaphore(1);
@@ -73,11 +98,11 @@ public final class PlatformBrowser {
     }
 
     /**
-     * The browser — the warm one, or a new one — when it is free within {@code wait}; empty
-     * when another operation still has it (or the wait was interrupted). The lease must end
-     * with {@link Lease#keepWarm} or {@link Lease#discard}.
+     * The browser for {@code account} — the warm one when it is that account's, else a new one with the
+     * account's profile — when it is free within {@code wait}; empty when another operation still has it
+     * (or the wait was interrupted). The lease must end with {@link Lease#keepWarm} or {@link Lease#discard}.
      */
-    public Optional<Lease> acquire(Duration wait) {
+    public Optional<Lease> acquire(String account, Duration wait) {
         try {
             if (!oneBrowser.tryAcquire(wait.toMillis(), TimeUnit.MILLISECONDS)) {
                 return Optional.empty();
@@ -87,32 +112,59 @@ public final class PlatformBrowser {
             return Optional.empty();
         }
         try {
-            WebDriver driver = warm.take();
-            return Optional.of(new Lease(driver != null ? driver : start(), driver != null));
+            WebDriver driver = warm.take(account);
+            return Optional.of(new Lease(driver != null ? driver : start(account), account, driver != null));
         } catch (RuntimeException e) {
             oneBrowser.release();
             throw e;
         }
     }
 
-    /** Closes the warm browser (app shutdown). */
+    /**
+     * Opens a session for {@code account}: the browser when it is free within {@code wait} (else
+     * {@code busy}), then {@code login} logs in and makes the session. A failed login leaves a
+     * screenshot and discards the browser (its state can't be trusted).
+     */
+    public <S, E extends Exception> S open(String account, Duration wait, Failures<E> failures, Login<S, E> login)
+            throws E {
+        Optional<Lease> leased;
+        try {
+            leased = acquire(account, wait);
+        } catch (RuntimeException e) {
+            throw failure(failures, "The " + failures.platform() + " browser did not start", e);
+        }
+        Lease lease = leased.orElseThrow(() ->
+                failures.busy().apply("Another " + failures.platform() + " operation is using the browser."));
+        try {
+            return login.open(lease);
+        } catch (RuntimeException e) {
+            lease.discard("login");
+            throw failure(failures, failures.platform() + " login failed", e);
+        } catch (Exception e) {
+            lease.discard("login");
+            throw e;
+        }
+    }
+
+    /** Closes the warm browser, and any handed back after this (app shutdown). */
     public void close() {
         warm.close();
     }
 
-    private ChromeDriver start() {
+    private ChromeDriver start(String account) {
+        Path profile = BrowserProfile.dir(settings.profileRoot(), settings.platform(), account);
         try {
-            BrowserProfile.ensurePrivate(settings.profileDir());
+            BrowserProfile.ensurePrivate(profile);
         } catch (IOException e) {
             throw new IllegalStateException("Cannot create the " + settings.platform() + " browser profile "
-                    + settings.profileDir(), e);
+                    + profile, e);
         }
         ChromeOptions options = new ChromeOptions();
         if (settings.headless()) {
             options.addArguments("--headless=new");
         }
         options.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--window-size=" + settings.windowSize(),
-                "--user-data-dir=" + settings.profileDir());
+                "--user-data-dir=" + profile);
         options.addArguments(BrowserProfile.secretStoreArgs(settings.passwordStore()));
         if (!isBlank(settings.chromiumBinary())) {
             options.setBinary(settings.chromiumBinary());
@@ -144,6 +196,19 @@ public final class PlatformBrowser {
                 Map.of("userAgent", userAgent.replace("HeadlessChrome", "Chrome"), "acceptLanguage", language + ",en"));
     }
 
+    /**
+     * An unexpected browser error as the platform's failure: temporary — or busy when the
+     * thread was interrupted (the app is stopping, the worker's pacing cut short): nothing was
+     * wrong with the platform, so it is postponed like a busy browser, and the interrupt stays
+     * set for whoever stops the thread.
+     */
+    private static <E extends Exception> E failure(Failures<E> failures, String failure, RuntimeException e) {
+        if (Thread.currentThread().isInterrupted()) {
+            return failures.busy().apply(failure + ": interrupted — again later");
+        }
+        return failures.temporary().apply(failure + ": " + e.getMessage(), e);
+    }
+
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
     }
@@ -152,11 +217,13 @@ public final class PlatformBrowser {
     public final class Lease {
 
         private final WebDriver driver;
+        private final String account;
         private final boolean wasWarm;
         private boolean ended;
 
-        private Lease(WebDriver driver, boolean wasWarm) {
+        private Lease(WebDriver driver, String account, boolean wasWarm) {
             this.driver = driver;
+            this.account = account;
             this.wasWarm = wasWarm;
         }
 
@@ -164,30 +231,51 @@ public final class PlatformBrowser {
             return driver;
         }
 
-        /** True when it is the warm browser of an earlier session (its login is probably still valid). */
+        /** True when it is the warm browser of the account's earlier session (its login is probably still valid). */
         public boolean wasWarm() {
             return wasWarm;
         }
 
-        /** Done: the browser stays open a little for the next operation. */
+        /** Done: the browser stays open a little for the account's next operation. Never throws. */
         public synchronized void keepWarm() {
             if (!ended) {
                 ended = true;
-                warm.park(driver);
-                oneBrowser.release();
+                try {
+                    warm.park(driver, account);
+                } catch (RuntimeException e) {
+                    logger.warn("Keeping the {} browser open failed — closing it", settings.platform(), e);
+                    quit();
+                } finally {
+                    oneBrowser.release();
+                }
             }
         }
 
-        /** Done, and the browser is not to be trusted (a failed login): closed. */
+        /** Done, and the browser is not to be trusted (a failed login): closed. Never throws. */
         public synchronized void discard() {
             if (!ended) {
                 ended = true;
                 try {
-                    driver.quit();
-                } catch (RuntimeException e) {
-                    logger.debug("Closing the {} browser failed", settings.platform(), e);
+                    quit();
+                } finally {
+                    oneBrowser.release();
                 }
-                oneBrowser.release();
+            }
+        }
+
+        /** Keeps a picture of the page {@code step} failed on, then discards the browser. */
+        private void discard(String step) {
+            if (!Thread.currentThread().isInterrupted()) {
+                screenshot(step);
+            }
+            discard();
+        }
+
+        private void quit() {
+            try {
+                driver.quit();
+            } catch (RuntimeException e) {
+                logger.debug("Closing the {} browser failed", settings.platform(), e);
             }
         }
 
@@ -206,19 +294,23 @@ public final class PlatformBrowser {
 
         /**
          * Runs one operation: any failure leaves a screenshot; an unexpected browser error
-         * becomes the platform's failure ({@code asFailure}).
+         * becomes the platform's temporary failure ({@code failure}: what failed), or a busy one
+         * when the operation was interrupted.
          */
-        public <T, E extends Exception> T guarded(String step, Work<T, E> work,
-                                                  Function<RuntimeException, E> asFailure) throws E {
+        public <T, E extends Exception> T guarded(String step, String failure, Failures<E> failures, Work<T, E> work)
+                throws E {
             try {
                 return work.run();
             } catch (RuntimeException e) {
-                screenshot(step);
-                throw asFailure.apply(e);
+                if (!Thread.currentThread().isInterrupted()) {
+                    screenshot(step);
+                }
+                throw failure(failures, failure, e);
             } catch (Exception e) {
                 screenshot(step);
                 throw e;
             }
         }
+
     }
 }

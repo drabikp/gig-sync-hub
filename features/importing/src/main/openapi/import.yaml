@@ -13,7 +13,9 @@ servers:
 tags:
   - name: Import
 paths:
-  /api/import:
+  /api/bands/{bandId}/import:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     get:
       tags: [Import]
       operationId: importState
@@ -23,8 +25,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImportState'
-  /api/import/read:
+                $ref: '#/components/schemas/ImportStateResponse'
+  /api/bands/{bandId}/import/read:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Import]
       operationId: readForImport
@@ -33,7 +37,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ImportRead'
+              $ref: '#/components/schemas/ImportReadRequest'
       responses:
         "202":
           description: Reading (or a read already runs).
@@ -41,7 +45,9 @@ paths:
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/BadRequest'
         "409":
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
-  /api/import/apply:
+  /api/bands/{bandId}/import/apply:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Import]
       operationId: applyImport
@@ -50,21 +56,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ImportApply'
+              $ref: '#/components/schemas/ImportApplyRequest'
       responses:
         "200":
           description: Imported.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImportResult'
+                $ref: '#/components/schemas/ImportResultResponse'
         "400":
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/BadRequest'
         "409":
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
 components:
   schemas:
-    ImportState:
+    ImportStateResponse:
       type: object
       required: [platforms, reading, readError, plan]
       properties:
@@ -80,16 +86,16 @@ components:
           nullable: true
         plan:
           allOf:
-            - $ref: '#/components/schemas/ImportPlan'
+            - $ref: '#/components/schemas/ImportPlanResponse'
           nullable: true
-    ImportPlan:
+    ImportPlanResponse:
       type: object
       required: [proposals, alreadyLinked, skipped, failures]
       properties:
         proposals:
           type: array
           items:
-            $ref: '#/components/schemas/ImportProposal'
+            $ref: '#/components/schemas/ImportProposalResponse'
         alreadyLinked:
           type: integer
         skipped:
@@ -101,7 +107,7 @@ components:
           type: object
           additionalProperties:
             type: string
-    ImportProposal:
+    ImportProposalResponse:
       description: |
         One gig to add or link. `versions` — the distinct details found, the catalog's first
         (platform null); `foundOn` — the platforms with a copy; `suggested` — matched to a
@@ -127,8 +133,8 @@ components:
         versions:
           type: array
           items:
-            $ref: '#/components/schemas/ImportVersion'
-    ImportVersion:
+            $ref: '#/components/schemas/ImportVersionResponse'
+    ImportVersionResponse:
       type: object
       required: [platform, title, start, end, venue, city, cancelled]
       properties:
@@ -150,7 +156,7 @@ components:
           type: string
         cancelled:
           type: boolean
-    ImportRead:
+    ImportReadRequest:
       type: object
       required: [platforms]
       properties:
@@ -158,7 +164,7 @@ components:
           type: array
           items:
             type: string
-    ImportDecision:
+    ImportDecisionRequest:
       description: "`version` — the index into the proposal's versions whose details to keep."
       type: object
       required: [index, include, sameGig, version]
@@ -171,15 +177,15 @@ components:
           type: boolean
         version:
           type: integer
-    ImportApply:
+    ImportApplyRequest:
       type: object
       required: [decisions]
       properties:
         decisions:
           type: array
           items:
-            $ref: '#/components/schemas/ImportDecision'
-    ImportResult:
+            $ref: '#/components/schemas/ImportDecisionRequest'
+    ImportResultResponse:
       type: object
       required: [added, updated, linked, skipped]
       properties:

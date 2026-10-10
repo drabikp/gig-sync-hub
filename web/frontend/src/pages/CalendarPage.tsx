@@ -2,15 +2,12 @@ import {
   Alert,
   Badge,
   Button,
-  Code,
   Collapse,
   Group,
   Paper,
-  ScrollArea,
   Select,
   Skeleton,
   Stack,
-  Table,
   Text,
   TextInput,
   UnstyledButton,
@@ -19,10 +16,12 @@ import { IconCalendarOff, IconChevronDown, IconRefresh, IconSearch } from '@tabl
 import { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useCalendar, useCalendarAction, useCalendarRules, useReadCalendar } from '../api/hooks';
 import type { CalendarFilter, CalendarRow } from '../api/types';
+import { useBandPath } from '../band/band';
 import { ActionButtons } from '../components/ActionButtons';
+import { CalendarRules } from '../components/CalendarSetup';
 import { DateBlock } from '../components/DateBlock';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
@@ -110,6 +109,7 @@ function Row({ row }: { row: CalendarRow }) {
 /** The band's calendar, sorted into gigs and the rest and checked against the catalog. */
 export function CalendarPage() {
   const { t } = useTranslation();
+  const path = useBandPath();
   const calendar = useCalendar();
   const read = useReadCalendar();
   const action = useCalendarAction();
@@ -141,7 +141,9 @@ export function CalendarPage() {
     return (
       <Stack>
         <PageHeader title={t('calendar.title')} />
-        <EmptyState icon={<IconCalendarOff size={28} />} color="gray" title={t('calendar.notConfigured')} text={t('calendar.notConfiguredText')} />
+        <EmptyState icon={<IconCalendarOff size={28} />} color="gray" title={t('calendar.notConfigured')} text={t('calendar.notConfiguredText')}>
+          <Button component={Link} to={path('/settings')} mt="xs">{t('calendarSetup.setUp')}</Button>
+        </EmptyState>
       </Stack>
     );
   }
@@ -231,29 +233,8 @@ export function CalendarPage() {
           </Group>
         </UnstyledButton>
         <Collapse in={rulesOpen}>
-          <Text size="sm" c="dimmed" mt="sm">{t('calendar.rulesHelp')}</Text>
-          <ScrollArea mt="sm">
-            <Table verticalSpacing={6} fz="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>{t('calendar.rule')}</Table.Th>
-                  <Table.Th>{t('calendar.value')}</Table.Th>
-                  <Table.Th>{t('calendar.weight')}</Table.Th>
-                  <Table.Th>{t('calendar.origin')}</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {(rules.data ?? []).map((r, i) => (
-                  <Table.Tr key={i} c={r.enabled ? undefined : 'dimmed'}>
-                    <Table.Td><Code>{r.kind}</Code></Table.Td>
-                    <Table.Td>{r.value?.replaceAll('|', ' | ')}</Table.Td>
-                    <Table.Td>{r.weighted ? (r.weight > 0 ? `+${r.weight}` : `−${Math.abs(r.weight)}`) : '—'}</Table.Td>
-                    <Table.Td>{t(`origin.${r.origin}`)}</Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
+          <Text size="sm" c="dimmed" mt="sm" mb="sm">{t('calendar.rulesHelp')}</Text>
+          {rules.data && <CalendarRules rules={rules.data} />}
         </Collapse>
       </Paper>
     </Stack>

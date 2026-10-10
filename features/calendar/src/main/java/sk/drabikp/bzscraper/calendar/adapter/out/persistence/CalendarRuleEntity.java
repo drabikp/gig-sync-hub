@@ -5,9 +5,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import sk.drabikp.bzscraper.calendar.domain.rules.ProfileRule;
-import sk.drabikp.bzscraper.calendar.domain.rules.RuleKind;
-import sk.drabikp.bzscraper.calendar.domain.rules.RuleOrigin;
+
+import java.util.UUID;
 
 /** JPA persistence model for one band-profile rule; kind and origin are stored by name. */
 @Entity
@@ -17,31 +16,71 @@ class CalendarRuleEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    /** Whose rule; null for the rules shipped with the app (everyone's). */
+    private UUID bandId;
     private String kind;
     private String ruleValue;
     private int weight;
     private String origin;
     private boolean enabled;
 
-    protected CalendarRuleEntity() {
-        // for JPA
+    public CalendarRuleEntity() {
+        // for JPA and CalendarEntityMapper
     }
 
-    static CalendarRuleEntity of(ProfileRule rule) {
-        CalendarRuleEntity entity = new CalendarRuleEntity();
-        entity.kind = rule.kind().name();
-        entity.ruleValue = rule.value();
-        entity.weight = rule.weight();
-        entity.origin = rule.origin().name();
-        entity.enabled = rule.enabled();
-        return entity;
+    public Long getId() {
+        return id;
     }
 
-    ProfileRule toRule() {
-        return new ProfileRule(RuleKind.valueOf(kind), ruleValue, weight, RuleOrigin.valueOf(origin), enabled);
+    public void setId(Long id) {
+        this.id = id;
     }
 
-    String getOrigin() {
+    public UUID getBandId() {
+        return bandId;
+    }
+
+    public void setBandId(UUID bandId) {
+        this.bandId = bandId;
+    }
+
+    public String getKind() {
+        return kind;
+    }
+
+    public void setKind(String kind) {
+        this.kind = kind;
+    }
+
+    public String getRuleValue() {
+        return ruleValue;
+    }
+
+    public void setRuleValue(String ruleValue) {
+        this.ruleValue = ruleValue;
+    }
+
+    public int getWeight() {
+        return weight;
+    }
+
+    public void setWeight(int weight) {
+        this.weight = weight;
+    }
+
+    public String getOrigin() {
         return origin;
+    }
+
+    public void setOrigin(String origin) {
+        this.origin = origin;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 }

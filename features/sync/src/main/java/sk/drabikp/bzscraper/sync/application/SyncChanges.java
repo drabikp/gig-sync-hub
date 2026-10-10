@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.sync.application;
 
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
 
 /**
@@ -16,8 +17,13 @@ public class SyncChanges implements SyncNotifier {
     }
 
     @Override
-    public void changed() {
-        live.changed(LiveUpdates.Topic.SYNC);
-        live.changed(LiveUpdates.Topic.GIGS);
+    public void changed(BandId band) {
+        live.changed(band, LiveUpdates.Topic.SYNC);
+        live.changed(band, LiveUpdates.Topic.GIGS);
+    }
+
+    @Override
+    public void changedEverywhere() {
+        live.changedEverywhere(LiveUpdates.Topic.SYNC);
     }
 }

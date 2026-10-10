@@ -10,9 +10,4 @@ package sk.drabikp.bzscraper.importing.domain;
  */
 public record ImportDecision(ImportProposal proposal, boolean include, boolean sameGig,
                              ImportProposal.Version chosen) {
-
-    /** The defaults: include it, accept non-suggested grouping, use the default version. */
-    public static ImportDecision byDefault(ImportProposal proposal) {
-        return new ImportDecision(proposal, true, !proposal.suggested(), proposal.defaultVersion());
-    }
 }

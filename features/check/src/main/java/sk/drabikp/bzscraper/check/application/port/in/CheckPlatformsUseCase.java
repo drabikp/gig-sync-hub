@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.check.application.port.in;
 
 import sk.drabikp.bzscraper.check.domain.PlatformCheck;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
@@ -14,18 +15,17 @@ import java.util.Optional;
  */
 public interface CheckPlatformsUseCase {
 
-    /** Reads the platforms now (slow: a browser for some); empty when a check is already running. */
-    Optional<PlatformCheck> check();
+    /** Reads the platforms for the band now (slow: a browser for some); empty when its check is already running. */
+    Optional<PlatformCheck> check(BandId band);
 
-    /** The latest check's result (kept in memory). */
-    Optional<PlatformCheck> lastCheck();
+    /** The band's latest check's result (kept in memory). */
+    Optional<PlatformCheck> lastCheck(BandId band);
 
-    boolean running();
-
+    boolean running(BandId band);
 
     /** Forgets that the gig is on the platform — its event is gone there; Publish creates it again. */
-    void forget(Platform platform, GigId gigId);
+    void forget(BandId band, Platform platform, GigId gigId);
 
     /** Takes a drift off the latest result (the user acted on it, e.g. queued a Re-sync). */
-    void dismiss(Platform platform, GigId gigId);
+    void dismiss(BandId band, Platform platform, GigId gigId);
 }

@@ -31,6 +31,15 @@ public record Admission(EntryType type, String amount) {
         return new Admission(EntryType.PAID, amount);
     }
 
+    /** The admission of this type; the amount counts only when it is paid (stripped). */
+    public static Admission of(EntryType type, String amount) {
+        return switch (type) {
+            case FREE -> free();
+            case VOLUNTARY -> voluntary();
+            case PAID -> paid(amount == null ? null : amount.strip());
+        };
+    }
+
     public boolean isPaid() {
         return type == EntryType.PAID;
     }

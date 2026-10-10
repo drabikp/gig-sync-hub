@@ -1,13 +1,17 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.sync.application.port.in.PauseSyncUseCase;
 import sk.drabikp.bzscraper.sync.application.port.out.SettingsStore;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncTrigger;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * The sync's pause switch: read by the dispatcher and the engine before each piece of work.
- * It survives a restart — paused stays paused until the user resumes.
+ * Each band's pause switch: read by the dispatcher and the engine before each piece of work. It
+ * survives a restart — paused stays paused until the band's user resumes.
  */
 public class SyncPause implements PauseSyncUseCase {
 
@@ -16,32 +20,41 @@ public class SyncPause implements PauseSyncUseCase {
     private final SyncTrigger trigger;
     private final SyncNotifier notifier;
     private final SettingsStore settings;
-    private volatile boolean paused;
+    private final Set<BandId> paused = ConcurrentHashMap.newKeySet();
 
     public SyncPause(SyncTrigger trigger, SyncNotifier notifier, SettingsStore settings) {
         this.trigger = trigger;
         this.notifier = notifier;
         this.settings = settings;
-        this.paused = settings.get(SETTING).map(Boolean::parseBoolean).orElse(false);
+        settings.all(SETTING).forEach((band, value) -> {
+            if (Boolean.parseBoolean(value)) {
+                paused.add(band);
+            }
+        });
     }
 
     @Override
-    public void pause() {
-        settings.put(SETTING, "true");
-        paused = true;
-        notifier.changed();
+    public void pause(BandId band) {
+        settings.put(band, SETTING, "true");
+        paused.add(band);
+        notifier.changed(band);
     }
 
     @Override
-    public void resume() {
-        settings.put(SETTING, null);
-        paused = false;
-        notifier.changed();
+    public void resume(BandId band) {
+        settings.put(band, SETTING, null);
+        paused.remove(band);
+        notifier.changed(band);
         trigger.wake();
     }
 
     @Override
-    public boolean paused() {
-        return paused;
+    public boolean paused(BandId band) {
+        return paused.contains(band);
+    }
+
+    @Override
+    public Set<BandId> pausedBands() {
+        return Set.copyOf(paused);
     }
 }

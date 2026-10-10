@@ -3,24 +3,21 @@ package sk.drabikp.bzscraper.calendar.adapter.out.persistence;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
-import sk.drabikp.bzscraper.calendar.domain.CalendarChange;
-import sk.drabikp.bzscraper.calendar.domain.KnownCalendarEvent;
-import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
-import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
-import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventStatus;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.UUID;
 
 /** JPA persistence model for one event of the saved calendar copy (table {@code calendar_event}). */
 @Entity
 @Table(name = "calendar_event")
+@IdClass(BandEventKey.class)
 class CalendarEventEntity {
 
+    @Id
+    private UUID bandId;
     @Id
     private String eventUid;
     private String title;
@@ -43,56 +40,179 @@ class CalendarEventEntity {
     private String suggestedBefore;
     private Instant changedAt;
 
-    protected CalendarEventEntity() {
-        // for JPA
+    public CalendarEventEntity() {
+        // for JPA and CalendarEntityMapper
     }
 
-    CalendarEventEntity(String eventUid) {
+    CalendarEventEntity(UUID bandId, String eventUid) {
+        this.bandId = bandId;
         this.eventUid = eventUid;
     }
 
-    /** Copies the domain state in; {@code lastSeen} is set when not null (a read). */
-    void set(KnownCalendarEvent known, Instant seen) {
-        CalendarEvent e = known.event();
-        title = e.title();
-        location = e.location();
-        notes = e.notes();
-        startsAt = e.start();
-        endsAt = e.end();
-        allDay = e.allDay();
-        repeating = e.repeating();
-        shownAsFree = e.shownAsFree();
-        calendarStatus = e.calendarStatus().name();
-        lastModified = e.lastModified();
-        suggested = known.suggested().name();
-        firstSeen = known.firstSeen();
+    /** A read saw the event at {@code seen}; without one (a change marked seen) the first sighting stays. */
+    void seen(Instant seen, Instant firstSeen) {
         if (seen != null || lastSeen == null) {
-            lastSeen = seen != null ? seen : known.firstSeen();
+            lastSeen = seen != null ? seen : firstSeen;
         }
-        removedAt = known.removedAt();
-        CalendarChange change = known.change();
-        changeType = change == null ? null : change.type().name();
-        changeFields = change == null ? null
-                : change.fields().stream().map(Enum::name).sorted().collect(Collectors.joining(","));
-        suggestedBefore = change == null || change.suggestedBefore() == null ? null : change.suggestedBefore().name();
-        changedAt = change == null ? null : change.at();
     }
 
-    KnownCalendarEvent toDomain() {
-        CalendarEvent event = new CalendarEvent(eventUid, title, location, notes, startsAt, endsAt, allDay, repeating,
-                shownAsFree, CalendarEventStatus.valueOf(calendarStatus), lastModified);
-        CalendarChange change = changeType == null ? null : new CalendarChange(CalendarChange.Type.valueOf(changeType),
-                changeFields == null || changeFields.isEmpty() ? Set.of() : Arrays.stream(changeFields.split(","))
-                        .map(CalendarChange.Field::valueOf).collect(Collectors.toSet()),
-                suggestedBefore == null ? null : CalendarEventKind.valueOf(suggestedBefore), changedAt);
-        return new KnownCalendarEvent(event, CalendarEventKind.valueOf(suggested), firstSeen, removedAt, change);
+    public UUID getBandId() {
+        return bandId;
     }
 
-    String getEventUid() {
+    public void setBandId(UUID bandId) {
+        this.bandId = bandId;
+    }
+
+    public String getEventUid() {
         return eventUid;
     }
 
-    Instant getLastSeen() {
+    public void setEventUid(String eventUid) {
+        this.eventUid = eventUid;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String location) {
+        this.location = location;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public LocalDateTime getStartsAt() {
+        return startsAt;
+    }
+
+    public void setStartsAt(LocalDateTime startsAt) {
+        this.startsAt = startsAt;
+    }
+
+    public LocalDateTime getEndsAt() {
+        return endsAt;
+    }
+
+    public void setEndsAt(LocalDateTime endsAt) {
+        this.endsAt = endsAt;
+    }
+
+    public boolean isAllDay() {
+        return allDay;
+    }
+
+    public void setAllDay(boolean allDay) {
+        this.allDay = allDay;
+    }
+
+    public boolean isRepeating() {
+        return repeating;
+    }
+
+    public void setRepeating(boolean repeating) {
+        this.repeating = repeating;
+    }
+
+    public boolean isShownAsFree() {
+        return shownAsFree;
+    }
+
+    public void setShownAsFree(boolean shownAsFree) {
+        this.shownAsFree = shownAsFree;
+    }
+
+    public String getCalendarStatus() {
+        return calendarStatus;
+    }
+
+    public void setCalendarStatus(String calendarStatus) {
+        this.calendarStatus = calendarStatus;
+    }
+
+    public Instant getLastModified() {
+        return lastModified;
+    }
+
+    public void setLastModified(Instant lastModified) {
+        this.lastModified = lastModified;
+    }
+
+    public String getSuggested() {
+        return suggested;
+    }
+
+    public void setSuggested(String suggested) {
+        this.suggested = suggested;
+    }
+
+    public Instant getFirstSeen() {
+        return firstSeen;
+    }
+
+    public void setFirstSeen(Instant firstSeen) {
+        this.firstSeen = firstSeen;
+    }
+
+    public Instant getLastSeen() {
         return lastSeen;
+    }
+
+    public void setLastSeen(Instant lastSeen) {
+        this.lastSeen = lastSeen;
+    }
+
+    public Instant getRemovedAt() {
+        return removedAt;
+    }
+
+    public void setRemovedAt(Instant removedAt) {
+        this.removedAt = removedAt;
+    }
+
+    public String getChangeType() {
+        return changeType;
+    }
+
+    public void setChangeType(String changeType) {
+        this.changeType = changeType;
+    }
+
+    public String getChangeFields() {
+        return changeFields;
+    }
+
+    public void setChangeFields(String changeFields) {
+        this.changeFields = changeFields;
+    }
+
+    public String getSuggestedBefore() {
+        return suggestedBefore;
+    }
+
+    public void setSuggestedBefore(String suggestedBefore) {
+        this.suggestedBefore = suggestedBefore;
+    }
+
+    public Instant getChangedAt() {
+        return changedAt;
+    }
+
+    public void setChangedAt(Instant changedAt) {
+        this.changedAt = changedAt;
     }
 }

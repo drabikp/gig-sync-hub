@@ -8,6 +8,6 @@ import java.util.Map;
 public class GigBusyException extends UserFacingException {
 
     public GigBusyException(String gigLabel) {
-        super("gigBusy", Map.of("gig", gigLabel), gigLabel + ": its platform work is running right now — try again when it is done.");
+        super(CatalogErrorCode.GIG_BUSY, Map.of("gig", gigLabel), gigLabel + ": its platform work is running right now — try again when it is done.");
     }
 }

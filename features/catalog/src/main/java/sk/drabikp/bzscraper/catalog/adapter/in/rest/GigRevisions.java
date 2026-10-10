@@ -9,7 +9,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 /**
- * A gig's revision as the API names it: a digest of everything the gig says. An edit names the
+ * A gig's revision as the API names it: a digest of everything the gig says ({@link Gig#fingerprint()}). An edit names the
  * revision it was made on, so a gig changed meanwhile (another window, an import, the calendar)
  * is not overwritten.
  */
@@ -20,7 +20,7 @@ final class GigRevisions {
 
     static String of(Gig gig) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(gig.toString().getBytes(StandardCharsets.UTF_8));
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(gig.fingerprint().getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest, 0, 12);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
@@ -30,9 +30,7 @@ final class GigRevisions {
     /** The gig as the user saw it at {@code rev}; changed since → nothing is changed, they reload. */
     static Gig asSeen(Gig current, String rev) {
         if (!of(current).equals(rev)) {
-            throw new ConcurrentChangeException(ConcurrentChangeException.CHANGED, "The gig was changed meanwhile "
-                    + "(in another window, by an import or from the calendar) — nothing was changed. Reload it and "
-                    + "edit again.");
+            throw ConcurrentChangeException.changed();
         }
         return current;
     }

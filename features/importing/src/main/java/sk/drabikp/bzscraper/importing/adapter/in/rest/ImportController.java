@@ -2,13 +2,16 @@ package sk.drabikp.bzscraper.importing.adapter.in.rest;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
 import sk.drabikp.bzscraper.importing.adapter.in.rest.api.ImportApi;
-import sk.drabikp.bzscraper.importing.adapter.in.rest.api.ImportApplyJson;
-import sk.drabikp.bzscraper.importing.adapter.in.rest.api.ImportReadJson;
-import sk.drabikp.bzscraper.importing.adapter.in.rest.api.ImportResultJson;
-import sk.drabikp.bzscraper.importing.adapter.in.rest.api.ImportStateJson;
+import sk.drabikp.bzscraper.importing.adapter.in.rest.api.ImportApplyRequest;
+import sk.drabikp.bzscraper.importing.adapter.in.rest.api.ImportReadRequest;
+import sk.drabikp.bzscraper.importing.adapter.in.rest.api.ImportResultResponse;
+import sk.drabikp.bzscraper.importing.adapter.in.rest.api.ImportStateResponse;
 import sk.drabikp.bzscraper.importing.application.port.in.ImportSessionUseCase;
+
+import java.util.UUID;
 
 /** Serves the import (import.yaml): the platforms are read in the background, the plan applied by index. */
 @RestController
@@ -16,25 +19,28 @@ class ImportController implements ImportApi {
 
     private final ImportSessionUseCase session;
     private final Platforms platforms;
+    private final ImportMapper mapper;
 
-    ImportController(ImportSessionUseCase session, Platforms platforms) {
+    ImportController(ImportSessionUseCase session, Platforms platforms, ImportMapper mapper) {
         this.session = session;
         this.platforms = platforms;
+        this.mapper = mapper;
     }
 
     @Override
-    public ResponseEntity<ImportStateJson> importState() {
-        return ResponseEntity.ok(ImportMapping.toJson(session.state()));
+    public ResponseEntity<ImportStateResponse> importState(UUID bandId) {
+        return ResponseEntity.ok(mapper.toResponse(session.state(new BandId(bandId))));
     }
 
     @Override
-    public ResponseEntity<Void> readForImport(ImportReadJson read) {
-        session.read(platforms.get(read.getPlatforms()));
+    public ResponseEntity<Void> readForImport(UUID bandId, ImportReadRequest read) {
+        session.read(new BandId(bandId), platforms.get(read.getPlatforms()));
         return ResponseEntity.accepted().build();
     }
 
     @Override
-    public ResponseEntity<ImportResultJson> applyImport(ImportApplyJson apply) {
-        return ResponseEntity.ok(ImportMapping.toJson(session.apply(ImportMapping.choices(apply))));
+    public ResponseEntity<ImportResultResponse> applyImport(UUID bandId, ImportApplyRequest apply) {
+        return ResponseEntity.ok(mapper.toResponse(session.apply(new BandId(bandId),
+                mapper.toChoices(apply.getDecisions()))));
     }
 }

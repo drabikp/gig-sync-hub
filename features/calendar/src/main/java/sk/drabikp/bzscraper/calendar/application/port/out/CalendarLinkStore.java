@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.application.port.out;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 
 import java.util.Map;
@@ -10,12 +11,12 @@ import java.util.Map;
  */
 public interface CalendarLinkStore {
 
-    Map<String, GigId> all();
+    Map<String, GigId> all(BandId band);
 
-    void link(String eventId, GigId gigId);
+    void link(BandId band, String eventId, GigId gigId);
 
-    void unlink(String eventId);
+    void unlink(BandId band, String eventId);
 
     /** Re-keys the links of a gig whose identity changed (an edit moved its date or venue). */
-    void move(GigId from, GigId to);
+    void move(BandId band, GigId from, GigId to);
 }

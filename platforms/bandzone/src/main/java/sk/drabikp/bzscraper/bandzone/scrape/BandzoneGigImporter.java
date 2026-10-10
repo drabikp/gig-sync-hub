@@ -1,9 +1,11 @@
 package sk.drabikp.bzscraper.bandzone.scrape;
 
 import org.springframework.stereotype.Component;
+import sk.drabikp.bzscraper.accounts.application.port.in.PlatformAccounts;
+import sk.drabikp.bzscraper.bandzone.BandzoneAccount;
 import sk.drabikp.bzscraper.bandzone.BandzonePlatform;
-import sk.drabikp.bzscraper.bandzone.BandzoneProperties;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.importing.application.port.out.GigImporter;
 import sk.drabikp.bzscraper.importing.domain.ImportedGig;
@@ -14,8 +16,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Imports the configured band's Bandzone gigs (planned and played) by scraping its
- * public page. Each keeps its Bandzone concert id — the same id publishing records — so
+ * Imports a band's Bandzone gigs (planned and played) by scraping its public page (the address its
+ * connected account names). Each keeps its Bandzone concert id — the same id publishing records — so
  * importing links the catalog gig to the existing concert. Scraped gigs that can't form
  * a valid gig (no start/city) are dropped at the mapping boundary.
  */
@@ -23,11 +25,11 @@ import java.util.Set;
 class BandzoneGigImporter implements GigImporter {
 
     private final GigProvider gigProvider;
-    private final String bandSlug;
+    private final PlatformAccounts accounts;
 
-    public BandzoneGigImporter(GigProvider gigProvider, BandzoneProperties properties) {
+    public BandzoneGigImporter(GigProvider gigProvider, PlatformAccounts accounts) {
         this.gigProvider = gigProvider;
-        this.bandSlug = properties.bandSlug();
+        this.accounts = accounts;
     }
 
     @Override
@@ -36,10 +38,8 @@ class BandzoneGigImporter implements GigImporter {
     }
 
     @Override
-    public List<ImportedGig> importGigs() throws BandzoneUploadException {
-        if (bandSlug.isBlank()) {
-            throw BandzoneUploadException.needsUser("Bandzone band slug not configured (bzscraper.bandzone.band-slug)");
-        }
+    public List<ImportedGig> importGigs(BandId band) throws BandzonePortalException {
+        String bandSlug = BandzoneAccount.of(accounts, band).bandSlug();
         List<ImportedGig> gigs = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (GigSummary summary : gigProvider.findByBand(bandSlug)) {

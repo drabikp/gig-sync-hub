@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "lint": "tsc -b --noEmit",
-    "generate": "openapi-typescript",
+    "generate": "openapi-typescript --enum-values",
     "predev": "npm run generate",
     "prebuild": "npm run generate",
     "pretest": "npm run generate"

@@ -4,7 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.core.io.ClassPathResource;
 import sk.drabikp.bzscraper.calendar.adapter.out.profile.ProfileFile;
-import sk.drabikp.bzscraper.calendar.config.CalendarProperties;
+import sk.drabikp.bzscraper.calendar.application.port.out.BandCalendarStore;
+import sk.drabikp.bzscraper.calendar.domain.BandCalendar;
 import sk.drabikp.bzscraper.calendar.domain.CalendarGigDrafter;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
@@ -13,15 +14,18 @@ import sk.drabikp.bzscraper.calendar.domain.rules.CalendarClassification;
 import sk.drabikp.bzscraper.calendar.domain.rules.CalendarEventClassifier;
 import sk.drabikp.bzscraper.calendar.domain.rules.ProfileRule;
 import sk.drabikp.bzscraper.calendar.domain.rules.RuleOrigin;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -39,8 +43,8 @@ class CalendarClassificationLiveTest {
 
     @Test
     void sorts_the_real_calendar() throws Exception {
-        List<CalendarEvent> events = new IcsCalendarFeed(new CalendarProperties(System.getenv("CAL_URL"),
-                "Europe/Prague", null, null, null, null, null)).read();
+        BandCalendar calendar = new BandCalendar(BandId.FIRST, System.getenv("CAL_URL"), ZoneId.of("Europe/Prague"));
+        List<CalendarEvent> events = new IcsCalendarFeed(new OneCalendar(calendar)).read(BandId.FIRST);
 
         List<ProfileRule> rules = new ArrayList<>();
         for (String preset : List.of("base", "sk-cz")) {
@@ -87,5 +91,29 @@ class CalendarClassificationLiveTest {
     private static void print(CalendarClassification c) {
         System.out.printf("  %s  %-48.48s %3d %-9s %s%n", c.event().day(), c.event().title(), c.score(),
                 c.status(), c.reasons().stream().map(r -> r.text() + " " + r.weight()).collect(Collectors.joining("; ")));
+    }
+
+    /** The one calendar read here. */
+    private record OneCalendar(BandCalendar calendar) implements BandCalendarStore {
+
+        @Override
+        public Optional<BandCalendar> of(BandId band) {
+            return Optional.of(calendar).filter(c -> c.band().equals(band));
+        }
+
+        @Override
+        public void save(BandCalendar calendar) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void delete(BandId band) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public int reseal() {
+            return 0;
+        }
     }
 }

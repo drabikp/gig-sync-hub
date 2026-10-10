@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.sync.domain.QueueResult;
 
@@ -9,7 +10,7 @@ import sk.drabikp.bzscraper.sync.domain.QueueResult;
  */
 public interface CancelGigUseCase {
 
-    QueueResult cancel(GigId id);
+    QueueResult cancel(BandId band, GigId id);
 
-    QueueResult reactivate(GigId id);
+    QueueResult reactivate(BandId band, GigId id);
 }

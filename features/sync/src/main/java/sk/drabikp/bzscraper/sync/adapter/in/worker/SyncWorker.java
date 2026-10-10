@@ -28,6 +28,7 @@ class SyncWorker {
     private static final Logger log = LoggerFactory.getLogger(SyncWorker.class);
 
     private final DispatchSyncUseCase dispatcher;
+    private final SyncWorkSignal workSignal;
     private final boolean enabled;
     private final long pollSeconds;
     private final ScheduledExecutorService thread = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -39,9 +40,9 @@ class SyncWorker {
 
     public SyncWorker(DispatchSyncUseCase dispatcher, SyncWorkSignal workSignal, SyncProperties properties) {
         this.dispatcher = dispatcher;
+        this.workSignal = workSignal;
         this.enabled = properties.worker().enabled();
         this.pollSeconds = properties.pollSeconds();
-        workSignal.onWork(this::wake);
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -52,6 +53,7 @@ class SyncWorker {
         }
         thread.execute(this::recover);
         thread.scheduleWithFixedDelay(this::drain, pollSeconds, pollSeconds, TimeUnit.SECONDS);
+        workSignal.onWork(this::wake);                  // work queued before now is drained by recover
     }
 
     /** New work was queued: drain now instead of at the next poll. */

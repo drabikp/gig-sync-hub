@@ -2,7 +2,9 @@ package sk.drabikp.bzscraper.catalog.application;
 
 import sk.drabikp.bzscraper.catalog.application.port.in.ExportGigsUseCase;
 import sk.drabikp.bzscraper.catalog.application.port.out.GigExporter;
+import sk.drabikp.bzscraper.gig.application.BadRequestException;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
 import java.util.List;
@@ -30,11 +32,11 @@ public class GigExportService implements ExportGigsUseCase {
     }
 
     @Override
-    public ExportFile export(Platform platform) {
+    public ExportFile export(BandId band, Platform platform) {
         GigExporter exporter = exporters.get(platform);
         if (exporter == null) {
-            throw new IllegalArgumentException("No export for " + platform);
+            throw new BadRequestException("No export for " + platform);
         }
-        return new ExportFile(exporter.fileName(), exporter.mediaType(), exporter.export(gigRepository.findAll()));
+        return new ExportFile(exporter.fileName(), exporter.mediaType(), exporter.export(band, gigRepository.findAll(band)));
     }
 }

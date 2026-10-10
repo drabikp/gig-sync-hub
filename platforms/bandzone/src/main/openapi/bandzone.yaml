@@ -30,12 +30,12 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/GigSummary'
+                  $ref: '#/components/schemas/GigSummaryResponse'
         "404":
           $ref: '../../../../../features/gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
 components:
   schemas:
-    GigSummary:
+    GigSummaryResponse:
       type: object
       required: [bzId, title, start, end, url, city, venue, bands, entryFee, isCancelled]
       properties:

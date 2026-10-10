@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -11,18 +12,27 @@ import java.util.Optional;
  */
 public final class Workflows {
 
-    private static final Map<SyncAction, List<StepType>> STEPS = Map.of(
+    private static final Map<SyncAction, List<StepType>> STEPS = new EnumMap<>(Map.of(
             SyncAction.PUBLISH, List.of(StepType.BULK_CREATE, StepType.FORM_CREATE),
             SyncAction.UPDATE, List.of(StepType.BULK_EDIT, StepType.FORM_EDIT),
             SyncAction.CANCEL, List.of(StepType.CANCEL, StepType.FORM_CANCEL),
             SyncAction.DELETE, List.of(StepType.REMOVE, StepType.FORM_REMOVE),
-            SyncAction.REACTIVATE, List.of(StepType.RECREATE));
+            SyncAction.REACTIVATE, List.of(StepType.RECREATE)));
+
+    static {
+        for (SyncAction action : SyncAction.values()) {
+            if (!STEPS.containsKey(action)) {
+                throw new IllegalStateException("no workflow for " + action);
+            }
+        }
+    }
 
     private Workflows() {
     }
 
-    public static Optional<List<StepType>> of(SyncAction action) {
-        return Optional.ofNullable(STEPS.get(action));
+    /** The action's steps, in the order they are tried (every action has a workflow). */
+    public static List<StepType> of(SyncAction action) {
+        return STEPS.get(action);
     }
 
     /** The step after {@code step} in its workflow, if any. */

@@ -4,34 +4,35 @@ import sk.drabikp.bzscraper.calendar.application.port.out.CalendarUnavailableExc
 import sk.drabikp.bzscraper.calendar.domain.CalendarOverview;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
 import sk.drabikp.bzscraper.calendar.domain.rules.ProfileRule;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.util.List;
 
 /**
- * Sorting the band calendar's events into gigs and everything else, with the band's
+ * Sorting a band calendar's events into gigs and everything else, with the band's
  * profile, remembering the user's answers, and keeping a copy of the calendar so each read
  * shows what is new, changed or gone. Never changes the calendar.
  */
 public interface ReviewCalendarUseCase {
 
-    boolean configured();
+    boolean configured(BandId band);
 
     /** The calendar as last read, sorted and matched against the catalog — without reading it again. */
-    CalendarOverview overview();
+    CalendarOverview overview(BandId band);
 
-    /** Reads the calendar, compares it with the last read and saves it; then as {@link #overview()}. */
-    CalendarOverview read() throws CalendarUnavailableException;
+    /** Reads the calendar, compares it with the last read and saves it; then as {@link #overview(BandId)}. */
+    CalendarOverview read(BandId band) throws CalendarUnavailableException;
 
     /** Remembers the user's verdict — {@code GIG} or {@code NOT_GIG} — for the event. */
-    void decide(String eventId, CalendarEventKind verdict);
+    void decide(BandId band, String eventId, CalendarEventKind verdict);
 
     /** Forgets the verdict; the profile decides again. */
-    void forget(String eventId);
+    void forget(BandId band, String eventId);
 
     /** The user has seen the event's change; an event gone from the calendar is then forgotten (and unlinked). */
-    void seen(String eventId);
+    void seen(BandId band, String eventId);
 
-    void seenAll();
+    void seenAll(BandId band);
 
-    List<ProfileRule> rules();
+    List<ProfileRule> rules(BandId band);
 }

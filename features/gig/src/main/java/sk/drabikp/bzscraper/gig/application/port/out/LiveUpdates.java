@@ -1,13 +1,20 @@
 package sk.drabikp.bzscraper.gig.application.port.out;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
+
 /**
- * Tells whoever shows the app's state (the open pages) that something changed, so they read it
- * again. Only WHAT changed travels ({@link Topic}); the data itself is read through the API.
+ * Tells whoever shows a band's state (its open pages) that something changed, so they read it
+ * again. Only WHAT changed, and whose, travels ({@link Topic}, the band); the data itself is read
+ * through the API.
  * How it is delivered (server-sent events today) is the implementing module's business.
  */
 public interface LiveUpdates {
 
-    void changed(Topic topic);
+    /** Something of the band's changed; only its pages are told. */
+    void changed(BandId band, Topic topic);
+
+    /** Something every band's pages show changed (e.g. a platform held back for everyone). */
+    void changedEverywhere(Topic topic);
 
     /** What changed. */
     enum Topic {
@@ -24,6 +31,13 @@ public interface LiveUpdates {
     }
 
     /** For tests and setups without pages. */
-    LiveUpdates NONE = topic -> {
+    LiveUpdates NONE = new LiveUpdates() {
+        @Override
+        public void changed(BandId band, Topic topic) {
+        }
+
+        @Override
+        public void changedEverywhere(Topic topic) {
+        }
     };
 }

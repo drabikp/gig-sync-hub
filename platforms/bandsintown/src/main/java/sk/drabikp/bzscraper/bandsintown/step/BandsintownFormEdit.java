@@ -2,7 +2,7 @@ package sk.drabikp.bzscraper.bandsintown.step;
 
 import org.springframework.stereotype.Component;
 import sk.drabikp.bzscraper.bandsintown.BandsintownPlatform;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 import sk.drabikp.bzscraper.bandsintown.portal.BitPortalClient;
 import sk.drabikp.bzscraper.bandsintown.portal.BitSession;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
@@ -40,9 +40,9 @@ class BandsintownFormEdit implements OneAtATimeStep {
         if (item.gig().cancelled()) {
             return StepOutcome.done("cancelled — Bandsintown keeps no cancelled copy to edit");
         }
-        try (BitSession session = portalClient.openSession()) {
-            return StepOutcome.done(session.editEventInForm(item.externalRef(), item.gig()));
-        } catch (BitUploadException e) {
+        try (BitSession session = portalClient.openSession(item.band())) {
+            return StepOutcome.done(session.editEventInForm(item.externalRef(), item.gig()).orElse(null));
+        } catch (BitPortalException e) {
             return e.outcome();
         }
     }

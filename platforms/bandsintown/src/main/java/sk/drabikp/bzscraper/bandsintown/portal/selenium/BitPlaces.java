@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.bandsintown.portal.selenium;
 
 import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.CityName;
+import sk.drabikp.bzscraper.gig.domain.Coordinates;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.gig.domain.TextFold;
@@ -63,7 +64,7 @@ final class BitPlaces {
         if (address == null || !address.resolved() || event.latitude() == null || event.longitude() == null) {
             return null;
         }
-        double km = address.kilometresTo(event.latitude(), event.longitude());
+        double km = address.kilometresTo(new Coordinates(event.latitude(), event.longitude())).orElse(0);
         return km <= TOLERANCE_KM ? null : String.format(Locale.ROOT,
                 "Bandsintown placed it %.0f km from %s (%s) — check the place there", km,
                 gig.location().city(), address.district());

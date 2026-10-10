@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.places.domain;
 
 import org.junit.jupiter.api.Test;
+import sk.drabikp.bzscraper.gig.domain.Coordinates;
 import sk.drabikp.bzscraper.gig.domain.Country;
 
 import java.util.List;
@@ -10,13 +11,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TownChoiceTest {
 
     private static final Town HRANICE_PREROV = new Town("Hranice", "okres Přerov", "Olomoucký kraj", "753 01",
-            Country.CZECHIA, 49.548, 17.735);
+            Country.CZECHIA, new Coordinates(49.548, 17.735));
     private static final Town HRANICE_CHEB = new Town("Hranice", "okres Cheb", "Karlovarský kraj", "351 24",
-            Country.CZECHIA, 50.305, 12.176);
+            Country.CZECHIA, new Coordinates(50.305, 12.176));
     private static final Town KOSICE_SK = new Town("Košice", "okres Košice I", "Košický kraj", "041 26",
-            Country.SLOVAKIA, 48.717, 21.25);
+            Country.SLOVAKIA, new Coordinates(48.717, 21.25));
     private static final Town KOSICE_CZ = new Town("Košice", "okres Tábor", "Jihočeský kraj", "391 17",
-            Country.CZECHIA, 49.325, 14.751);
+            Country.CZECHIA, new Coordinates(49.325, 14.751));
     private static final List<Town> ALL = List.of(HRANICE_PREROV, HRANICE_CHEB, KOSICE_SK, KOSICE_CZ);
 
     @Test

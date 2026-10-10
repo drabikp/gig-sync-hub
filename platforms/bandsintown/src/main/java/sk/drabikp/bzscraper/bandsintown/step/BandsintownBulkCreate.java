@@ -1,9 +1,10 @@
 package sk.drabikp.bzscraper.bandsintown.step;
 
 import org.springframework.stereotype.Component;
+import sk.drabikp.bzscraper.accounts.application.port.in.PlatformAccounts;
+import sk.drabikp.bzscraper.bandsintown.BandsintownAccount;
 import sk.drabikp.bzscraper.bandsintown.BandsintownPlatform;
-import sk.drabikp.bzscraper.bandsintown.BandsintownProperties;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 import sk.drabikp.bzscraper.bandsintown.portal.BitPortalClient;
 import sk.drabikp.bzscraper.bandsintown.portal.BitSession;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -16,7 +17,7 @@ import java.util.List;
 
 /**
  * Bandsintown's bulk upload: one CSV for up to 25 gigs creates drafts, which are then
- * published (followers notified only when configured) and read back. Past events are taken
+ * published (followers notified only when the band's account says so) and read back. Past events are taken
  * — they are listed under Past Events. A refused upload created nothing; an event that was
  * uploaded but isn't published exists as a draft, so it is left for the user.
  */
@@ -24,11 +25,11 @@ import java.util.List;
 class BandsintownBulkCreate implements SyncStep {
 
     private final BitPortalClient portalClient;
-    private final boolean notifyFollowers;
+    private final PlatformAccounts accounts;
 
-    public BandsintownBulkCreate(BitPortalClient portalClient, BandsintownProperties properties) {
+    public BandsintownBulkCreate(BitPortalClient portalClient, PlatformAccounts accounts) {
         this.portalClient = portalClient;
-        this.notifyFollowers = properties.notifyFollowers();
+        this.accounts = accounts;
     }
 
     @Override
@@ -43,16 +44,17 @@ class BandsintownBulkCreate implements SyncStep {
 
     @Override
     public int batchSize() {
-        return BandsintownBulkEdit.MAX_ROWS;
+        return BitSession.MAX_ROWS_PER_UPLOAD;
     }
 
     @Override
     public List<StepOutcome> run(List<Item> items) {
         List<Gig> gigs = items.stream().map(Item::gig).toList();
-        try (BitSession session = portalClient.openSession()) {
+        try (BitSession session = portalClient.openSession(items.getFirst().band())) {
+            boolean notifyFollowers = BandsintownAccount.of(accounts, items.getFirst().band()).notifyFollowers();
             List<BitSession.Created> created = session.createEvents(gigs, notifyFollowers);
             return created.stream().map(BitSession.Created::outcome).toList();
-        } catch (BitUploadException e) {
+        } catch (BitPortalException e) {
             // a refused upload made nothing (Bandsintown's row errors); anything else may have
             StepOutcome outcome = e.outcome();
             return gigs.stream().map(gig -> outcome).toList();

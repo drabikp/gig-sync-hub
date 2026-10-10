@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.sync.application;
 
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.sync.application.port.in.QueueSyncWork;
@@ -32,21 +33,21 @@ public class GigResyncService implements ResyncGigUseCase {
     }
 
     @Override
-    public QueueResult resync(Collection<GigId> gigs) {
+    public QueueResult resync(BandId band, Collection<GigId> gigs) {
         QueueResult result = transactions.computeInTransaction(() -> {
             List<SyncTask> queued = new ArrayList<>();
             List<String> notQueued = new ArrayList<>();
             for (GigId id : gigs) {
-                Optional<Gig> gig = gigRepository.findById(id);
+                Optional<Gig> gig = gigRepository.findById(band, id);
                 if (gig.isEmpty()) {
                     continue;
                 }
-                if (state.busy(id)) {
+                if (state.busy(band, id)) {
                     notQueued.add(SyncTask.labelOf(gig.get()) + ": its platform work is running — re-sync it when "
                             + "that is done");
                     continue;
                 }
-                QueueResult one = sync.update(gig.get());
+                QueueResult one = sync.update(band, gig.get());
                 queued.addAll(one.queued());
                 notQueued.addAll(one.notQueued());
                 if (one.queued().isEmpty() && one.notQueued().isEmpty()) {
@@ -55,7 +56,7 @@ public class GigResyncService implements ResyncGigUseCase {
             }
             return new QueueResult(queued, notQueued);
         });
-        sync.signal(result);
+        sync.signal(band, result);
         return result;
     }
 }

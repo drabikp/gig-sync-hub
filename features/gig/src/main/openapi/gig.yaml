@@ -3,42 +3,66 @@ info:
   title: bzscraper — shared parts
   version: "1"
   description: |
-    What every part of the API shares: a gig as the form holds it, and how the API says no.
-    The features' specs refer to these schemas; the kernel generates them once
-    (sk.drabikp.bzscraper.gig.api) and the features use those classes.
+    What every part of the API shares: a gig as the form holds it (GigFormRequest when sent,
+    GigFormResponse when answered — the same fields), its country and entry type, and how the
+    API says no. The features' specs refer to these schemas; the kernel generates them once
+    (sk.drabikp.bzscraper.gig.api) and the features use those classes. Names: …Request for what
+    is sent, …Response for what is answered, …Value for an enum.
 paths: {}
 components:
+  parameters:
+    BandId:
+      name: bandId
+      in: path
+      required: true
+      description: The band (its id). A band the signed-in user doesn't manage is "not found" (404).
+      schema:
+        type: string
+        format: uuid
   responses:
     Refused:
       description: A rule said no — nothing changed. The page says it from `code` and `args`.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ProblemResponse'
     BadRequest:
-      description: The request makes no sense (a missing field, an unknown platform).
+      description: The request makes no sense (a body that can't be read, a gig or platform that isn't one).
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ProblemResponse'
     NotFound:
       description: Nothing there (e.g. a gig deleted meanwhile).
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ProblemResponse'
   schemas:
-    Problem:
+    ProblemCodeValue:
       description: |
-        How the API says no. `code` names the case (gigBusy, gigIdentityTaken, changedMeanwhile,
-        deletedMeanwhile, invalidGig, noPlatform, noPlan, nothingSelected, notFound, badRequest,
-        badCredentials, calendarUnavailable, unexpected, …), `args` its details; `message` is the
-        English fallback.
+        Every case the API says no with — each feature's own (the server's `<Feature>ErrorCode` enums,
+        checked against this list by the app's tests; the page translates every one, `errors.<code>`).
+        Kernel: changedMeanwhile, deletedMeanwhile, invalidGig (args.fields), notFound, badRequest,
+        notConfigured (args.setting). Catalog: gigBusy (args.gig), gigIdentityTaken (args.date, venue).
+        Sync: taskMovedOn (args.gig, status). Import: noPlatform, noPlan, nothingSelected, importReading.
+        Calendar: calendarUnavailable, invalidCalendar (args.fields: address, zone), invalidRule
+        (args.rule: its number, args.reason). Accounts: slugTaken (args.slug), invalidBand (args.fields:
+        name, slug), ownerOnly, invalidAccount (args.fields), secretsUnavailable. The app: unexpected.
+      type: string
+      enum: [changedMeanwhile, deletedMeanwhile, invalidGig, notFound, badRequest, notConfigured,
+             gigBusy, gigIdentityTaken, taskMovedOn, noPlatform, noPlan, nothingSelected, importReading,
+             calendarUnavailable, invalidCalendar, invalidRule, slugTaken, invalidBand, ownerOnly,
+             invalidAccount, secretsUnavailable, unexpected]
+    ProblemResponse:
+      description: |
+        How the API says no: `code` names the case (ProblemCodeValue), `args` its details; `message` is
+        the English fallback.
       type: object
       required: [code, args, message]
       properties:
         code:
-          type: string
+          $ref: '#/components/schemas/ProblemCodeValue'
         args:
           type: object
           additionalProperties:
@@ -46,13 +70,14 @@ components:
         message:
           type: string
           nullable: true
-    Country:
+    CountryValue:
       type: string
       enum: [CZECHIA, SLOVAKIA]
-    EntryType:
+    EntryTypeValue:
       type: string
       enum: [FREE, VOLUNTARY, PAID]
-    GigDraft:
+    # A gig as the form holds it — one definition, sent both ways under two names (&gigForm).
+    GigFormRequest: &gigForm
       description: |
         A gig as the form holds it: days and times as the band reads them in the gig's own
         country. Times are "HH:mm" (or "HH:mm:ss"). The town's address details come from the
@@ -95,7 +120,7 @@ components:
           nullable: true
         country:
           allOf:
-            - $ref: '#/components/schemas/Country'
+            - $ref: '#/components/schemas/CountryValue'
           nullable: true
         street:
           type: string
@@ -123,7 +148,7 @@ components:
           items:
             type: string
         entry:
-          $ref: '#/components/schemas/EntryType'
+          $ref: '#/components/schemas/EntryTypeValue'
         price:
           type: string
           nullable: true
@@ -141,6 +166,7 @@ components:
           nullable: true
         cancelled:
           type: boolean
+    GigFormResponse: *gigForm
     TimeOfDay:
       description: '"HH:mm" or "HH:mm:ss".'
       type: string

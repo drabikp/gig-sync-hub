@@ -12,10 +12,12 @@ public final class TestPlatforms {
     public static final Platform BANDZONE = Platform.of("BANDZONE");
     public static final Platform BANDSINTOWN = Platform.of("BANDSINTOWN");
 
-    public static final PlatformTraits BANDZONE_TRAITS = new PlatformTraits(BANDZONE, "Bandzone", true, false, true,
-            10, "https://bandzone.cz/koncert/{id}");
-    public static final PlatformTraits BANDSINTOWN_TRAITS = new PlatformTraits(BANDSINTOWN, "Bandsintown", false, true,
-            false, 20, "https://www.bandsintown.com/e/{id}");
+    public static final PlatformTraits BANDZONE_TRAITS = PlatformTraits.of(BANDZONE, "Bandzone")
+            .keepsCancelledEvents(true).listsBandSlot(false).carriesAdmission(true).importPrecedence(10)
+            .eventUrl("https://bandzone.cz/koncert/{id}").build();
+    public static final PlatformTraits BANDSINTOWN_TRAITS = PlatformTraits.of(BANDSINTOWN, "Bandsintown")
+            .keepsCancelledEvents(false).listsBandSlot(true).carriesAdmission(false).importPrecedence(20)
+            .eventUrl("https://www.bandsintown.com/e/{id}").build();
 
     public static final Platforms PLATFORMS = new Platforms(List.of(BANDZONE_TRAITS, BANDSINTOWN_TRAITS));
 

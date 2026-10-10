@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useIsMobile } from '../lib/useIsMobile';
+import { useBandPath } from '../band/band';
 
 /**
  * A page's title row. On a phone: a bar stuck to the top, with Back and up to one action; on a
@@ -11,6 +12,7 @@ import { useIsMobile } from '../lib/useIsMobile';
  */
 export function PageHeader({ title, back: always, phoneBack, backLabel, actions, mobileAction }: {
   title: ReactNode;
+  /** Where Back goes: an address within the band ('/', '/gig/x'), or what it does. */
   back?: string | (() => void);
   /** Back only on a phone (where the page is reached from More; the desktop menu lists it). */
   phoneBack?: string;
@@ -22,7 +24,8 @@ export function PageHeader({ title, back: always, phoneBack, backLabel, actions,
   const navigate = useNavigate();
   const { t } = useTranslation();
   const back = always ?? (mobile ? phoneBack : undefined);
-  const goBack = () => (typeof back === 'function' ? back() : back ? navigate(back) : undefined);
+  const path = useBandPath();
+  const goBack = () => (typeof back === 'function' ? back() : back ? navigate(path(back)) : undefined);
   if (mobile) {
     return (
       <Box

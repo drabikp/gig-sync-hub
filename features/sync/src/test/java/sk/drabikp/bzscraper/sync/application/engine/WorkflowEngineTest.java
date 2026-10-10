@@ -23,6 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDSINTOWN;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
@@ -54,9 +55,9 @@ class WorkflowEngineTest {
     }
 
     private SyncTask edit(Gig gig, Platform platform) {
-        gigs.save(gig);
-        published.record(platform, gig.id(), "id-" + gig.title());
-        return outbox.enqueue(gig.id(), SyncTask.labelOf(gig), platform, SyncAction.UPDATE, clock.instant());
+        gigs.save(BAND, gig);
+        published.record(BAND, platform, gig.id(), "id-" + gig.title());
+        return outbox.enqueue(BAND, gig.id(), SyncTask.labelOf(gig), platform, SyncAction.UPDATE, clock.instant());
     }
 
     private SyncTask after(SyncTask task) {
@@ -69,6 +70,23 @@ class WorkflowEngineTest {
         while ((next = outbox.nextDue(clock.instant())).isPresent()) {
             engine.runFrom(next.get());
         }
+    }
+
+    @Test
+    void a_step_that_throws_fails_its_runs_with_what_was_thrown_and_reports_the_fault_in_full() {
+        SyncTask task = edit(upcoming("A"), BANDZONE);
+        bzForm.outcome = item -> {
+            throw new NullPointerException();
+        };
+        SyncFakes.Faults faults = new SyncFakes.Faults();
+        WorkflowEngine engine = SyncFakes.engine(SyncFakes.registry(published, bzForm), gigs, published, outbox,
+                signals, clock, new SyncPause(signals, signals, new SyncFakes.Settings()),
+                PlatformBreakers.never(clock), faults);
+
+        runAll(engine);
+
+        assertThat(after(task).message()).isEqualTo("form edit: NullPointerException");
+        assertThat(faults.reported).singleElement().isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -217,10 +235,10 @@ class WorkflowEngineTest {
         SyncTask task = edit(upcoming("A"), BANDZONE);
         Gig renamed = new Gig("A 2026", upcoming("A").schedule(), upcoming("A").location(), List.of(),
                 upcoming("A").admission(), null, null, null, null, false);
-        gigs.save(renamed);
+        gigs.save(BAND, renamed);
         Gig gone = upcoming("Gone");
         SyncTask goneTask = edit(gone, BANDZONE);
-        gigs.deleteById(gone.id());
+        gigs.deleteById(BAND, gone.id());
 
         runAll(engine(bzForm));
 
@@ -246,15 +264,15 @@ class WorkflowEngineTest {
     private final SyncFakes.Step bzRemove = new SyncFakes.Step(BANDZONE, StepType.REMOVE, 1);
 
     private SyncTask queue(Gig gig, Platform platform, SyncAction action) {
-        return outbox.enqueue(gig.id(), SyncTask.labelOf(gig), platform, action, clock.instant());
+        return outbox.enqueue(BAND, gig.id(), SyncTask.labelOf(gig), platform, action, clock.instant());
     }
 
     @Test
     void due_publishes_go_in_one_upload_and_each_new_id_is_recorded() {
         Gig a = upcoming("A");
         Gig b = upcoming("B");
-        gigs.save(a);
-        gigs.save(b);
+        gigs.save(BAND, a);
+        gigs.save(BAND, b);
         SyncTask ta = queue(a, BANDSINTOWN, SyncAction.PUBLISH);
         SyncTask tb = queue(b, BANDSINTOWN, SyncAction.PUBLISH);
         bitCreate.outcome = item -> StepOutcome.created("bit-" + item.gig().title(), null);
@@ -262,18 +280,18 @@ class WorkflowEngineTest {
         runAll(engine(bitCreate));
 
         assertThat(bitCreate.calls).singleElement().satisfies(batch -> assertThat(batch).hasSize(2));
-        assertThat(published.externalRef(BANDSINTOWN, a.id())).contains("bit-A");
-        assertThat(published.externalRef(BANDSINTOWN, b.id())).contains("bit-B");
+        assertThat(published.externalRef(BAND, BANDSINTOWN, a.id())).contains("bit-A");
+        assertThat(published.externalRef(BAND, BANDSINTOWN, b.id())).contains("bit-B");
         assertThat(List.of(after(ta).status(), after(tb).status())).containsOnly(SyncStatus.DONE);
     }
 
     @Test
     void a_failed_publish_is_not_tried_again_and_records_nothing_while_moot_ones_end_done() {
         Gig a = upcoming("A");
-        gigs.save(a);
+        gigs.save(BAND, a);
         SyncTask failed = queue(a, BANDZONE, SyncAction.PUBLISH);
         Gig cancelled = upcoming("C").cancel();
-        gigs.save(cancelled);
+        gigs.save(BAND, cancelled);
         SyncTask moot = queue(cancelled, BANDZONE, SyncAction.PUBLISH);
         bzCreate.outcome = item -> StepOutcome.failed("timeout");
 
@@ -281,26 +299,26 @@ class WorkflowEngineTest {
 
         assertThat(after(failed).status()).isEqualTo(SyncStatus.FAILED);
         assertThat(after(failed).message()).contains("create form: timeout", "check Bandzone, then Retry or Discard");
-        assertThat(published.isPublished(BANDZONE, a.id())).isFalse();
+        assertThat(published.isPublished(BAND, BANDZONE, a.id())).isFalse();
         assertThat(after(moot).message()).isEqualTo("the gig was cancelled before it was published");
     }
 
     @Test
     void cancel_keeps_the_platform_id_and_delete_forgets_it_after_the_gig_left_the_catalog() {
         Gig a = upcoming("A");
-        gigs.save(a.cancel());
-        published.record(BANDZONE, a.id(), "100");
+        gigs.save(BAND, a.cancel());
+        published.record(BAND, BANDZONE, a.id(), "100");
         SyncTask cancel = queue(a, BANDZONE, SyncAction.CANCEL);
         Gig gone = upcoming("Gone");
-        published.record(BANDZONE, gone.id(), "200");
+        published.record(BAND, BANDZONE, gone.id(), "200");
         SyncTask delete = queue(gone, BANDZONE, SyncAction.DELETE);
 
         runAll(engine(bzCancel, bzRemove));
 
         assertThat(after(cancel).status()).isEqualTo(SyncStatus.DONE);
-        assertThat(published.externalRef(BANDZONE, a.id())).contains("100");
+        assertThat(published.externalRef(BAND, BANDZONE, a.id())).contains("100");
         assertThat(after(delete).status()).isEqualTo(SyncStatus.DONE);
-        assertThat(published.isPublished(BANDZONE, gone.id())).isFalse();
+        assertThat(published.isPublished(BAND, BANDZONE, gone.id())).isFalse();
         assertThat(bzRemove.ran()).singleElement().satisfies(i -> {
             assertThat(i.externalRef()).isEqualTo("200");
             assertThat(i.gig()).isNull();
@@ -310,8 +328,8 @@ class WorkflowEngineTest {
     @Test
     void reactivating_removes_the_cancelled_copy_then_creates_it_again_from_the_platforms_own_steps() {
         Gig a = upcoming("A");
-        gigs.save(a);
-        published.record(BANDZONE, a.id(), "100");
+        gigs.save(BAND, a);
+        published.record(BAND, BANDZONE, a.id(), "100");
         SyncTask task = queue(a, BANDZONE, SyncAction.REACTIVATE);
         List<String> order = new ArrayList<>();
         bzRemove.outcome = item -> {
@@ -326,7 +344,7 @@ class WorkflowEngineTest {
         runAll(engine(bzRemove, bzCreate));
 
         assertThat(order).containsExactly("remove 100", "create");
-        assertThat(published.externalRef(BANDZONE, a.id())).contains("300");
+        assertThat(published.externalRef(BAND, BANDZONE, a.id())).contains("300");
         assertThat(after(task).status()).isEqualTo(SyncStatus.DONE);
         assertThat(after(task).message()).isEqualTo("remove and create again");
     }
@@ -334,14 +352,14 @@ class WorkflowEngineTest {
     @Test
     void a_failed_recreate_leaves_no_record_so_the_next_publish_creates_it() {
         Gig a = upcoming("A");
-        gigs.save(a);
-        published.record(BANDZONE, a.id(), "100");
+        gigs.save(BAND, a);
+        published.record(BAND, BANDZONE, a.id(), "100");
         SyncTask task = queue(a, BANDZONE, SyncAction.REACTIVATE);
         bzCreate.outcome = item -> StepOutcome.failed("wizard broke");
 
         runAll(engine(bzRemove, bzCreate));
 
-        assertThat(published.isPublished(BANDZONE, a.id())).isFalse();
+        assertThat(published.isPublished(BAND, BANDZONE, a.id())).isFalse();
         assertThat(after(task).status()).isEqualTo(SyncStatus.FAILED);
         assertThat(after(task).message()).contains("re-creating failed (wizard broke)", "publish the gig again");
     }
@@ -355,11 +373,11 @@ class WorkflowEngineTest {
         bitCancel.refusal = gig -> Optional.of("the list doesn't remove past events");
         bitRemove.outcome = item -> StepOutcome.refused("a past event — the list can't remove it");
         Gig past = TestGigs.gig("Summer", "Klub 007");                                    // 2026-09-15
-        gigs.save(past.cancel());
-        published.record(BANDSINTOWN, past.id(), "901");
+        gigs.save(BAND, past.cancel());
+        published.record(BAND, BANDSINTOWN, past.id(), "901");
         SyncTask cancel = queue(past, BANDSINTOWN, SyncAction.CANCEL);
         Gig gone = TestGigs.gig("Spring", "Barrák");
-        published.record(BANDSINTOWN, gone.id(), "902");
+        published.record(BAND, BANDSINTOWN, gone.id(), "902");
         SyncTask delete = queue(gone, BANDSINTOWN, SyncAction.DELETE);   // left the catalog: no refusal asked
 
         runAll(engine(bitCancel, bitFormCancel, bitRemove, bitFormRemove));
@@ -369,8 +387,8 @@ class WorkflowEngineTest {
         assertThat(bitRemove.ran()).extracting(SyncStep.Item::externalRef).containsExactly("902");
         assertThat(bitFormRemove.ran()).extracting(SyncStep.Item::externalRef).containsExactly("902");
         assertThat(List.of(after(cancel).status(), after(delete).status())).containsOnly(SyncStatus.DONE);
-        assertThat(published.externalRef(BANDSINTOWN, past.id())).contains("901");
-        assertThat(published.isPublished(BANDSINTOWN, gone.id())).isFalse();
+        assertThat(published.externalRef(BAND, BANDSINTOWN, past.id())).contains("901");
+        assertThat(published.isPublished(BAND, BANDSINTOWN, gone.id())).isFalse();
         assertThat(outbox.log(cancel.id())).extracting(SyncLogEntry::message).anySatisfy(m ->
                 assertThat(m).isEqualTo("cancel: the list doesn't remove past events → cancel in the form"));
         assertThat(outbox.log(delete.id())).extracting(SyncLogEntry::message).anySatisfy(m ->
@@ -384,23 +402,23 @@ class WorkflowEngineTest {
         bitRemove.refusal = gig -> Optional.of("the list doesn't remove past events");
         bitCreate.outcome = item -> StepOutcome.created("903", null);
         Gig past = TestGigs.gig("Summer", "Klub 007");
-        gigs.save(past);
-        published.record(BANDSINTOWN, past.id(), "901");
+        gigs.save(BAND, past);
+        published.record(BAND, BANDSINTOWN, past.id(), "901");
         SyncTask task = queue(past, BANDSINTOWN, SyncAction.REACTIVATE);
 
         runAll(engine(bitRemove, bitFormRemove, bitCreate));
 
         assertThat(bitRemove.ran()).isEmpty();
         assertThat(bitFormRemove.ran()).extracting(SyncStep.Item::externalRef).containsExactly("901");
-        assertThat(published.externalRef(BANDSINTOWN, past.id())).contains("903");
+        assertThat(published.externalRef(BAND, BANDSINTOWN, past.id())).contains("903");
         assertThat(after(task).status()).isEqualTo(SyncStatus.DONE);
     }
 
     @Test
     void a_platform_without_the_steps_for_an_action_leaves_it_to_the_user() {
         Gig a = upcoming("A");
-        gigs.save(a);
-        published.record(BANDSINTOWN, a.id(), "900");
+        gigs.save(BAND, a);
+        published.record(BAND, BANDSINTOWN, a.id(), "900");
         SyncTask reactivate = queue(a, BANDSINTOWN, SyncAction.REACTIVATE);
 
         runAll(engine(bitCreate));
@@ -417,7 +435,7 @@ class WorkflowEngineTest {
         }
         SyncPause pause = new SyncPause(signals, signals, new SyncFakes.Settings());
         bzForm.outcome = item -> {
-            pause.pause();                          // the user pauses while the first gig runs
+            pause.pause(BAND);                          // the user pauses while the first gig runs
             return StepOutcome.done(null);
         };
         WorkflowEngine engine = SyncFakes.engine(SyncFakes.registry(published, bzForm), gigs, published, outbox, signals,

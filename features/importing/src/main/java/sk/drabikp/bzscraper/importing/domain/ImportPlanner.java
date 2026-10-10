@@ -42,49 +42,94 @@ public final class ImportPlanner {
                                   Platforms platforms) {
         Map<GigId, Gig> localById = new LinkedHashMap<>();
         catalog.forEach(g -> localById.putIfAbsent(g.id(), g));
-        Set<String> linkedRefs = new HashSet<>();
-        Map<GigId, Set<Platform>> linkedPlatforms = new HashMap<>();
-        for (Publication p : publications) {
-            if (p.hasExternalRef()) {
-                linkedRefs.add(key(p.platform(), p.externalRef()));
+        Links links = Links.of(publications);
+        Grouping grouping = new Grouping(localById, links, platforms);
+        imported.stream().sorted(byPrecedence(platforms)).forEach(grouping::add);
+        suggestMatches(localById.values(), links.platformsByGig(), grouping.withLocal, grouping.withoutLocal);
+        return new ImportPlan(grouping.proposals(), grouping.alreadyLinked, grouping.skipped, failures);
+    }
+
+    /** An event on a platform, by its id there. */
+    private record PlatformRef(Platform platform, String ref) {
+    }
+
+    /** What the catalog already links: the platform events, and per gig the platforms it is on. */
+    private record Links(Set<PlatformRef> refs, Map<GigId, Set<Platform>> platformsByGig) {
+
+        static Links of(Collection<Publication> publications) {
+            Set<PlatformRef> refs = new HashSet<>();
+            Map<GigId, Set<Platform>> platformsByGig = new HashMap<>();
+            for (Publication p : publications) {
+                if (p.hasExternalRef()) {
+                    refs.add(new PlatformRef(p.platform(), p.externalRef()));
+                }
+                platformsByGig.computeIfAbsent(p.gigId(), id -> new HashSet<>()).add(p.platform());
             }
-            linkedPlatforms.computeIfAbsent(p.gigId(), id -> new HashSet<>()).add(p.platform());
+            return new Links(refs, platformsByGig);
         }
 
-        int alreadyLinked = 0;
-        List<String> skipped = new ArrayList<>();
-        Map<GigId, Group> withLocal = new LinkedHashMap<>();
-        Map<GigId, Group> withoutLocal = new LinkedHashMap<>();
+        boolean linked(ImportedGig copy) {
+            return refs.contains(new PlatformRef(copy.platform(), copy.externalRef()));
+        }
 
-        List<ImportedGig> ordered = imported.stream()
-                .sorted(Comparator.comparingInt((ImportedGig c) -> platforms.traits(c.platform()).importPrecedence())
-                        .thenComparing(ImportedGig::platform)).toList();
-        for (ImportedGig copy : ordered) {
-            if (linkedRefs.contains(key(copy.platform(), copy.externalRef()))) {
+        boolean on(GigId id, Platform platform) {
+            return platformsByGig.getOrDefault(id, Set.of()).contains(platform);
+        }
+    }
+
+    /**
+     * The platform gigs grouped by identity — with the catalog gig of that identity, or on their own —
+     * counting those already linked and leaving out (with the reason) those that would overwrite a
+     * gig already linked there.
+     */
+    private static final class Grouping {
+
+        private final Map<GigId, Gig> localById;
+        private final Links links;
+        private final Platforms platforms;
+        private final Map<GigId, Group> withLocal = new LinkedHashMap<>();
+        private final Map<GigId, Group> withoutLocal = new LinkedHashMap<>();
+        private final List<String> skipped = new ArrayList<>();
+        private int alreadyLinked;
+
+        Grouping(Map<GigId, Gig> localById, Links links, Platforms platforms) {
+            this.localById = localById;
+            this.links = links;
+            this.platforms = platforms;
+        }
+
+        void add(ImportedGig copy) {
+            if (links.linked(copy)) {
                 alreadyLinked++;
-                continue;
+                return;
             }
             GigId id = copy.gig().id();
             Gig local = localById.get(id);
             Map<GigId, Group> groups = local != null ? withLocal : withoutLocal;
-            boolean takenOnPlatform = local != null
-                    && linkedPlatforms.getOrDefault(id, Set.of()).contains(copy.platform());
+            boolean takenOnPlatform = local != null && links.on(id, copy.platform());
             Group existing = groups.get(id);
             if (takenOnPlatform || (existing != null && existing.copies.containsKey(copy.platform()))) {
                 skipped.add(describe(copy, platforms) + " — another " + platforms.name(copy.platform())
                         + " event already has this date and venue");
-                continue;
+                return;
             }
             groups.computeIfAbsent(id, k -> new Group(local)).copies.put(copy.platform(), copy);
         }
 
-        suggestMatches(localById.values(), linkedPlatforms, withLocal, withoutLocal);
+        /** Newest first. */
+        List<ImportProposal> proposals() {
+            List<ImportProposal> proposals = new ArrayList<>();
+            withLocal.values().forEach(g -> proposals.add(g.toProposal(platforms)));
+            withoutLocal.values().forEach(g -> proposals.add(g.toProposal(platforms)));
+            proposals.sort(Comparator.comparing(ImportProposal::date).reversed());
+            return proposals;
+        }
+    }
 
-        List<ImportProposal> proposals = new ArrayList<>();
-        withLocal.values().forEach(g -> proposals.add(g.toProposal(platforms)));
-        withoutLocal.values().forEach(g -> proposals.add(g.toProposal(platforms)));
-        proposals.sort(Comparator.comparing(ImportProposal::date).reversed());
-        return new ImportPlan(proposals, alreadyLinked, skipped, failures);
+    /** The platforms' copies whose details win first on import, first. */
+    private static Comparator<ImportedGig> byPrecedence(Platforms platforms) {
+        return Comparator.comparingInt((ImportedGig c) -> platforms.traits(c.platform()).importPrecedence())
+                .thenComparing(ImportedGig::platform);
     }
 
     private static void suggestMatches(Collection<Gig> catalog, Map<GigId, Set<Platform>> linkedPlatforms,
@@ -133,10 +178,6 @@ public final class ImportPlanner {
         return dayA.equals(b.schedule().startDate()) && CityName.same(a.location().city(), b.location().city());
     }
 
-    private static String key(Platform platform, String ref) {
-        return platform + ":" + ref;
-    }
-
     private static String describe(ImportedGig copy, Platforms platforms) {
         Gig g = copy.gig();
         return platforms.name(copy.platform()) + " " + g.schedule().startDate() + " " + g.title()
@@ -153,10 +194,8 @@ public final class ImportPlanner {
         }
 
         private ImportProposal toProposal(Platforms platforms) {
-            return new ImportProposal(local, copies.values().stream()
-                    .sorted(Comparator.comparingInt((ImportedGig c) -> platforms.traits(c.platform()).importPrecedence())
-                            .thenComparing(ImportedGig::platform))
-                    .toList(), suggested);
+            return new ImportProposal(local, copies.values().stream().sorted(byPrecedence(platforms)).toList(),
+                    suggested);
         }
     }
 }

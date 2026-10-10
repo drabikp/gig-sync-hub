@@ -3,6 +3,9 @@ package sk.drabikp.bzscraper.calendar.adapter.out.persistence;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.TestComponent;
 import org.springframework.context.annotation.Bean;
+import sk.drabikp.bzscraper.accounts.application.AccountsFakes;
+import sk.drabikp.bzscraper.accounts.application.AesGcmSecretBox;
+import sk.drabikp.bzscraper.accounts.application.port.in.SecretBox;
 
 import java.time.Clock;
 
@@ -17,5 +20,10 @@ class CalendarPersistenceTestApplication {
     @Bean
     Clock clock() {
         return Clock.systemDefaultZone();
+    }
+
+    @Bean
+    SecretBox secretBox() {
+        return new AesGcmSecretBox(AccountsFakes.TEST_KEYS);
     }
 }

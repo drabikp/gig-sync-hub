@@ -2,14 +2,19 @@ package sk.drabikp.bzscraper.calendar.application.port.out;
 
 import sk.drabikp.bzscraper.calendar.domain.rules.ProfileRule;
 import sk.drabikp.bzscraper.calendar.domain.rules.RuleOrigin;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.util.List;
 
-/** The band profile's rules. Each origin is replaced as a whole by whoever owns it. */
+/** The band profiles' rules: the shipped ones and each band's own. Each origin is replaced as a whole by whoever owns it. */
 public interface BandProfileStore {
 
-    List<ProfileRule> rules();
+    /** The band's rules: the shipped ones (everyone's) and the band's own, in the order they were stored. */
+    List<ProfileRule> rules(BandId band);
 
-    /** Replaces every rule of {@code origin} with {@code rules} (all of that origin). */
-    void replace(RuleOrigin origin, List<ProfileRule> rules);
+    /** Replaces the rules shipped with the app ({@code PRESET}, everyone's) with {@code rules}. */
+    void replaceShipped(List<ProfileRule> rules);
+
+    /** Replaces the band's own rules of {@code origin} ({@code USER}, {@code LEARNED}) with {@code rules}. */
+    void replace(BandId band, RuleOrigin origin, List<ProfileRule> rules);
 }

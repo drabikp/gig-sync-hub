@@ -1,6 +1,8 @@
 package sk.drabikp.bzscraper;
 
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -9,9 +11,11 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.CompositeArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import org.springframework.data.repository.Repository;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
@@ -30,8 +34,8 @@ class ArchitectureTest {
 
     private static final String BASE = "sk.drabikp.bzscraper";
     private static final String ROOT = BASE + ".";
-    private static final List<String> FEATURES = List.of("places", "sync", "catalog", "importing", "check",
-            "calendar");
+    private static final List<String> FEATURES = List.of("accounts", "places", "sync", "catalog", "importing",
+            "check", "calendar");
     private static final List<String> PLATFORMS = List.of("bandzone", "bandsintown");
 
     private static String[] packages(Stream<String> modules) {
@@ -69,6 +73,21 @@ class ArchitectureTest {
                     .should().onlyHaveDependentClassesThat().resideInAPackage(ROOT + f + "..")
                     .as("the inside of " + f + " (not its domain or ports) is used only by " + f))
             .toList());
+
+    /**
+     * Everything a band has is read and written by band: no persistence adapter asks its Spring Data
+     * repository for every row of a table ({@code findAll()}, {@code count()}, {@code deleteAll()}) —
+     * queries across bands (the sync worker's due work) are named as such. The bands themselves
+     * (accounts: the directory of every band) are the exception.
+     */
+    @ArchTest
+    static final ArchRule a_bands_rows_are_read_and_written_by_band = noClasses()
+            .that().resideInAPackage(BASE + "..adapter.out.persistence..")
+            .and().resideOutsideOfPackage(ROOT + "accounts..")
+            .should().callMethodWhere(DescribedPredicate.describe("a repository's every-row method",
+                    (JavaMethodCall call) -> Set.of("findAll", "count", "deleteAll").contains(call.getTarget().getName())
+                            && call.getTarget().getRawParameterTypes().isEmpty()
+                            && call.getTarget().getOwner().isAssignableTo(Repository.class)));
 
     @ArchTest
     static final ArchRule the_kernels_persistence_and_wiring_are_its_own = classes()

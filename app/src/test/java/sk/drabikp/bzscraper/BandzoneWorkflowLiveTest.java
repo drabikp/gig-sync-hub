@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 
 /**
  * Live, end to end through the workflow engine: publishes a made-up gig to the Bandzone TEST
@@ -69,20 +70,20 @@ class BandzoneWorkflowLiveTest {
                 new Location("Zámecký klub", "Hranice", Country.CZECHIA,
                         new Address(null, "753 01", "okres Přerov", "Olomoucký kraj", 49.548, 17.735)),
                 List.of(), Admission.free(), "Automated test — will be deleted.", null, null, null);
-        saveGig.add(gig);
+        saveGig.add(BAND, gig);
 
-        publishGigs.publish(Set.of(TestPlatforms.BANDZONE), List.of(gig));
+        publishGigs.publish(BAND, Set.of(TestPlatforms.BANDZONE), List.of(gig));
         runAll();
-        String bandzoneId = publishedGigStore.externalRef(TestPlatforms.BANDZONE, gig.id()).orElse(null);
+        String bandzoneId = publishedGigStore.externalRef(BAND, TestPlatforms.BANDZONE, gig.id()).orElse(null);
         System.out.println("Workflow live test: created Bandzone concert " + bandzoneId + " — "
-                + syncLog.recent(5).stream().map(t -> t.action() + " " + t.status() + " " + t.message()).toList());
+                + syncLog.history(BAND, gig.id(), 5).stream().map(t -> t.action() + " " + t.status() + " " + t.message()).toList());
 
-        deleteGig.delete(gig.id());
+        deleteGig.delete(BAND, gig.id());
         runAll();
 
         assertThat(bandzoneId).as("published through the create form").isNotNull();
-        assertThat(publishedGigStore.isPublished(TestPlatforms.BANDZONE, gig.id())).as("removed and forgotten").isFalse();
-        assertThat(syncLog.recent(2)).extracting(SyncTask::status).containsOnly(SyncStatus.DONE);
+        assertThat(publishedGigStore.isPublished(BAND, TestPlatforms.BANDZONE, gig.id())).as("removed and forgotten").isFalse();
+        assertThat(syncLog.history(BAND, gig.id(), 2)).extracting(SyncTask::status).containsOnly(SyncStatus.DONE);
     }
 
     private void runAll() {

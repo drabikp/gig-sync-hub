@@ -1,7 +1,10 @@
 package sk.drabikp.bzscraper.importing.domain;
 
+import sk.drabikp.bzscraper.gig.domain.Coordinates;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
+
+import java.util.Optional;
 
 /**
  * A gig as it exists on a platform, read for import: the platform's version of the gig
@@ -22,5 +25,10 @@ public record ImportedGig(Platform platform, Gig gig, String externalRef, Double
     /** A platform copy without coordinates (the platform shows none). */
     public ImportedGig(Platform platform, Gig gig, String externalRef) {
         this(platform, gig, externalRef, null, null);
+    }
+
+    /** Where the platform put the event, when it shows that. */
+    public Optional<Coordinates> coordinates() {
+        return latitude == null ? Optional.empty() : Optional.of(new Coordinates(latitude, longitude));
     }
 }

@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.sync.application.port.out;
 import org.junit.jupiter.api.Test;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.TestGigs;
+import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.domain.StepType;
 import sk.drabikp.bzscraper.sync.domain.SyncAction;
 import sk.drabikp.bzscraper.sync.domain.SyncStatus;
@@ -13,6 +14,8 @@ import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.OTHER;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDSINTOWN;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
@@ -30,7 +33,7 @@ public abstract class SyncOutboxContract {
     protected abstract SyncOutbox outbox();
 
     private SyncTask queue(Gig g, SyncAction action) {
-        return outbox().enqueue(g.id(), SyncTask.labelOf(g), BANDZONE, action, NOW);
+        return outbox().enqueue(BAND, g.id(), SyncTask.labelOf(g), BANDZONE, action, NOW);
     }
 
     private SyncTask get(SyncTask task) {
@@ -43,9 +46,44 @@ public abstract class SyncOutboxContract {
 
         assertThat(task.status()).isEqualTo(SyncStatus.PENDING);
         assertThat(outbox().nextDue(NOW)).contains(task);
-        assertThat(outbox().openFor(gig.id())).containsExactly(task);
-        assertThat(outbox().due(BANDZONE, SyncAction.UPDATE, NOW)).containsExactly(task);
-        assertThat(outbox().due(BANDSINTOWN, SyncAction.UPDATE, NOW)).isEmpty();
+        assertThat(outbox().openFor(BAND, gig.id())).containsExactly(task);
+        assertThat(outbox().due(BAND, BANDZONE, SyncAction.UPDATE, NOW)).containsExactly(task);
+        assertThat(outbox().due(BAND, BANDSINTOWN, SyncAction.UPDATE, NOW)).isEmpty();
+    }
+
+    @Test
+    void a_bands_tasks_are_its_own_even_for_the_same_gig() {
+        SyncTask mine = queue(gig, SyncAction.UPDATE);
+        SyncTask theirs = outbox().enqueue(OTHER, gig.id(), SyncTask.labelOf(gig), BANDZONE, SyncAction.UPDATE, NOW);
+
+        assertThat(outbox().openFor(BAND, gig.id())).extracting(SyncTask::id).containsExactly(mine.id());
+        assertThat(outbox().unfinished(OTHER)).extracting(SyncTask::id).containsExactly(theirs.id());
+        assertThat(outbox().due(OTHER, BANDZONE, SyncAction.UPDATE, NOW)).extracting(SyncTask::id)
+                .containsExactly(theirs.id());
+        assertThat(outbox().supersede(BAND, gig.id(), BANDZONE, "test", NOW)).extracting(SyncTask::id)
+                .containsExactly(mine.id());
+        assertThat(get(theirs).status()).isEqualTo(SyncStatus.PENDING);
+        assertThat(outbox().nextDue(NOW, Set.of(), Set.of(OTHER))).isEmpty();
+    }
+
+    @Test
+    void a_platform_is_known_by_its_id_whichever_instance_asks() {
+        SyncTask task = queue(gig, SyncAction.UPDATE);
+        Platform sameId = Platform.of(BANDZONE.id());
+
+        assertThat(get(task).platform()).isEqualTo(BANDZONE);
+        assertThat(outbox().due(BAND, sameId, SyncAction.UPDATE, NOW)).extracting(SyncTask::id).containsExactly(task.id());
+        assertThat(outbox().supersede(BAND, gig.id(), sameId, "test", NOW)).extracting(SyncTask::id).containsExactly(task.id());
+    }
+
+    @Test
+    void a_gigs_history_is_its_own_tasks_newest_first() {
+        SyncTask first = queue(gig, SyncAction.PUBLISH);
+        queue(other, SyncAction.PUBLISH);
+        SyncTask second = queue(gig, SyncAction.UPDATE);
+
+        assertThat(outbox().history(BAND, gig.id(), 10)).extracting(SyncTask::id).containsExactly(second.id(), first.id());
+        assertThat(outbox().history(BAND, gig.id(), 1)).extracting(SyncTask::id).containsExactly(second.id());
     }
 
     @Test
@@ -129,9 +167,9 @@ public abstract class SyncOutboxContract {
         outbox().markFailed(failed.id(), "x", NOW);
         SyncTask othersPending = queue(other, SyncAction.UPDATE);
 
-        assertThat(outbox().supersede(gig.id(), BANDZONE, "deleted", NOW)).extracting(SyncTask::id)
+        assertThat(outbox().supersede(BAND, gig.id(), BANDZONE, "deleted", NOW)).extracting(SyncTask::id)
                 .containsExactly(pending.id());
-        assertThat(outbox().replaceFailed(gig.id(), BANDZONE, Set.of(SyncAction.CANCEL), "deleted", NOW))
+        assertThat(outbox().replaceFailed(BAND, gig.id(), BANDZONE, Set.of(SyncAction.CANCEL), "deleted", NOW))
                 .extracting(SyncTask::id).containsExactly(failed.id());
 
         assertThat(get(pending).status()).isEqualTo(SyncStatus.DISCARDED);
@@ -143,10 +181,10 @@ public abstract class SyncOutboxContract {
     void tasks_follow_a_gig_whose_identity_changed() {
         SyncTask task = queue(gig, SyncAction.UPDATE);
 
-        outbox().move(gig.id(), other.id(), "moved");
+        outbox().move(BAND, gig.id(), other.id(), "moved");
 
         assertThat(get(task).gigId()).isEqualTo(other.id());
-        assertThat(outbox().openFor(gig.id())).isEmpty();
-        assertThat(outbox().openFor(other.id())).hasSize(1);
+        assertThat(outbox().openFor(BAND, gig.id())).isEmpty();
+        assertThat(outbox().openFor(BAND, other.id())).hasSize(1);
     }
 }

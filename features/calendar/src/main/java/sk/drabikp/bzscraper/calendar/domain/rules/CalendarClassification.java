@@ -16,7 +16,6 @@ public record CalendarClassification(CalendarEvent event, CalendarEventKind kind
                                      boolean decidedByUser, CalendarEventStatus status, int score,
                                      List<Reason> reasons) {
 
-    /** One matched rule: a readable description and the weight it added (0 for status rules). */
     /**
      * Why the rules said what they said: which kind of evidence ({@link Why}), the word or number
      * it found, and the weight it adds. {@link #text()} says it in English; pages translate

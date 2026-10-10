@@ -41,10 +41,7 @@ public class SyncDispatcher implements DispatchSyncUseCase {
 
     @Override
     public boolean runNext() {
-        if (pause.paused()) {
-            return false;
-        }
-        Optional<SyncTask> next = outbox.nextDue(clock.instant(), health.held());
+        Optional<SyncTask> next = outbox.nextDue(clock.instant(), health.held(), pause.pausedBands());
         next.ifPresent(engine::runFrom);
         return next.isPresent();
     }
@@ -59,7 +56,7 @@ public class SyncDispatcher implements DispatchSyncUseCase {
                 outbox.markFailed(task.id(), "interrupted by a restart — it may or may not have happened on "
                         + platforms.name(task.platform()) + "; check there, then Retry or Discard", now);
             }
+            notifier.changed(task.band());
         }
-        notifier.changed();
     }
 }

@@ -40,12 +40,6 @@ record BitEvent(String id, String status, String startDate, String startTime, St
         return startDate != null && startDate.length() >= 10 ? Integer.parseInt(startDate.substring(8, 10)) : -1;
     }
 
-    /** "PUBLISHED 2026-08-29 at Secret Garden, Košice I, Slovakia (48.72, 21.25)" — for checking by hand. */
-    public String described() {
-        return status + " " + startDate + " at " + venueName + ", " + venueCity + ", " + venueCountry
-                + " (" + latitude + ", " + longitude + ")";
-    }
-
     static String idOf(Object value) {
         if (value == null) {
             return null;

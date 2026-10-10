@@ -1,6 +1,6 @@
 package sk.drabikp.bzscraper.bandsintown.portal;
 
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 import sk.drabikp.bzscraper.bandsintown.RemovalReason;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.importing.domain.ImportedGig;
@@ -8,7 +8,7 @@ import sk.drabikp.bzscraper.sync.application.port.out.FailureKind;
 import sk.drabikp.bzscraper.sync.domain.StepOutcome;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 /**
  * An authenticated Bandsintown artist-portal session. Events are addressed by their
@@ -16,6 +16,9 @@ import java.util.Map;
  * removed, with "canceled" as the reason.
  */
 public interface BitSession extends AutoCloseable {
+
+    /** The most rows one bulk upload takes — the portal's limit. */
+    int MAX_ROWS_PER_UPLOAD = 25;
 
     /**
      * Creates and publishes the gigs. Never throws for a single gig: each result says
@@ -27,38 +30,43 @@ public interface BitSession extends AutoCloseable {
     List<Created> createEvents(List<Gig> gigs, boolean notifyFollowers);
 
     /**
-     * Overwrites several published events in one upload (at most 25), keyed by event id in
-     * upload order. One result per event, in the same order; never throws for one event.
+     * Overwrites several published events in one upload (at most {@link #MAX_ROWS_PER_UPLOAD}),
+     * one row per edit in the given order. One result per edit, by position (so even two edits
+     * of one event each get theirs); never throws for one event.
      *
-     * @throws BitUploadException when the upload as a whole failed (nothing is known per event)
+     * @throws BitPortalException when the upload as a whole failed (nothing is known per event)
      */
-    List<Edited> updateEvents(List<Map.Entry<String, Gig>> edits) throws BitUploadException;
+    List<Edited> updateEvents(List<EventEdit> edits) throws BitPortalException;
 
     /**
      * Edits the event in the portal's single-page form — which also takes PAST events, unlike
      * the upload: the place is picked from Bandsintown's venue search in the gig's town.
-     * Returns a note when Bandsintown placed it far from the town, else null.
      *
-     * @throws BitUploadException permanent when Bandsintown refused it or has no such place
+     * @return a note when Bandsintown placed it far from the town
+     * @throws BitPortalException permanent when Bandsintown refused it or has no such place
      */
-    String editEventInForm(String eventId, Gig gig) throws BitUploadException;
+    Optional<String> editEventInForm(String eventId, Gig gig) throws BitPortalException;
 
     /** Removes the event from Bandsintown, for {@code reason}. An event that is already gone is not an error. */
-    void deleteEvent(String eventId, RemovalReason reason) throws BitUploadException;
+    void deleteEvent(String eventId, RemovalReason reason) throws BitPortalException;
 
     /**
      * Removes the event through its single-page form — which also opens for PAST events, which
      * the event list can't remove. Same reasons as {@link #deleteEvent}; already gone is not an
      * error.
      */
-    void deleteEventInForm(String eventId, RemovalReason reason) throws BitUploadException;
+    void deleteEventInForm(String eventId, RemovalReason reason) throws BitPortalException;
 
     /** Every event of the artist on Bandsintown — upcoming and past — with its event id. */
-    List<ImportedGig> listEvents() throws BitUploadException;
+    List<ImportedGig> listEvents() throws BitPortalException;
 
     /** Releases the session (closes the browser). Never throws. */
     @Override
     void close();
+
+    /** One published event to overwrite with the gig. */
+    record EventEdit(String eventId, Gig gig) {
+    }
 
     /**
      * Outcome of editing one event: updated, or why not and what that means — REFUSED

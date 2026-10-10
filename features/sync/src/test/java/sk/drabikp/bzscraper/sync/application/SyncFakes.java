@@ -3,20 +3,25 @@ package sk.drabikp.bzscraper.sync.application;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Publication;
 import sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms;
+import sk.drabikp.bzscraper.sync.application.engine.OutcomeSettlement;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformBreakers;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformHealth;
+import sk.drabikp.bzscraper.sync.application.engine.RecreateStep;
+import sk.drabikp.bzscraper.sync.application.engine.RunPreparation;
 import sk.drabikp.bzscraper.sync.application.engine.StepRegistry;
 import sk.drabikp.bzscraper.sync.application.engine.SyncAdmission;
 import sk.drabikp.bzscraper.sync.application.engine.SyncDispatcher;
 import sk.drabikp.bzscraper.sync.application.engine.WorkflowEngine;
 import sk.drabikp.bzscraper.sync.application.port.in.PauseSyncUseCase;
 import sk.drabikp.bzscraper.sync.application.port.out.SettingsStore;
+import sk.drabikp.bzscraper.sync.application.port.out.SyncFaults;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncOutbox;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncStep;
@@ -64,10 +69,15 @@ public final class SyncFakes {
             return tasks.get(id);
         }
 
+        /**
+         * Keeps the platform as its id, like the database: what comes back is an equal platform, not the
+         * caller's instance — so a comparison with {@code ==} fails here as it does in the app.
+         */
         @Override
-        public SyncTask enqueue(GigId gigId, String gigLabel, Platform platform, SyncAction action, Instant now) {
-            SyncTask task = new SyncTask(nextId++, gigId, gigLabel, platform, action, SyncStatus.PENDING, 0, now, now,
-                    now, null, null);
+        public SyncTask enqueue(BandId band, GigId gigId, String gigLabel, Platform platform, SyncAction action,
+                                Instant now) {
+            SyncTask task = new SyncTask(nextId++, band, gigId, gigLabel, Platform.of(platform.id()), action,
+                    SyncStatus.PENDING, 0, now, now, now, null, null);
             tasks.put(task.id(), task);
             write(task.id(), now, "queued");
             return task;
@@ -79,19 +89,28 @@ public final class SyncFakes {
         }
 
         @Override
-        public List<SyncTask> openFor(GigId gigId) {
-            return tasks.values().stream().filter(t -> t.gigId().equals(gigId) && t.status().open()).toList();
+        public List<SyncTask> openFor(BandId band, GigId gigId) {
+            return tasks.values().stream().filter(t -> t.band().equals(band) && t.gigId().equals(gigId)
+                    && t.status().open()).toList();
         }
 
         @Override
-        public List<SyncTask> unfinished() {
-            return tasks.values().stream().filter(t -> t.status().open() || t.status() == SyncStatus.FAILED).toList();
+        public List<SyncTask> unfinished(BandId band) {
+            return tasks.values().stream().filter(t -> t.band().equals(band)
+                    && (t.status().open() || t.status() == SyncStatus.FAILED)).toList();
         }
 
         @Override
-        public List<SyncTask> recent(int limit) {
-            return tasks.values().stream().sorted(Comparator.comparingLong(SyncTask::id).reversed())
+        public List<SyncTask> recent(BandId band, int limit) {
+            return tasks.values().stream().filter(t -> t.band().equals(band))
+                    .sorted(Comparator.comparingLong(SyncTask::id).reversed())
                     .limit(limit).toList();
+        }
+
+        @Override
+        public List<SyncTask> history(BandId band, GigId gigId, int limit) {
+            return tasks.values().stream().filter(t -> t.band().equals(band) && t.gigId().equals(gigId))
+                    .sorted(Comparator.comparingLong(SyncTask::id).reversed()).limit(limit).toList();
         }
 
         @Override
@@ -100,26 +119,27 @@ public final class SyncFakes {
         }
 
         @Override
-        public List<SyncTask> supersede(GigId gigId, Platform platform, String why, Instant now) {
-            List<SyncTask> pending = tasks.values().stream().filter(t -> t.gigId().equals(gigId)
-                    && t.platform() == platform && t.status() == SyncStatus.PENDING).toList();
+        public List<SyncTask> supersede(BandId band, GigId gigId, Platform platform, String why, Instant now) {
+            List<SyncTask> pending = tasks.values().stream().filter(t -> t.band().equals(band) && t.gigId().equals(gigId)
+                    && t.platform().equals(platform) && t.status() == SyncStatus.PENDING).toList();
             pending.forEach(t -> change(t.id(), SyncStatus.DISCARDED, t.attempts(), null, "superseded: " + why, now));
             return pending;
         }
 
         @Override
-        public List<SyncTask> replaceFailed(GigId gigId, Platform platform, Set<SyncAction> actions, String why,
-                                            Instant now) {
-            List<SyncTask> failed = tasks.values().stream().filter(t -> t.gigId().equals(gigId)
-                    && t.platform() == platform && t.status() == SyncStatus.FAILED && actions.contains(t.action()))
+        public List<SyncTask> replaceFailed(BandId band, GigId gigId, Platform platform, Set<SyncAction> actions,
+                                            String why, Instant now) {
+            List<SyncTask> failed = tasks.values().stream().filter(t -> t.band().equals(band) && t.gigId().equals(gigId)
+                    && t.platform().equals(platform) && t.status() == SyncStatus.FAILED && actions.contains(t.action()))
                     .toList();
             failed.forEach(t -> change(t.id(), SyncStatus.DISCARDED, t.attempts(), null, "replaced: " + why, now));
             return failed;
         }
 
         @Override
-        public void move(GigId from, GigId to, String newLabel) {
-            tasks.replaceAll((id, t) -> t.gigId().equals(from) ? new SyncTask(t.id(), to, newLabel, t.platform(),
+        public void move(BandId band, GigId from, GigId to, String newLabel) {
+            tasks.replaceAll((id, t) -> t.band().equals(band) && t.gigId().equals(from)
+                    ? new SyncTask(t.id(), t.band(), to, newLabel, t.platform(),
                     t.action(), t.status(), t.attempts(), t.createdAt(), t.nextAttemptAt(), t.updatedAt(),
                     t.message(), t.step()) : t);
         }
@@ -135,9 +155,9 @@ public final class SyncFakes {
         }
 
         @Override
-        public List<SyncTask> due(Platform platform, SyncAction action, Instant now) {
-            return tasks.values().stream()
-                    .filter(t -> due(t, now) && t.platform() == platform && t.action() == action).toList();
+        public List<SyncTask> due(BandId band, Platform platform, SyncAction action, Instant now) {
+            return tasks.values().stream().filter(t -> due(t, now) && t.band().equals(band)
+                    && t.platform().equals(platform) && t.action() == action).toList();
         }
 
         @Override
@@ -184,7 +204,7 @@ public final class SyncFakes {
             if (!t.status().canBecome(SyncStatus.PENDING)) {
                 return;                                 // as the real outbox: a finished task stays so
             }
-            tasks.put(id, new SyncTask(id, t.gigId(), t.gigLabel(), t.platform(), t.action(), SyncStatus.PENDING, 0,
+            tasks.put(id, new SyncTask(id, t.band(), t.gigId(), t.gigLabel(), t.platform(), t.action(), SyncStatus.PENDING, 0,
                     t.createdAt(), now, now, t.message(), next));
             write(id, now, why + " → " + next.label());
         }
@@ -208,7 +228,7 @@ public final class SyncFakes {
             if (!t.status().canBecome(status)) {
                 return;                                 // as the real outbox: a late or racing write is ignored
             }
-            tasks.put(id, new SyncTask(id, t.gigId(), t.gigLabel(), t.platform(), t.action(), status, attempts,
+            tasks.put(id, new SyncTask(id, t.band(), t.gigId(), t.gigLabel(), t.platform(), t.action(), status, attempts,
                     t.createdAt(), next, now, message, t.step()));
             write(id, now, status + (message == null ? "" : ": " + message));
         }
@@ -221,75 +241,83 @@ public final class SyncFakes {
     public static final class Published implements PublishedGigStore {
 
         private final Map<String, Publication> records = new LinkedHashMap<>();
+        private final Map<String, BandId> bands = new HashMap<>();
 
-        private static String key(Platform platform, GigId id) {
-            return platform + "|" + id;
+        private static String key(BandId band, Platform platform, GigId id) {
+            return band + "|" + platform + "|" + id.key();
         }
 
         @Override
-        public boolean isPublished(Platform platform, GigId gigId) {
-            return records.containsKey(key(platform, gigId));
+        public boolean isPublished(BandId band, Platform platform, GigId gigId) {
+            return records.containsKey(key(band, platform, gigId));
         }
 
         @Override
-        public Optional<String> externalRef(Platform platform, GigId gigId) {
-            return Optional.ofNullable(records.get(key(platform, gigId))).map(Publication::externalRef)
+        public Optional<String> externalRef(BandId band, Platform platform, GigId gigId) {
+            return Optional.ofNullable(records.get(key(band, platform, gigId))).map(Publication::externalRef)
                     .filter(ref -> !ref.isBlank());
         }
 
         @Override
-        public void record(Platform platform, GigId gigId, String externalRef) {
-            records.put(key(platform, gigId), new Publication(platform, gigId, externalRef));
+        public void record(BandId band, Platform platform, GigId gigId, String externalRef) {
+            records.put(key(band, platform, gigId), new Publication(Platform.of(platform.id()), gigId, externalRef));
+            bands.put(key(band, platform, gigId), band);
         }
 
         @Override
-        public void remove(Platform platform, GigId gigId) {
-            records.remove(key(platform, gigId));
+        public void remove(BandId band, Platform platform, GigId gigId) {
+            records.remove(key(band, platform, gigId));
+            bands.remove(key(band, platform, gigId));
         }
 
         @Override
-        public void move(GigId from, GigId to) {
-            for (Publication p : List.copyOf(records.values())) {
+        public void move(BandId band, GigId from, GigId to) {
+            for (Publication p : all(band)) {
                 if (p.gigId().equals(from)) {
-                    records.remove(key(p.platform(), from));
-                    record(p.platform(), to, p.externalRef());
+                    remove(band, p.platform(), from);
+                    record(band, p.platform(), to, p.externalRef());
                 }
             }
         }
 
         @Override
-        public List<Publication> all() {
-            return List.copyOf(records.values());
+        public List<Publication> all(BandId band) {
+            return records.entrySet().stream().filter(e -> band.equals(bands.get(e.getKey())))
+                    .map(Map.Entry::getValue).toList();
         }
     }
 
     public static final class Gigs implements GigRepository {
 
-        private final Map<GigId, Gig> gigs = new HashMap<>();
+        private final Map<BandId, Map<GigId, Gig>> gigs = new HashMap<>();
 
-        @Override
-        public void save(Gig gig) {
-            gigs.put(gig.id(), gig);
+        private Map<GigId, Gig> of(BandId band) {
+            return gigs.computeIfAbsent(band, b -> new LinkedHashMap<>());
         }
 
         @Override
-        public Optional<Gig> findById(GigId id) {
-            return Optional.ofNullable(gigs.get(id));
+        public void save(BandId band, Gig gig) {
+            of(band).put(gig.id(), gig);
         }
 
         @Override
-        public List<Gig> findAll() {
-            return List.copyOf(gigs.values());
+        public Optional<Gig> findById(BandId band, GigId id) {
+            return Optional.ofNullable(of(band).get(id));
         }
 
         @Override
-        public List<Gig> findStartingWithin(DateRange range) {
-            return findAll();
+        public List<Gig> findAll(BandId band) {
+            return List.copyOf(of(band).values());
         }
 
         @Override
-        public void deleteById(GigId id) {
-            gigs.remove(id);
+        public List<Gig> findStartingWithin(BandId band, DateRange range) {
+            return findAll(band);
+        }
+
+        @Override
+        public void deleteById(BandId band, GigId id) {
+            of(band).remove(id);
         }
     }
 
@@ -322,7 +350,12 @@ public final class SyncFakes {
         }
 
         @Override
-        public void changed() {
+        public void changed(BandId band) {
+            changes++;
+        }
+
+        @Override
+        public void changedEverywhere() {
             changes++;
         }
     }
@@ -330,20 +363,32 @@ public final class SyncFakes {
     /** Settings in memory. */
     public static final class Settings implements SettingsStore {
 
-        public final Map<String, String> values = new HashMap<>();
+        public final Map<BandId, Map<String, String>> values = new HashMap<>();
 
         @Override
-        public Optional<String> get(String name) {
-            return Optional.ofNullable(values.get(name));
+        public Optional<String> get(BandId band, String name) {
+            return Optional.ofNullable(values.getOrDefault(band, Map.of()).get(name));
         }
 
         @Override
-        public void put(String name, String value) {
+        public void put(BandId band, String name, String value) {
+            Map<String, String> of = values.computeIfAbsent(band, b -> new HashMap<>());
             if (value == null) {
-                values.remove(name);
+                of.remove(name);
             } else {
-                values.put(name, value);
+                of.put(name, value);
             }
+        }
+
+        @Override
+        public Map<BandId, String> all(String name) {
+            Map<BandId, String> all = new HashMap<>();
+            values.forEach((band, of) -> {
+                if (of.containsKey(name)) {
+                    all.put(band, of.get(name));
+                }
+            });
+            return all;
         }
     }
 
@@ -422,13 +467,32 @@ public final class SyncFakes {
     // --- the sync services wired with these fakes and TestPlatforms ---
 
     public static StepRegistry registry(Published published, SyncStep... steps) {
-        return new StepRegistry(List.of(steps), TestPlatforms.PLATFORMS, new DirectTransactions(), published);
+        return new StepRegistry(List.of(steps), TestPlatforms.PLATFORMS,
+                RecreateStep.recreator(new DirectTransactions(), published));
+    }
+
+    /** What the engine reported as unexpected failures of steps. */
+    public static final class Faults implements SyncFaults {
+
+        public final List<RuntimeException> reported = new ArrayList<>();
+
+        @Override
+        public void unexpected(SyncStep step, RuntimeException failure) {
+            reported.add(failure);
+        }
     }
 
     public static WorkflowEngine engine(StepRegistry steps, Gigs gigs, Published published, Outbox outbox, Signals signals,
                                  Clock clock, PauseSyncUseCase pause, PlatformHealth health) {
-        return new WorkflowEngine(steps, gigs, published, outbox, new DirectTransactions(), signals, clock,
-                TestPlatforms.PLATFORMS, pause, health);
+        return engine(steps, gigs, published, outbox, signals, clock, pause, health, new Faults());
+    }
+
+    public static WorkflowEngine engine(StepRegistry steps, Gigs gigs, Published published, Outbox outbox, Signals signals,
+                                 Clock clock, PauseSyncUseCase pause, PlatformHealth health, SyncFaults faults) {
+        RunPreparation preparation = new RunPreparation(steps, gigs, published, outbox, TestPlatforms.PLATFORMS, clock);
+        OutcomeSettlement settlement = new OutcomeSettlement(steps, published, outbox, new DirectTransactions(),
+                TestPlatforms.PLATFORMS, clock);
+        return new WorkflowEngine(steps, preparation, settlement, outbox, signals, faults, clock, pause, health);
     }
 
     /** Never paused, platforms never held back. */

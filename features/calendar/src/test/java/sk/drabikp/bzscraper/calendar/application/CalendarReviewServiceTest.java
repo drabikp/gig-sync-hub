@@ -15,11 +15,15 @@ import sk.drabikp.bzscraper.calendar.domain.rules.BandProfile;
 import sk.drabikp.bzscraper.calendar.domain.rules.ProfileRule;
 import sk.drabikp.bzscraper.calendar.domain.rules.RuleKind;
 import sk.drabikp.bzscraper.catalog.application.CatalogFakes;
-import sk.drabikp.bzscraper.gig.application.UserFacingException;
+import sk.drabikp.bzscraper.catalog.application.port.in.CatalogErrorCode;
+import sk.drabikp.bzscraper.catalog.application.port.in.GigIdentityTakenException;
+import sk.drabikp.bzscraper.gig.application.BadRequestException;
+import sk.drabikp.bzscraper.gig.application.NotFoundException;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.TestGigs;
 import sk.drabikp.bzscraper.sync.application.SyncFakes;
+import sk.drabikp.bzscraper.sync.application.SyncRequests;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -29,8 +33,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.OTHER;
 
 class CalendarReviewServiceTest {
 
@@ -45,15 +52,19 @@ class CalendarReviewServiceTest {
     private final SyncFakes.Gigs gigs = new SyncFakes.Gigs();
     private final SyncFakes.MutableClock clock = new SyncFakes.MutableClock();
     private final SyncFakes.Outbox outbox = new SyncFakes.Outbox();
+    private final SyncFakes.Published published = new SyncFakes.Published();
+    private final SyncRequests requests = SyncFakes.requests(outbox, published, new SyncFakes.Signals(), clock);
     private final CalendarReviewService service = new CalendarReviewService(feed, profiles, decisions, snapshots,
             links, gigs, new SyncFakes.DirectTransactions(), clock, new BandProfile.Thresholds(4, -1, -4),
-            CatalogFakes.writes(gigs, new SyncFakes.Published(), outbox, SyncFakes.requests(outbox,
-                    new SyncFakes.Published(), new SyncFakes.Signals(), clock), new CalendarLinksFollowGigs(links)),
+            LiveUpdates.NONE);
+    private final CalendarCatalogService catalog = new CalendarCatalogService(service,
+            CatalogFakes.writes(gigs, published, outbox, requests, new CalendarLinksFollowGigs(links)),
+            CatalogFakes.catalog(gigs, published, outbox, requests), links, new SyncFakes.DirectTransactions(),
             LiveUpdates.NONE);
 
     @BeforeEach
     void rules() {
-        when(profiles.rules()).thenReturn(List.of(
+        when(profiles.rules(any())).thenReturn(List.of(
                 ProfileRule.preset(RuleKind.TITLE_CONTAINS, "fest", 3),
                 ProfileRule.preset(RuleKind.NOTES_LABEL, "showtime", 5),
                 ProfileRule.preset(RuleKind.CATALOG_GIG_SAME_DAY, null, 2),
@@ -71,9 +82,9 @@ class CalendarReviewServiceTest {
     }
 
     private CalendarOverview read(CalendarEvent... events) throws Exception {
-        when(feed.read()).thenReturn(List.of(events));
+        when(feed.read(BAND)).thenReturn(List.of(events));
         clock.advance(Duration.ofMinutes(10));
-        return service.read();
+        return service.read(BAND);
     }
 
     private static CalendarRow row(CalendarOverview overview, String id) {
@@ -86,8 +97,8 @@ class CalendarReviewServiceTest {
 
     @Test
     void classifies_with_the_stored_rules_the_catalogs_gig_days_and_the_users_verdicts() throws Exception {
-        gigs.save(festGig());
-        decisions.decide("visit", CalendarEventKind.NOT_GIG);
+        gigs.save(BAND, festGig());
+        decisions.decide(BAND, "visit", CalendarEventKind.NOT_GIG);
 
         CalendarOverview overview = read(event("fest", "Fest", FEST_DAY, ""), event("visit", "Fest", FEST_DAY.plusDays(1), ""));
 
@@ -117,36 +128,45 @@ class CalendarReviewServiceTest {
         CalendarOverview third = read(fest(), club);
         assertThat(row(third, "fest").change()).as("unseen changes stay").isNotNull();
 
-        service.seenAll();
+        service.seenAll(BAND);
 
-        assertThat(service.overview().rows()).extracting(CalendarRow::eventId).containsExactlyInAnyOrder("fest", "club");
-        assertThat(service.overview().rows()).allSatisfy(r -> assertThat(r.change()).isNull());
+        assertThat(service.overview(BAND).rows()).extracting(CalendarRow::eventId).containsExactlyInAnyOrder("fest", "club");
+        assertThat(service.overview(BAND).rows()).allSatisfy(r -> assertThat(r.change()).isNull());
     }
 
     @Test
     void a_gig_is_added_to_the_catalog_from_the_calendar_and_stays_linked_to_its_event() throws Exception {
         read(fest());
-        CalendarRow before = row(service.overview(), "fest");
+        CalendarRow before = row(service.overview(BAND), "fest");
         assertThat(before.missingFromCatalog()).isTrue();
         assertThat(before.draft().showTime()).hasToString("20:30");
 
-        service.addToCatalog("fest", festGig());
+        catalog.addToCatalog(BAND, "fest", festGig());
 
-        CalendarRow after = row(service.overview(), "fest");
-        assertThat(gigs.findById(festGig().id())).isPresent();
+        CalendarRow after = row(service.overview(BAND), "fest");
+        assertThat(gigs.findById(BAND, festGig().id())).isPresent();
         assertThat(after.match().state()).isEqualTo(CatalogMatch.State.LINKED);
         assertThat(after.match().differences()).isEmpty();
-        assertThatThrownBy(() -> service.addToCatalog("other", festGig()))
-                .isInstanceOf(UserFacingException.class).hasMessageContaining("link the event");
+        assertThatThrownBy(() -> catalog.addToCatalog(BAND, "other", festGig()))
+                .isInstanceOf(GigIdentityTakenException.class).extracting("code").isEqualTo(CatalogErrorCode.GIG_IDENTITY_TAKEN);
+        assertThat(links.all(BAND)).doesNotContainKey("other");
+    }
+
+    @Test
+    void an_event_is_not_linked_to_a_gig_that_is_gone() throws Exception {
+        read(fest());
+
+        assertThatThrownBy(() -> catalog.link(BAND, "fest", festGig().id())).isInstanceOf(NotFoundException.class);
+        assertThat(links.all(BAND)).isEmpty();
     }
 
     @Test
     void a_linked_gig_shows_what_the_calendar_now_says_differently() throws Exception {
         read(fest(), event("club", "Club fest", FEST_DAY.plusDays(7), "Showtime: 21:00"));
-        service.addToCatalog("fest", festGig());
+        catalog.addToCatalog(BAND, "fest", festGig());
         Gig club = TestGigs.gig("Club fest", "Klub 007",
                 ZonedDateTime.of(FEST_DAY.plusDays(7).toLocalDate().atTime(21, 0), PRAGUE));
-        service.addToCatalog("club", club);
+        catalog.addToCatalog(BAND, "club", club);
 
         CalendarOverview overview = read(
                 event("fest", "ZRUŠENÉ Fest", FEST_DAY.plusDays(1), "Showtime: 20:30"));
@@ -156,34 +176,49 @@ class CalendarReviewServiceTest {
         assertThat(row(overview, "club").match().differences()).extracting(CatalogMatch.Difference::kind)
                 .containsExactly(CatalogMatch.Kind.REMOVED);
 
-        service.seen("club");
+        service.seen(BAND, "club");
 
-        assertThat(service.overview().rows()).extracting(CalendarRow::eventId).containsExactly("fest");
-        assertThat(links.all()).doesNotContainKey("club");
+        assertThat(service.overview(BAND).rows()).extracting(CalendarRow::eventId).containsExactly("fest");
+        assertThat(links.all(BAND)).doesNotContainKey("club");
     }
 
     @Test
     void gig_events_are_linked_to_the_one_catalog_gig_on_their_day() throws Exception {
-        gigs.save(festGig());
+        gigs.save(BAND, festGig());
         Gig twin1 = TestGigs.gig("A", "Klub A", ZonedDateTime.of(FEST_DAY.plusDays(1), PRAGUE));
         Gig twin2 = TestGigs.gig("B", "Klub B", ZonedDateTime.of(FEST_DAY.plusDays(1), PRAGUE));
-        gigs.save(twin1);
-        gigs.save(twin2);
+        gigs.save(BAND, twin1);
+        gigs.save(BAND, twin2);
         read(fest(), event("double", "Double fest", FEST_DAY.plusDays(1), "Showtime: 20:00"));
 
-        assertThat(service.linkSameDayGigs()).isEqualTo(1);
+        assertThat(catalog.linkSameDayGigs(BAND)).isEqualTo(1);
 
-        assertThat(links.all()).containsOnlyKeys("fest");
-        assertThat(row(service.overview(), "double").match().sameDay()).hasSize(2);
+        assertThat(links.all(BAND)).containsOnlyKeys("fest");
+        assertThat(row(service.overview(BAND), "double").match().sameDay()).hasSize(2);
     }
 
     @Test
     void a_verdict_is_gig_or_not_a_gig() {
-        service.decide("uid", CalendarEventKind.GIG);
-        service.forget("other");
+        service.decide(BAND, "uid", CalendarEventKind.GIG);
+        service.forget(BAND, "other");
 
-        assertThat(decisions.all()).containsOnlyKeys("uid");
-        assertThatThrownBy(() -> service.decide("uid", CalendarEventKind.UNSURE))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(decisions.all(BAND)).containsOnlyKeys("uid");
+        assertThatThrownBy(() -> service.decide(BAND, "uid", CalendarEventKind.UNSURE))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void each_band_has_its_own_calendar_copy_verdicts_and_links() throws Exception {
+        read(fest());
+        catalog.addToCatalog(BAND, "fest", festGig());
+        service.decide(BAND, "fest", CalendarEventKind.GIG);
+
+        assertThat(service.overview(OTHER).rows()).as("the other band read nothing").isEmpty();
+        assertThat(service.overview(OTHER).lastRead()).isNull();
+        assertThat(links.all(OTHER)).isEmpty();
+        assertThat(decisions.all(OTHER)).isEmpty();
+        assertThatThrownBy(() -> catalog.link(OTHER, "fest", festGig().id()))
+                .as("the gig is the first band's").isInstanceOf(NotFoundException.class);
+        assertThat(gigs.findAll(OTHER)).isEmpty();
     }
 }

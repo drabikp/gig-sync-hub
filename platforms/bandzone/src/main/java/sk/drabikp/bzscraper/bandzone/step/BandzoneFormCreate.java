@@ -1,8 +1,10 @@
 package sk.drabikp.bzscraper.bandzone.step;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import sk.drabikp.bzscraper.bandzone.BandzonePlatform;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 import sk.drabikp.bzscraper.bandzone.portal.BandzonePortalClient;
 import sk.drabikp.bzscraper.bandzone.portal.BandzoneSession;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -21,6 +23,8 @@ import java.util.Optional;
  */
 @Component
 class BandzoneFormCreate implements OneAtATimeStep {
+
+    private static final Logger logger = LoggerFactory.getLogger(BandzoneFormCreate.class);
 
     private final BandzonePortalClient portalClient;
 
@@ -43,21 +47,38 @@ class BandzoneFormCreate implements OneAtATimeStep {
         return Optional.empty();                 // Bandzone keeps past concerts too
     }
 
+    /**
+     * Creates and completes the concert. The session is closed by hand, not with
+     * try-with-resources: nothing thrown while closing may replace the outcome of a concert that
+     * was made — it would be made again.
+     */
     @Override
     public StepOutcome runOne(Item item) {
         Gig gig = item.gig();
-        try (BandzoneSession session = portalClient.openSession()) {
+        BandzoneSession session;
+        try {
+            session = portalClient.openSession(item.band());
+        } catch (BandzonePortalException e) {
+            return e.outcome();
+        }
+        try {
             String bandzoneId = session.createGig(gig);
             try {
                 session.updateGig(bandzoneId, gig);
                 return StepOutcome.created(bandzoneId, null);
-            } catch (BandzoneUploadException e) {
+            } catch (BandzonePortalException e) {
                 return StepOutcome.created(bandzoneId,
                         "created, but not all details were saved (" + e.getMessage() + ") — use Re-sync");
             }
-        } catch (BandzoneUploadException e) {
+        } catch (BandzonePortalException e) {
             // a permanent error (e.g. a town Bandzone doesn't know) stopped it before creating
             return e.outcome();
+        } finally {
+            try {
+                session.close();
+            } catch (RuntimeException e) {
+                logger.warn("Closing the Bandzone session failed", e);
+            }
         }
     }
 }

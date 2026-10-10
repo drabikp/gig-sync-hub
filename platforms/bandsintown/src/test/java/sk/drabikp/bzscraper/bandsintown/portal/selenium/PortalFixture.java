@@ -45,7 +45,7 @@ final class PortalFixture implements AutoCloseable {
         driver = TestChromium.start("1366,900");
         driver.executeCdpCommand("Page.addScriptToEvaluateOnNewDocument", Map.of("source", PortalReplies.CAPTURE));
         portal = new BitPortal(driver, new WebDriverWait(driver, Duration.ofSeconds(10)), new HumanPacer(0, 0),
-                "http://127.0.0.1:" + server.getAddress().getPort(), "1");
+                "http://127.0.0.1:" + server.getAddress().getPort()).forArtist("1");
     }
 
     /** What the API answers to requests whose path (with query) starts with {@code path}. */

@@ -1,9 +1,8 @@
 package sk.drabikp.bzscraper.bandsintown.portal.selenium;
 
-import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 import sk.drabikp.bzscraper.bandsintown.RemovalReason;
 import sk.drabikp.bzscraper.bandsintown.csv.BandsintownCsv;
 import sk.drabikp.bzscraper.bandsintown.portal.BitSession;
@@ -16,7 +15,6 @@ import java.time.Clock;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,7 +41,6 @@ import java.util.Optional;
  */
 final class SeleniumBitSession implements BitSession {
 
-    static final int MAX_ROWS_PER_UPLOAD = 25;
     private static final Logger logger = LoggerFactory.getLogger(SeleniumBitSession.class);
 
     private final BitPortal portal;
@@ -53,11 +50,10 @@ final class SeleniumBitSession implements BitSession {
     private final Clock clock;
     private boolean closed;
 
-    SeleniumBitSession(PlatformBrowser.Lease lease, WebDriverWait wait, HumanPacer pacer, String baseUrl,
-                       String artistId, String artistName, Clock clock) {
+    SeleniumBitSession(PlatformBrowser.Lease lease, BitPortal portal, String artistName, Clock clock) {
         this.lease = lease;
         this.clock = clock;
-        this.portal = new BitPortal(lease.driver(), wait, pacer, baseUrl, artistId);
+        this.portal = portal;
         this.events = new BitEventsPage(portal);
         this.artistName = artistName;
     }
@@ -74,21 +70,26 @@ final class SeleniumBitSession implements BitSession {
             }
             try {
                 results.addAll(guarded("upload", "Bandsintown upload failed", () -> createBatch(batch, notifyFollowers)));
-            } catch (BitUploadException e) {
+            } catch (BitPortalException e) {
                 logger.warn("Bandsintown upload of {} gig(s) failed", batch.size(), e);
-                batch.forEach(gig -> results.add(Created.failed(gig, e.kind(), e.getMessage())));
+                // interrupted part-way, the events may exist already (as drafts): not postponed — a
+                // run later would upload them twice — but failed for the user to check
+                FailureKind kind = e.kind() == FailureKind.BUSY ? FailureKind.TEMPORARY : e.kind();
+                String message = e.kind() == FailureKind.BUSY
+                        ? e.getMessage() + " — the events may be on Bandsintown already; check there" : e.getMessage();
+                batch.forEach(gig -> results.add(Created.failed(gig, kind, message)));
             }
         }
         return results;
     }
 
-    private List<Created> createBatch(List<Gig> batch, boolean notifyFollowers) throws BitUploadException {
+    private List<Created> createBatch(List<Gig> batch, boolean notifyFollowers) throws BitPortalException {
         BitBulkUpload upload = events.bulkUpload();
         PortalReply reply = upload.upload(BandsintownCsv.newEvents(batch, artistName, notifyFollowers));
         if (!reply.ok()) {
             throw reply.rowErrors().isEmpty()
-                    ? new BitUploadException("Bandsintown rejected the upload — " + reply.describe())
-                    : BitUploadException.refused("Bandsintown refused the events: " + String.join(", ", reply.rowErrors()));
+                    ? BitPortalException.temporary("Bandsintown rejected the upload — " + reply.describe())
+                    : BitPortalException.refused("Bandsintown refused the events: " + String.join(", ", reply.rowErrors()));
         }
         String[] drafts = reply.draftIds(batch.size());
         String[] existing = reply.updatedIds(batch.size());
@@ -121,7 +122,7 @@ final class SeleniumBitSession implements BitSession {
      * The listed events by id: the upcoming list, plus the past list when the batch has gigs
      * already played (published past events are listed there, not as upcoming).
      */
-    private Map<String, BitEvent> listed(List<Gig> batch) throws BitUploadException {
+    private Map<String, BitEvent> listed(List<Gig> batch) throws BitPortalException {
         Map<String, BitEvent> byId = new HashMap<>();
         events.upcoming().forEach(e -> byId.put(e.id(), e));
         ZonedDateTime now = ZonedDateTime.now(clock);
@@ -135,27 +136,25 @@ final class SeleniumBitSession implements BitSession {
     // --- update ---
 
     /**
-     * One upload of rows WITH event ids. Each row is judged on its own: updated (its id in
-     * {@code updated_events}), refused (Bandsintown's row error), or not applied — a reply
-     * with errors may hold back the other rows too, so those simply try again.
+     * One upload of rows WITH event ids, one row per edit. Each row is judged on its own, by its
+     * position: updated (its id in {@code updated_events}), refused (Bandsintown's row error), or
+     * not applied — a reply with errors may hold back the other rows too, so those simply try again.
      */
     @Override
-    public List<Edited> updateEvents(List<Map.Entry<String, Gig>> edits) throws BitUploadException {
+    public List<Edited> updateEvents(List<EventEdit> edits) throws BitPortalException {
         return guarded("update", "Bandsintown upload failed", () -> {
-            Map<String, Gig> ordered = new LinkedHashMap<>();
-            edits.forEach(edit -> ordered.put(edit.getKey(), edit.getValue()));
             BitBulkUpload upload = events.bulkUpload();
-            PortalReply reply = upload.upload(BandsintownCsv.updates(ordered, artistName));
+            PortalReply reply = upload.upload(BandsintownCsv.updates(edits, artistName));
             int rows = edits.size();
             String[] updated = reply.updatedIds(rows);
             String[] drafts = reply.draftIds(rows);
             String[] refused = reply.rowErrorsByIndex(rows);
             if (!reply.ok() && Arrays.stream(refused).allMatch(Objects::isNull)) {
-                throw new BitUploadException("Bandsintown rejected the upload — " + reply.describe());
+                throw BitPortalException.temporary("Bandsintown rejected the upload — " + reply.describe());
             }
             List<Edited> results = new ArrayList<>();
             for (int i = 0; i < rows; i++) {
-                String eventId = edits.get(i).getKey();
+                String eventId = edits.get(i).eventId();
                 if (drafts[i] != null) {
                     results.add(Edited.notUpdated(eventId, FailureKind.NEEDS_USER, "Bandsintown made a new draft " + drafts[i]
                             + " instead of editing event " + eventId + " — delete that draft there"));
@@ -177,13 +176,13 @@ final class SeleniumBitSession implements BitSession {
     /**
      * The event's single-page form, which also opens for past events: the place from the
      * venue search (the suggestion in the gig's town), then dates, times, name and
-     * description; saved. A note when Bandsintown placed it far from the town, else null.
+     * description; saved. A note when Bandsintown placed it far from the town.
      */
     @Override
-    public String editEventInForm(String eventId, Gig gig) throws BitUploadException {
+    public Optional<String> editEventInForm(String eventId, Gig gig) throws BitPortalException {
         return guarded("form-edit", "Bandsintown's edit form failed", () -> {
             BitEventForm form = BitEventForm.open(portal, eventId).orElseThrow(() ->
-                    new BitUploadException("Bandsintown's form for event " + eventId + " didn't open."));
+                    BitPortalException.temporary("Bandsintown's form for event " + eventId + " didn't open."));
             form.pickVenue(gig);
             form.setSchedule(gig.schedule().showStart(), gig.schedule().showEnd());
             form.setTitle(gig.title());
@@ -191,7 +190,7 @@ final class SeleniumBitSession implements BitSession {
                 form.setDescription(gig.description());
             }
             PortalReply reply = form.save();
-            return reply.event().map(saved -> BitPlaces.check(gig, saved)).orElse(null);
+            return reply.event().map(saved -> BitPlaces.check(gig, saved));
         });
     }
 
@@ -199,14 +198,14 @@ final class SeleniumBitSession implements BitSession {
 
     /** The Upcoming row's "⋯" → Delete. A past event isn't there: refused (the form can). */
     @Override
-    public void deleteEvent(String eventId, RemovalReason reason) throws BitUploadException {
+    public void deleteEvent(String eventId, RemovalReason reason) throws BitPortalException {
         guarded("delete", "Bandsintown delete failed", () -> {
             List<BitEvent> upcoming = events.upcoming();
             Optional<BitEvent> event = upcoming.stream().filter(e -> eventId.equals(e.id())).findFirst();
             if (event.isEmpty()) {
                 portal.pause();
                 if (events.past().stream().anyMatch(e -> eventId.equals(e.id()))) {
-                    throw BitUploadException.refused("Bandsintown event " + eventId + " is a past event, which the "
+                    throw BitPortalException.refused("Bandsintown event " + eventId + " is a past event, which the "
                             + "event list can't remove (its form can).");
                 }
                 logger.info("Bandsintown event {} is not listed — already removed", eventId);
@@ -223,13 +222,13 @@ final class SeleniumBitSession implements BitSession {
      * list's. A form that doesn't open for an event neither list shows: already gone.
      */
     @Override
-    public void deleteEventInForm(String eventId, RemovalReason reason) throws BitUploadException {
+    public void deleteEventInForm(String eventId, RemovalReason reason) throws BitPortalException {
         guarded("form-delete", "Bandsintown's form delete failed", () -> {
             Optional<BitEventForm> form = BitEventForm.open(portal, eventId);
             if (form.isEmpty()) {
                 portal.pause();
                 if (events.find(eventId).isPresent()) {
-                    throw new BitUploadException("Bandsintown's form for event " + eventId + " didn't open — nothing "
+                    throw BitPortalException.temporary("Bandsintown's form for event " + eventId + " didn't open — nothing "
                             + "was deleted.");
                 }
                 logger.info("Bandsintown event {} is not listed — already removed", eventId);
@@ -243,7 +242,7 @@ final class SeleniumBitSession implements BitSession {
     // --- list (import) ---
 
     @Override
-    public List<ImportedGig> listEvents() throws BitUploadException {
+    public List<ImportedGig> listEvents() throws BitPortalException {
         return guarded("list", "Could not read the Bandsintown events", () -> {
             Map<String, BitEvent> byId = new LinkedHashMap<>();
             events.upcoming().forEach(e -> byId.putIfAbsent(e.id(), e));
@@ -255,32 +254,19 @@ final class SeleniumBitSession implements BitSession {
         });
     }
 
-    /**
-     * Read-only: what the portal lists for the given event ids, upcoming and past — "status
-     * start_date at venue … (upcoming|past)", or nothing for an id it doesn't list.
-     */
-    Map<String, String> inspect(Collection<String> ids) throws BitUploadException {
-        Map<String, String> found = new LinkedHashMap<>();
-        events.upcoming().stream().filter(e -> ids.contains(e.id()))
-                .forEach(e -> found.put(e.id(), e.described() + " (upcoming)"));
-        portal.pause();
-        events.past().stream().filter(e -> ids.contains(e.id()))
-                .forEach(e -> found.putIfAbsent(e.id(), e.described() + " (past)"));
-        return found;
-    }
-
+    /** Hands the browser back (kept open a little for the next session). Never throws. */
     @Override
     public void close() {
         if (closed) {
             return;
         }
         closed = true;
-        lease.keepWarm();                           // kept open a little for the next session
+        lease.keepWarm();
     }
 
     /** Runs one operation; a failure leaves a screenshot, and a browser error is a temporary failure. */
-    private <T> T guarded(String step, String failure, PlatformBrowser.Work<T, BitUploadException> work)
-            throws BitUploadException {
-        return lease.guarded(step, work, e -> new BitUploadException(failure + ": " + e.getMessage(), e));
+    private <T> T guarded(String step, String failure, PlatformBrowser.Work<T, BitPortalException> work)
+            throws BitPortalException {
+        return lease.guarded(step, failure, SeleniumBitPortalClient.FAILURES, work);
     }
 }

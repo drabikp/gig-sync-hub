@@ -1,8 +1,10 @@
 package sk.drabikp.bzscraper.gig.domain;
 
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.util.Base64;
+import java.util.Locale;
 
 /**
  * Identity of a {@link Gig} — its natural business key: start date + normalized
@@ -37,21 +39,21 @@ public record GigId(LocalDate date, String venue) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(key().getBytes(StandardCharsets.UTF_8));
     }
 
-    /** The identity a {@link #token()} stands for; IllegalArgumentException when it stands for none. */
+    /** The identity a {@link #token()} stands for; {@link UnknownReferenceException} when it stands for none. */
     public static GigId fromToken(String token) {
         String key;
         try {
             key = new String(Base64.getUrlDecoder().decode(token), StandardCharsets.UTF_8);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("not a gig: " + token, e);
+            throw new UnknownReferenceException("not a gig: " + token, e);
         }
         if (key.indexOf('|') < 0) {
-            throw new IllegalArgumentException("not a gig: " + token);
+            throw new UnknownReferenceException("not a gig: " + token);
         }
         try {
             return fromKey(key);
-        } catch (java.time.DateTimeException e) {
-            throw new IllegalArgumentException("not a gig: " + token, e);
+        } catch (DateTimeException e) {
+            throw new UnknownReferenceException("not a gig: " + token, e);
         }
     }
 
@@ -59,6 +61,6 @@ public record GigId(LocalDate date, String venue) {
         if (venue == null) {
             return "";
         }
-        return venue.trim().toLowerCase().replaceAll("\\s+", " ");
+        return venue.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
     }
 }

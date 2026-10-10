@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.places.adapter.out.photon;
 
 import org.junit.jupiter.api.Test;
+import sk.drabikp.bzscraper.gig.domain.Coordinates;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.places.config.PlacesProperties;
 import sk.drabikp.bzscraper.places.domain.Town;
@@ -28,8 +29,23 @@ class PhotonPlaceSearchTest {
     @Test
     void towns_come_with_district_region_postal_code_and_coordinates_once_each() {
         assertThat(new PhotonPlaceSearch(new PlacesProperties("http://unused")).parse(KOSICE)).containsExactly(
-                new Town("Košice", "okres Košice I", "Košický kraj", "041 26", Country.SLOVAKIA, 48.717, 21.25),
-                new Town("Košice", "okres Kutná Hora", "Středočeský kraj", null, Country.CZECHIA, 49.896, 15.151));
+                new Town("Košice", "okres Košice I", "Košický kraj", "041 26", Country.SLOVAKIA, new Coordinates(48.717, 21.25)),
+                new Town("Košice", "okres Kutná Hora", "Středočeský kraj", null, Country.CZECHIA, new Coordinates(49.896, 15.151)));
+    }
+
+    @Test
+    void a_feature_without_its_place_or_properties_is_left_out_and_the_others_stay() {
+        String answer = """
+                {"features":[
+                 {"type":"Feature","properties":{"countrycode":"SK","name":"Nowhere"}},
+                 {"geometry":{"coordinates":[21.25,48.717]},"type":"Feature"},
+                 {"geometry":{"coordinates":["x",48.7]},"properties":{"countrycode":"SK","name":"Odd"}},
+                 {"geometry":{"coordinates":[17.73,49.55]},"properties":{"countrycode":"CZ","name":"Hranice",
+                  "county":"okres Přerov"}}]}
+                """;
+
+        assertThat(new PhotonPlaceSearch(new PlacesProperties("http://unused")).parse(answer)).extracting(Town::name)
+                .containsExactly("Hranice");
     }
 
     @Test

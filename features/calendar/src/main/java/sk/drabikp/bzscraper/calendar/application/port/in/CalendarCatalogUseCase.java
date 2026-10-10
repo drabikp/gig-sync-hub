@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 
@@ -14,14 +15,20 @@ public interface CalendarCatalogUseCase {
     /**
      * Saves {@code gig} to the catalog, linked to the event.
      *
-     * @throws IllegalStateException if the catalog already has a gig with that identity
+     * @throws sk.drabikp.bzscraper.catalog.application.port.in.GigIdentityTakenException if the catalog
+     *         already has a gig with that identity (link the event to it instead)
      */
-    void addToCatalog(String eventId, Gig gig);
+    void addToCatalog(BandId band, String eventId, Gig gig);
 
-    void link(String eventId, GigId gigId);
+    /**
+     * Links the event to the catalog's gig.
+     *
+     * @throws sk.drabikp.bzscraper.gig.application.NotFoundException if the gig is no longer in the catalog
+     */
+    void link(BandId band, String eventId, GigId gigId);
 
-    void unlink(String eventId);
+    void unlink(BandId band, String eventId);
 
     /** Links every gig event whose day has exactly one catalog gig not linked to another event; returns how many. */
-    int linkSameDayGigs();
+    int linkSameDayGigs(BandId band);
 }

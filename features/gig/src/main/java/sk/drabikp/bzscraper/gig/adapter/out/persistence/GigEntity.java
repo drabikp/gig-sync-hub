@@ -5,29 +5,62 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.EntryType;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.Objects;
+import java.util.UUID;
 
 /**
  * JPA persistence model for a gig — this is the ONLY place JPA annotations live.
  * It is a flattened mirror of the {@link sk.drabikp.bzscraper.gig.domain.Gig}
- * aggregate; {@link GigEntityMapper} translates between the two. The domain never
+ * aggregate; {@link GigEntityMapper} (MapStruct) translates between the two. The domain never
  * imports this class.
  *
  * Schedule is stored as wall-clock {@code LocalDateTime} plus the country; the
  * zone is reconstructed from the country on the way out, sidestepping Hibernate's
  * {@code ZonedDateTime} timezone handling. {@code id} is the serialized natural key
- * (start date + normalized venue), so {@code save} upserts by gig identity.
+ * (start date + normalized venue) within its band ({@code band_id}), so {@code save} upserts by the
+ * band and the gig's identity.
  */
 @Entity
 @Table(name = "gig")
+@IdClass(GigEntity.Key.class)
 class GigEntity {
 
+    /** A gig's key: its band and its identity there ({@code GigId.key()}). */
+    static final class Key implements Serializable {
+
+        private UUID bandId;
+        private String id;
+
+        Key() {
+            // for JPA
+        }
+
+        Key(UUID bandId, String id) {
+            this.bandId = bandId;
+            this.id = id;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Key k && Objects.equals(bandId, k.bandId) && Objects.equals(id, k.id);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(bandId, id);
+        }
+    }
+
+    @Id
+    private UUID bandId;
     @Id
     private String id;
     /** Optimistic lock: bumped on every update; a save based on an older one fails. */
@@ -62,124 +95,207 @@ class GigEntity {
     private String posterImageUrl;
     private boolean cancelled;
 
-    protected GigEntity() {
-        // for JPA
+    public GigEntity() {
+        // for JPA and GigEntityMapper
     }
 
-    public GigEntity(String id, String title, LocalDateTime startDateTime, LocalDateTime endDateTime,
-                     String venue, String city, Country country, String lineup, EntryType entryType,
-                     String entryFee, String description, String facebookUrl, String ticketUrl,
-                     String posterImageUrl, boolean cancelled) {
-        this.id = id;
-        this.title = title;
-        this.startDateTime = startDateTime;
-        this.endDateTime = endDateTime;
-        this.venue = venue;
-        this.city = city;
-        this.country = country;
-        this.lineup = lineup;
-        this.entryType = entryType;
-        this.entryFee = entryFee;
-        this.description = description;
-        this.facebookUrl = facebookUrl;
-        this.ticketUrl = ticketUrl;
-        this.posterImageUrl = posterImageUrl;
-        this.cancelled = cancelled;
+    public UUID getBandId() {
+        return bandId;
     }
 
-    void setSlot(LocalDateTime start, LocalDateTime end) {
-        this.slotStart = start;
-        this.slotEnd = end;
-    }
-
-    void setAddress(Address address) {
-        this.street = address == null ? null : address.street();
-        this.postalCode = address == null ? null : address.postalCode();
-        this.district = address == null ? null : address.district();
-        this.region = address == null ? null : address.region();
-        this.latitude = address == null ? null : address.latitude();
-        this.longitude = address == null ? null : address.longitude();
-    }
-
-    Address getAddress() {
-        Address address = new Address(street, postalCode, district, region, latitude, longitude);
-        return address.equals(new Address(null, null, null, null, null, null)) ? null : address;
-    }
-
-    LocalDateTime getSlotStart() {
-        return slotStart;
-    }
-
-    LocalDateTime getSlotEnd() {
-        return slotEnd;
-    }
-
-    Long getVersion() {
-        return version;
-    }
-
-    /** Carries over the version the row had when it was read in this transaction. */
-    void setVersion(Long version) {
-        this.version = version;
+    public void setBandId(UUID bandId) {
+        this.bandId = bandId;
     }
 
     public String getId() {
         return id;
     }
 
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+
     public String getTitle() {
         return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
     }
 
     public LocalDateTime getStartDateTime() {
         return startDateTime;
     }
 
+    public void setStartDateTime(LocalDateTime startDateTime) {
+        this.startDateTime = startDateTime;
+    }
+
     public LocalDateTime getEndDateTime() {
         return endDateTime;
+    }
+
+    public void setEndDateTime(LocalDateTime endDateTime) {
+        this.endDateTime = endDateTime;
+    }
+
+    public LocalDateTime getSlotStart() {
+        return slotStart;
+    }
+
+    public void setSlotStart(LocalDateTime slotStart) {
+        this.slotStart = slotStart;
+    }
+
+    public LocalDateTime getSlotEnd() {
+        return slotEnd;
+    }
+
+    public void setSlotEnd(LocalDateTime slotEnd) {
+        this.slotEnd = slotEnd;
     }
 
     public String getVenue() {
         return venue;
     }
 
+    public void setVenue(String venue) {
+        this.venue = venue;
+    }
+
     public String getCity() {
         return city;
+    }
+
+    public void setCity(String city) {
+        this.city = city;
+    }
+
+    public String getStreet() {
+        return street;
+    }
+
+    public void setStreet(String street) {
+        this.street = street;
+    }
+
+    public String getPostalCode() {
+        return postalCode;
+    }
+
+    public void setPostalCode(String postalCode) {
+        this.postalCode = postalCode;
+    }
+
+    public String getDistrict() {
+        return district;
+    }
+
+    public void setDistrict(String district) {
+        this.district = district;
+    }
+
+    public String getRegion() {
+        return region;
+    }
+
+    public void setRegion(String region) {
+        this.region = region;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
     }
 
     public Country getCountry() {
         return country;
     }
 
+    public void setCountry(Country country) {
+        this.country = country;
+    }
+
     public String getLineup() {
         return lineup;
+    }
+
+    public void setLineup(String lineup) {
+        this.lineup = lineup;
     }
 
     public EntryType getEntryType() {
         return entryType;
     }
 
+    public void setEntryType(EntryType entryType) {
+        this.entryType = entryType;
+    }
+
     public String getEntryFee() {
         return entryFee;
+    }
+
+    public void setEntryFee(String entryFee) {
+        this.entryFee = entryFee;
     }
 
     public String getDescription() {
         return description;
     }
 
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
     public String getFacebookUrl() {
         return facebookUrl;
+    }
+
+    public void setFacebookUrl(String facebookUrl) {
+        this.facebookUrl = facebookUrl;
     }
 
     public String getTicketUrl() {
         return ticketUrl;
     }
 
+    public void setTicketUrl(String ticketUrl) {
+        this.ticketUrl = ticketUrl;
+    }
+
     public String getPosterImageUrl() {
         return posterImageUrl;
     }
 
+    public void setPosterImageUrl(String posterImageUrl) {
+        this.posterImageUrl = posterImageUrl;
+    }
+
     public boolean isCancelled() {
         return cancelled;
+    }
+
+    public void setCancelled(boolean cancelled) {
+        this.cancelled = cancelled;
     }
 }

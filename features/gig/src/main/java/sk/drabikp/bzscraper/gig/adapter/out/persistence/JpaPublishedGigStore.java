@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.gig.adapter.out.persistence;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Publication;
@@ -20,58 +21,57 @@ import java.util.Optional;
 class JpaPublishedGigStore implements PublishedGigStore {
 
     private final PublishedGigJpaRepository jpaRepository;
+    private final PublicationEntityMapper mapper;
 
-    public JpaPublishedGigStore(PublishedGigJpaRepository jpaRepository) {
+    public JpaPublishedGigStore(PublishedGigJpaRepository jpaRepository, PublicationEntityMapper mapper) {
         this.jpaRepository = jpaRepository;
+        this.mapper = mapper;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public boolean isPublished(Platform platform, GigId gigId) {
-        return jpaRepository.existsById(key(platform, gigId));
+    public boolean isPublished(BandId band, Platform platform, GigId gigId) {
+        return jpaRepository.existsById(key(band, platform, gigId));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<String> externalRef(Platform platform, GigId gigId) {
-        return jpaRepository.findById(key(platform, gigId))
+    public Optional<String> externalRef(BandId band, Platform platform, GigId gigId) {
+        return jpaRepository.findById(key(band, platform, gigId))
                 .map(PublishedGigEntity::getExternalRef)
                 .filter(ref -> !ref.isBlank());
     }
 
     @Override
-    public void record(Platform platform, GigId gigId, String externalRef) {
-        jpaRepository.save(new PublishedGigEntity(key(platform, gigId), externalRef));
+    public void record(BandId band, Platform platform, GigId gigId, String externalRef) {
+        jpaRepository.save(new PublishedGigEntity(key(band, platform, gigId), externalRef));
     }
 
     @Override
-    public void remove(Platform platform, GigId gigId) {
-        jpaRepository.deleteById(key(platform, gigId));
+    public void remove(BandId band, Platform platform, GigId gigId) {
+        jpaRepository.deleteById(key(band, platform, gigId));
     }
 
     @Override
-    public void move(GigId from, GigId to) {
+    public void move(BandId band, GigId from, GigId to) {
         if (from.equals(to)) {
             return;
         }
-        List<PublishedGigEntity> records = jpaRepository.findByKeyGigId(from.key());
+        List<PublishedGigEntity> records = jpaRepository.findByKeyBandIdAndKeyGigId(band.value(), from.key());
         jpaRepository.deleteAll(records);
         jpaRepository.flush(); // delete before insert, in case the keys collide
-        for (PublishedGigEntity old : records) {
-            record(Platform.of(old.getKey().platform()), to, old.getExternalRef());
+        for (Publication old : mapper.toDomain(records)) {
+            record(band, old.platform(), to, old.externalRef());
         }
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Publication> all() {
-        return jpaRepository.findAll().stream()
-                .map(e -> new Publication(Platform.of(e.getKey().platform()),
-                        GigId.fromKey(e.getKey().gigId()), e.getExternalRef()))
-                .toList();
+    public List<Publication> all(BandId band) {
+        return mapper.toDomain(jpaRepository.findByKeyBandId(band.value()));
     }
 
-    private static PublishedGigEntity.Key key(Platform platform, GigId gigId) {
-        return new PublishedGigEntity.Key(platform.id(), gigId.key());
+    private static PublishedGigEntity.Key key(BandId band, Platform platform, GigId gigId) {
+        return new PublishedGigEntity.Key(band.value(), platform.id(), gigId.key());
     }
 }

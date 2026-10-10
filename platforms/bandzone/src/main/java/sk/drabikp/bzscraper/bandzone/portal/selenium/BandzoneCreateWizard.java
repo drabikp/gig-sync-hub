@@ -1,8 +1,9 @@
 package sk.drabikp.bzscraper.bandzone.portal.selenium;
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.support.ui.ExpectedConditions;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 
 import java.util.regex.Matcher;
@@ -26,9 +27,9 @@ final class BandzoneCreateWizard {
     }
 
     /** Creates the concert; returns its Bandzone id. */
-    public String create(Gig gig) throws BandzoneUploadException {
-        browser.open("/koncert/zalozit.html?initBandPublicId=" + browser.bandSlug);
-        browser.wait.until(ExpectedConditions.presenceOfElementLocated(By.name("start[date]")));
+    public String create(Gig gig) throws BandzonePortalException {
+        browser.open("/koncert/zalozit.html?initBandPublicId=" + browser.bandSlug());
+        browser.until(ExpectedConditions.presenceOfElementLocated(By.name("start[date]")));
         form.setStart(gig.schedule().start());
         form.selectCity(gig.location());
         browser.clickByName("continue");
@@ -42,12 +43,12 @@ final class BandzoneCreateWizard {
      * whether this is one of them; "new" continues to the info step.
      */
     private void passDuplicateScreen() {
-        browser.wait.until(ExpectedConditions.or(
+        browser.until(ExpectedConditions.or(
                 ExpectedConditions.presenceOfElementLocated(By.name("new")),
                 ExpectedConditions.presenceOfElementLocated(By.name("name"))));
-        if (!browser.driver.findElements(By.name("new")).isEmpty()) {
+        if (browser.has(By.name("new"))) {
             browser.clickByName("new");
-            browser.wait.until(ExpectedConditions.presenceOfElementLocated(By.name("name")));
+            browser.until(ExpectedConditions.presenceOfElementLocated(By.name("name")));
         }
     }
 
@@ -55,15 +56,15 @@ final class BandzoneCreateWizard {
      * Submits and reads the new concert id from the page Bandzone opens. (Searching the band
      * page by title is unreliable: same-titled gigs and the notification panel link to others.)
      */
-    private String send(Gig gig) throws BandzoneUploadException {
-        browser.click(browser.driver.findElement(By.name("send")));
+    private String send(Gig gig) throws BandzonePortalException {
+        browser.click(browser.find(By.name("send")));
         try {
-            browser.wait.until(d -> CONCERT_URL.matcher(d.getCurrentUrl()).find());
-        } catch (RuntimeException e) {
-            throw new BandzoneUploadException("Gig '" + gig.title() + "' was submitted but Bandzone did not open "
-                    + "the created concert (still at " + browser.driver.getCurrentUrl() + ").", e);
+            browser.until(d -> CONCERT_URL.matcher(d.getCurrentUrl()).find());
+        } catch (TimeoutException e) {
+            throw BandzonePortalException.temporary("Gig '" + gig.title() + "' was submitted but Bandzone did not open "
+                    + "the created concert (still at " + browser.currentUrl() + ").", e);
         }
-        Matcher m = CONCERT_URL.matcher(browser.driver.getCurrentUrl());
+        Matcher m = CONCERT_URL.matcher(browser.currentUrl());
         m.find();
         return m.group(1);
     }

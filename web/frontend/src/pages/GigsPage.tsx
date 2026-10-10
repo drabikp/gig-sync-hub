@@ -21,8 +21,9 @@ import { IconChevronRight, IconDownload, IconPlus, IconSearch, IconTicket } from
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
-import { useGigs, usePlatforms, usePublish, useResync, useSyncStatus } from '../api/hooks';
+import { useExportAddress, useGigs, usePlatforms, usePublish, useResync, useSyncStatus } from '../api/hooks';
 import type { Gig } from '../api/types';
+import { useBandPath } from '../band/band';
 import { DateBlock } from '../components/DateBlock';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
@@ -40,6 +41,8 @@ function place(t: (k: string) => string, gig: Gig): string {
 
 /** The band's gigs: upcoming first (or the past), searchable, each with its state on every platform. */
 export function GigsPage() {
+  const path = useBandPath();
+  const exportAddress = useExportAddress();
   const { t } = useTranslation();
   const mobile = useIsMobile();
   const navigate = useNavigate();
@@ -99,14 +102,14 @@ export function GigsPage() {
                 </Menu.Target>
                 <Menu.Dropdown>
                   {exportable.map((p) => (
-                    <Menu.Item key={p.id} component="a" href={`/api/exports/${p.id}`}>
+                    <Menu.Item key={p.id} component="a" href={exportAddress(p.id)}>
                       {t('gigs.downloadFor', { platform: p.name })}
                     </Menu.Item>
                   ))}
                 </Menu.Dropdown>
               </Menu>
             )}
-            <Button leftSection={<IconPlus size={18} />} onClick={() => navigate('/gig/new')}>
+            <Button leftSection={<IconPlus size={18} />} onClick={() => navigate(path('/gig/new'))}>
               {t('gigs.new')}
             </Button>
           </>
@@ -147,7 +150,7 @@ export function GigsPage() {
           {t('gigs.count', { count: list.length })}
         </Text>
         {counts && (busy > 0 || counts.failed > 0) && (
-          <Anchor component={Link} to="/activity" size="sm" fw={600} c={counts.failed ? 'red' : 'orange.8'}>
+          <Anchor component={Link} to={path('/activity')} size="sm" fw={600} c={counts.failed ? 'red' : 'orange.8'}>
             {[busy && t('gigs.syncBusy', { count: busy }), counts.failed && t('gigs.syncFailed', { count: counts.failed })]
               .filter(Boolean).join(' · ')}
           </Anchor>
@@ -162,7 +165,7 @@ export function GigsPage() {
       {mobile ? (
         <Stack gap="sm">
           {list.map((g) => (
-            <UnstyledButton key={g.id} onClick={() => navigate(`/gig/${g.id}`)}>
+            <UnstyledButton key={g.id} onClick={() => navigate(path(`/gig/${g.id}`))}>
               <Paper withBorder p="md" radius="lg">
                 <Group wrap="nowrap" gap="md" align="center">
                   <DateBlock date={g.gig.date!} muted={g.gig.cancelled} />
@@ -244,7 +247,7 @@ export function GigsPage() {
                 <Table.Tbody>
                   {list.map((g) => (
                     <Table.Tr key={g.id} bg={chosen.includes(g.id) ? 'var(--mantine-primary-color-light)' : undefined}
-                      style={{ cursor: 'pointer' }} onClick={() => navigate(`/gig/${g.id}`)}>
+                      style={{ cursor: 'pointer' }} onClick={() => navigate(path(`/gig/${g.id}`))}>
                       <Table.Td onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           aria-label={t('gigs.select', { title: g.gig.title })}
@@ -258,7 +261,7 @@ export function GigsPage() {
                       </Table.Td>
                       <Table.Td>
                         <Group gap={8} wrap="nowrap">
-                          <Anchor component={Link} to={`/gig/${g.id}`} fw={700} c="var(--mantine-color-text)"
+                          <Anchor component={Link} to={path(`/gig/${g.id}`)} fw={700} c="var(--mantine-color-text)"
                             td={g.gig.cancelled ? 'line-through' : undefined} onClick={(e) => e.stopPropagation()}>
                             {g.gig.title}
                           </Anchor>
@@ -283,7 +286,7 @@ export function GigsPage() {
 
       {mobile && (
         <Affix position={{ bottom: 'calc(84px + env(safe-area-inset-bottom))', right: 16 }}>
-          <Button size="lg" radius="xl" leftSection={<IconPlus size={22} />} onClick={() => navigate('/gig/new')}
+          <Button size="lg" radius="xl" leftSection={<IconPlus size={22} />} onClick={() => navigate(path('/gig/new'))}
             style={{ boxShadow: '0 10px 24px rgba(59, 79, 216, 0.38)' }}>
             {t('gigs.new')}
           </Button>

@@ -3,16 +3,19 @@ import { IconActivity, IconAdjustmentsHorizontal, IconChevronRight, IconDeviceMo
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { BandSwitcher } from '../components/BandSwitcher';
 import { PageHeader } from '../components/PageHeader';
 import { LANGUAGES, setLanguage } from '../i18n';
 import { done } from '../lib/notify';
+import { useBandPath } from '../band/band';
 
 interface InstallPrompt extends Event {
   prompt: () => Promise<void>;
 }
 
-/** The phone's "More": the places used now and then, installing the app, the language. */
+/** The phone's "More": the band (and the way to another), the places used now and then, installing the app, the language. */
 export function MorePage() {
+  const path = useBandPath();
   const { t, i18n } = useTranslation();
   const [install, setInstall] = useState<InstallPrompt | null>(null);
   const standalone = typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)').matches;
@@ -40,6 +43,9 @@ export function MorePage() {
   return (
     <Stack gap="md">
       <PageHeader title={t('nav.more')} />
+      <Paper withBorder p={6}>
+        <BandSwitcher />
+      </Paper>
       {!standalone && !hidden && (
         <Paper p="md" radius="lg" bg="#1F2A44" c="white">
           <Group wrap="nowrap" align="flex-start" gap="md">
@@ -70,7 +76,7 @@ export function MorePage() {
       )}
       <Paper withBorder p={4}>
         {rows.map((row) => (
-          <NavLink key={row.to} component={Link} to={row.to} label={row.label} leftSection={<ThemeIcon variant="light" radius="md">{row.icon}</ThemeIcon>}
+          <NavLink key={row.to} component={Link} to={path(row.to)} label={row.label} leftSection={<ThemeIcon variant="light" radius="md">{row.icon}</ThemeIcon>}
             rightSection={<IconChevronRight size={18} />}
             styles={{ root: { minHeight: 56, borderRadius: 12 }, label: { fontSize: 16, fontWeight: 600 } }} />
         ))}

@@ -1,11 +1,9 @@
 package sk.drabikp.bzscraper.bandzone.portal.selenium;
 
 import org.openqa.selenium.By;
-import org.openqa.selenium.JavascriptExecutor;
-import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.support.ui.WebDriverWait;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,27 +26,36 @@ import java.util.Map;
 final class BandzoneLineupPage {
 
     private final BandzoneBrowser browser;
-    private final WebDriver driver;
-    private final WebDriverWait wait;
-    private final String url;
+    private final String path;
 
     public BandzoneLineupPage(BandzoneBrowser browser, String bandzoneId) {
         this.browser = browser;
-        this.driver = browser.driver;
-        this.wait = browser.wait;
-        this.url = browser.baseUrl + "/koncert/" + bandzoneId + "/update?updateTabs-at=updateBands";
+        this.path = "/koncert/" + bandzoneId + "/update?updateTabs-at=updateBands";
     }
 
-    public void sync(List<String> lineup, String ownBandName) throws BandzoneUploadException {
+    /** Makes the tab's performers the lineup plus the band itself, and checks what Bandzone stored. */
+    public void sync(List<String> lineup, String ownBandName) throws BandzonePortalException {
+        List<String> desired = desired(lineup, ownBandName);
+        open();
+        boolean ownListed = performers().values().stream().anyMatch(p -> sameName(p, ownBandName));
+        removeOthers(desired, ownBandName);
+        addMissing(desired);
+        verify(desired, ownBandName, ownListed);
+    }
+
+    /** The lineup without the band itself, each name once. */
+    private static List<String> desired(List<String> lineup, String ownBandName) {
         List<String> desired = new ArrayList<>();
         for (String name : lineup) {
             if (!sameName(name, ownBandName) && desired.stream().noneMatch(d -> sameName(d, name))) {
                 desired.add(name.trim());
             }
         }
+        return desired;
+    }
 
-        open();
-        boolean ownListed = performers().values().stream().anyMatch(p -> sameName(p, ownBandName));
+    /** Removes every performer neither in the lineup nor the band itself, one confirm form each. */
+    private void removeOthers(List<String> desired, String ownBandName) {
         for (Map.Entry<String, String> performer : performers().entrySet()) {
             String name = performer.getValue();
             if (!sameName(name, ownBandName) && desired.stream().noneMatch(d -> sameName(d, name))) {
@@ -56,21 +63,28 @@ final class BandzoneLineupPage {
                 open();
             }
         }
+    }
 
+    /** Queues every lineup name the tab doesn't list yet and adds them in one go. */
+    private void addMissing(List<String> desired) throws BandzonePortalException {
         List<String> present = new ArrayList<>(performers().values());
         List<String> toAdd = desired.stream()
                 .filter(d -> present.stream().noneMatch(p -> sameName(p, d)))
                 .toList();
-        if (!toAdd.isEmpty()) {
-            for (String name : toAdd) {
-                queue(name);
-            }
-            var add = driver.findElement(By.id("frmaddBandForm-add"));
-            js("arguments[0].click();", add);
-            wait.until(ExpectedConditions.stalenessOf(add));
-            open();
+        if (toAdd.isEmpty()) {
+            return;
         }
+        for (String name : toAdd) {
+            queue(name);
+        }
+        WebElement add = browser.find(By.id("frmaddBandForm-add"));
+        browser.click(add);
+        browser.until(ExpectedConditions.stalenessOf(add));
+        open();
+    }
 
+    /** The stored performers are the lineup plus the band itself (if it was listed before). */
+    private void verify(List<String> desired, String ownBandName, boolean ownListed) throws BandzonePortalException {
         List<String> stored = new ArrayList<>(performers().values());
         List<String> missing = desired.stream()
                 .filter(d -> stored.stream().noneMatch(s -> sameName(s, d)))
@@ -79,18 +93,18 @@ final class BandzoneLineupPage {
                 .filter(s -> !sameName(s, ownBandName) && desired.stream().noneMatch(d -> sameName(d, s)))
                 .toList();
         if (ownListed && stored.stream().noneMatch(p -> sameName(p, ownBandName))) {
-            throw new BandzoneUploadException("Bandzone lineup sync removed the band itself ("
+            throw BandzonePortalException.temporary("Bandzone lineup sync removed the band itself ("
                     + ownBandName + ") — add it back on Bandzone.");
         }
         if (!missing.isEmpty() || !extra.isEmpty()) {
-            throw new BandzoneUploadException("Bandzone lineup did not sync (missing " + missing
+            throw BandzonePortalException.temporary("Bandzone lineup did not sync (missing " + missing
                     + ", unexpected " + extra + ").");
         }
     }
 
     private void open() {
-        driver.get(url);
-        wait.until(ExpectedConditions.presenceOfElementLocated(By.id("frmaddBandForm-add")));
+        browser.open(path);
+        browser.until(ExpectedConditions.presenceOfElementLocated(By.id("frmaddBandForm-add")));
     }
 
     /** Current performers in page order: editable element id -> name. */
@@ -117,24 +131,24 @@ final class BandzoneLineupPage {
                 + "  if (q.get('em')==='delete' && q.get('ei')===id && b) return b;"
                 + "}"
                 + "return null;";
-        wait.until(d -> js(findButton, gigBandId) != null);
+        browser.until(d -> js(findButton, gigBandId) != null);
         // requestSubmit with the button's value, as for the concert delete tab
         js("var b=(function(){" + findButton + "}).apply(null, arguments);var f=b.form;"
                         + "var h=document.createElement('input');h.type='hidden';h.name='delete';h.value=b.value;"
                         + "f.appendChild(h);f.requestSubmit(b);",
                 gigBandId);
-        wait.until(ExpectedConditions.invisibilityOfElementLocated(By.id(editableId)));
+        browser.until(ExpectedConditions.invisibilityOfElementLocated(By.id(editableId)));
     }
 
     /** Queues one band in the add form: its exact-name profile, or a new stub. */
-    private void queue(String name) {
+    private void queue(String name) throws BandzonePortalException {
         long before = queuedCount();
         // drop stale suggestions so the wait below only sees this search's results
         js("document.querySelectorAll('ul.ui-autocomplete').forEach(u=>{u.innerHTML='';u.style.display='none';});"
                 + "var t=document.querySelector('#frmaddBandForm-bandIds__addCompleter__container-textInput');"
                 + "t.focus();t.value=arguments[0];t.dispatchEvent(new Event('input',{bubbles:true}));", name);
         // the "add new band/performer" item is always offered, so a non-empty list is certain
-        wait.until(d -> (Boolean) js("return Array.from(document.querySelectorAll('ul.ui-autocomplete'))"
+        browser.until(d -> (Boolean) js("return Array.from(document.querySelectorAll('ul.ui-autocomplete'))"
                 + ".some(u=>u.offsetParent!==null&&u.querySelector('li'));"));
         String picked = (String) js(
                 "var n=arguments[0].toLowerCase();"
@@ -147,13 +161,13 @@ final class BandzoneLineupPage {
                 name);
         if ("stub".equals(picked)) {
             By stubName = By.name("bandIds__addCompleter__createItem[name]");
-            wait.until(ExpectedConditions.visibilityOfElementLocated(stubName));
+            browser.until(ExpectedConditions.visibilityOfElementLocated(stubName));
             browser.setValue("[name='bandIds__addCompleter__createItem[name]']", name);
             browser.clickByName("bandIds__addCompleter__createItem[create]");
         } else if (picked == null) {
-            throw new IllegalStateException("Bandzone offered no way to add band '" + name + "'");
+            throw BandzonePortalException.temporary("Bandzone offered no way to add band '" + name + "'.");
         }
-        wait.until(d -> queuedCount() > before);
+        browser.until(d -> queuedCount() > before);
     }
 
     private long queuedCount() {
@@ -162,7 +176,7 @@ final class BandzoneLineupPage {
     }
 
     private Object js(String script, Object... args) {
-        return ((JavascriptExecutor) driver).executeScript(script, args);
+        return browser.js(script, args);
     }
 
     static boolean sameName(String a, String b) {

@@ -6,9 +6,10 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * {@code bzscraper.calendar.*}: the band calendar's private address ({@code ical-url} — a
- * secret, never in git; {@link #toString} hides it) and zone, the rule presets and the band's
- * own rules file, and the scores that sort events into gig / unsure / not a gig.
+ * {@code bzscraper.calendar.*}: the zone a band's calendar is in unless it says another, the rule presets,
+ * and the scores that sort events into gig / unsure / not a gig. Each band sets up its own calendar and
+ * rules on the page; {@code ical-url} (a secret, never in git; {@link #toString} hides it) and
+ * {@code profile-file} are band #1's from before that, kept once on start.
  */
 @ConfigurationProperties("bzscraper.calendar")
 public record CalendarProperties(String icalUrl, String zone, String presets, String profileFile, Integer gigScore,

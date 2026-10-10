@@ -21,6 +21,11 @@
 			<artifactId>spring-boot-starter-flyway</artifactId>
 		</dependency>
 		<!-- the generated API classes (gig.api and every feature's) carry these annotations -->
+		<!-- the mappers between the API's classes and the domain (every module's …Mapper) -->
+		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>jakarta.validation</groupId>
 			<artifactId>jakarta.validation-api</artifactId>
@@ -57,7 +62,7 @@
 	<build>
 		<plugins>
 			<plugin>
-				<!-- the API's shared parts: GigDraft, Country, EntryType, Problem → sk.drabikp.bzscraper.gig.api -->
+				<!-- the API's shared parts: GigFormRequest/Response, CountryValue, EntryTypeValue, ProblemResponse + ProblemCodeValue → sk.drabikp.bzscraper.gig.api -->
 				<groupId>org.openapitools</groupId>
 				<artifactId>openapi-generator-maven-plugin</artifactId>
 				<executions>
@@ -89,7 +94,9 @@
 							     picked up by the other modules' tests -->
 							<includes>
 								<include>sk/drabikp/bzscraper/gig/domain/TestGigs*</include>
+								<include>sk/drabikp/bzscraper/gig/domain/TestBands*</include>
 								<include>sk/drabikp/bzscraper/gig/domain/platform/TestPlatforms*</include>
+								<include>sk/drabikp/bzscraper/gig/application/port/out/TestLiveUpdates*</include>
 							</includes>
 						</configuration>
 					</execution>

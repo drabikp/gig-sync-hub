@@ -52,6 +52,8 @@ class H2ImportTest {
                 .isEqualTo(LocalDateTime.of(2026, 8, 22, 18, 0));
         assertThat(jdbc.queryForObject("select external_ref from published_gig where platform = 'BANDZONE'",
                 String.class)).isEqualTo("563406");
+        assertThat(jdbc.queryForList("select distinct band_id::text from gig", String.class))
+                .as("the one band of H2 is band #1").containsExactly("00000000-0000-0000-0000-000000000001");
         assertThat(jdbc.queryForObject("select created_at from sync_task where id = 15", OffsetDateTime.class)
                 .toInstant()).isEqualTo(OffsetDateTime.of(2026, 10, 9, 9, 54, 36, 0, ZoneOffset.UTC).toInstant());
         assertThat(jdbc.queryForObject("select message from sync_log where task_id = 15", String.class))
@@ -63,9 +65,9 @@ class H2ImportTest {
 
     @Test
     void new_rows_get_ids_after_the_copied_ones() {
-        Long task = jdbc.queryForObject("insert into sync_task (gig_id, gig_label, platform, action, status,"
-                + " attempts, created_at, updated_at) values ('g', 'g', 'X', 'UPDATE', 'PENDING', 0, now(), now())"
-                + " returning id", Long.class);
+        Long task = jdbc.queryForObject("insert into sync_task (band_id, gig_id, gig_label, platform, action, status,"
+                + " attempts, created_at, updated_at) values ('00000000-0000-0000-0000-000000000001', 'g', 'g', 'X',"
+                + " 'UPDATE', 'PENDING', 0, now(), now()) returning id", Long.class);
         Long rule = jdbc.queryForObject("insert into calendar_rule (kind, weight, origin, enabled)"
                 + " values ('TITLE', 1, 'USER', true) returning id", Long.class);
 

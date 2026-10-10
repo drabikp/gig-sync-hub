@@ -9,16 +9,24 @@ import java.util.Map;
  */
 public class ConcurrentChangeException extends UserFacingException {
 
-    /** The gig is gone. */
-    public static final String DELETED = "deletedMeanwhile";
-    /** The gig is not as the user saw it. */
-    public static final String CHANGED = "changedMeanwhile";
-
-    public ConcurrentChangeException(String code, String message) {
-        super(code, Map.of(), message);
+    private ConcurrentChangeException(GigErrorCode code, String message, Throwable cause) {
+        super(code, Map.of(), message, cause);
     }
 
-    public ConcurrentChangeException(String code, String message, Throwable cause) {
-        super(code, Map.of(), message, cause);
+    /** The gig is not as the user saw it. */
+    public static ConcurrentChangeException changed() {
+        return changed(null);
+    }
+
+    /** The gig is not as the user saw it: another transaction saved it at the same time ({@code cause}). */
+    public static ConcurrentChangeException changed(Throwable cause) {
+        return new ConcurrentChangeException(GigErrorCode.CHANGED_MEANWHILE, "The gig was changed meanwhile (in another window, "
+                + "by an import or from the calendar) — nothing was changed. Reload it and edit again.", cause);
+    }
+
+    /** The gig is gone. */
+    public static ConcurrentChangeException deleted() {
+        return new ConcurrentChangeException(GigErrorCode.DELETED_MEANWHILE, "The gig was deleted meanwhile — nothing was changed.",
+                null);
     }
 }

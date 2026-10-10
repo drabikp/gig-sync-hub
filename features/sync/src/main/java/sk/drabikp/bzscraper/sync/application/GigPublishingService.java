@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.sync.application;
 
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
@@ -32,20 +33,20 @@ public class GigPublishingService implements PublishGigsUseCase {
     }
 
     @Override
-    public QueueResult publish(Set<Platform> targets, Collection<Gig> gigs) {
+    public QueueResult publish(BandId band, Set<Platform> targets, Collection<Gig> gigs) {
         QueueResult result = transactions.computeInTransaction(() -> {
             List<SyncTask> queued = new ArrayList<>();
             List<String> notQueued = new ArrayList<>();
             for (Platform platform : platforms.ordered(targets)) {
                 for (Gig gig : gigs) {
-                    QueueResult one = sync.publish(platform, gig);
+                    QueueResult one = sync.publish(band, platform, gig);
                     queued.addAll(one.queued());
                     notQueued.addAll(one.notQueued());
                 }
             }
             return new QueueResult(queued, notQueued);
         });
-        sync.signal(result);
+        sync.signal(band, result);
         return result;
     }
 }

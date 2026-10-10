@@ -2,10 +2,12 @@ package sk.drabikp.bzscraper.bandzone.scrape;
 
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Country;
+import sk.drabikp.bzscraper.gig.domain.EntryType;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -57,9 +59,7 @@ final class GigSummaryToGigMapper {
     }
 
     private static Admission resolveAdmission(String entryFee) {
-        if (entryFee == null || entryFee.isBlank() || entryFee.toLowerCase().contains("zdarma")) {
-            return Admission.free();
-        }
-        return Admission.paid(entryFee);
+        boolean free = entryFee == null || entryFee.isBlank() || entryFee.toLowerCase(Locale.ROOT).contains("zdarma");
+        return Admission.of(free ? EntryType.FREE : EntryType.PAID, entryFee);
     }
 }

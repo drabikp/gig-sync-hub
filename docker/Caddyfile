@@ -1,14 +1,21 @@
-# The way in from the internet (compose profile "proxy"): HTTPS for BZ_DOMAIN with a Let's
-# Encrypt certificate Caddy gets and renews itself (the domain's DNS must point here, ports 80
-# and 443 open), HTTP redirected to HTTPS, everything passed to the app. BZ_DOMAIN=localhost
-# tries it locally with Caddy's own certificate.
+# The way in (compose service "proxy"): HTTPS for BZ_DOMAIN with a Let's Encrypt certificate
+# Caddy gets and renews itself (the domain's DNS must point here, ports 80 and 443 open), HTTP
+# redirected to HTTPS; /auth/* goes to the sign-in (Rauthy), everything else to the app — one
+# origin. BZ_DOMAIN=localhost (the default) runs it locally with Caddy's own certificate.
 {$BZ_DOMAIN} {
 	# the live updates (server-sent events) are a stream: never compressed or held back
-	@notLive not path /api/events
+	@notLive not path /api/bands/*/events
 	encode @notLive zstd gzip
 
-	reverse_proxy app:8080 {
-		flush_interval -1
+	# the sign-in: Rauthy serves everything under /auth/v1
+	handle /auth/* {
+		reverse_proxy rauthy:8080
+	}
+
+	handle {
+		reverse_proxy app:8080 {
+			flush_interval -1
+		}
 	}
 
 	header {

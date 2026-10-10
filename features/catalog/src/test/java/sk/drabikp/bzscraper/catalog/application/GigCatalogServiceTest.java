@@ -21,6 +21,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.OTHER;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDSINTOWN;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
@@ -40,9 +42,9 @@ class GigCatalogServiceTest {
     private final Gig gig = TestGigs.gig("Fest", "Klub 007");
 
     private Gig onBothPlatforms(Gig g) {
-        gigs.save(g);
-        published.record(BANDZONE, g.id(), "100");
-        published.record(BANDSINTOWN, g.id(), "900");
+        gigs.save(BAND, g);
+        published.record(BAND, BANDZONE, g.id(), "100");
+        published.record(BAND, BANDSINTOWN, g.id(), "900");
         return g;
     }
 
@@ -56,13 +58,30 @@ class GigCatalogServiceTest {
     }
 
     @Test
+    void the_same_gig_in_two_bands_is_two_gigs_and_one_bands_changes_leave_the_other_alone() {
+        service.add(BAND, gig);
+        service.add(OTHER, gig);
+        published.record(OTHER, BANDZONE, gig.id(), "999");
+
+        service.cancel(BAND, gig.id());
+        QueueResult deleted = service.delete(BAND, gig.id());
+
+        assertThat(service.allGigs(BAND)).isEmpty();
+        assertThat(service.gig(OTHER, gig.id()).cancelled()).isFalse();
+        assertThat(deleted.queued()).isEmpty();
+        assertThat(published.isPublished(OTHER, BANDZONE, gig.id())).isTrue();
+        assertThat(service.publicationsByGig(BAND)).isEmpty();
+        assertThat(outbox.all()).isEmpty();
+    }
+
+    @Test
     void an_edit_queues_an_update_on_every_platform_the_gig_is_on_in_the_same_transaction() {
         onBothPlatforms(gig);
 
-        QueueResult result = service.update(gig, renamed(gig, "Fest 2026"));
+        QueueResult result = service.update(BAND, gig, renamed(gig, "Fest 2026"));
 
         assertThat(transactions.used).isEqualTo(1);
-        assertThat(gigs.findById(gig.id())).get().extracting(Gig::title).isEqualTo("Fest 2026");
+        assertThat(gigs.findById(BAND, gig.id())).get().extracting(Gig::title).isEqualTo("Fest 2026");
         assertThat(result.queued()).extracting(SyncTask::platform, SyncTask::action)
                 .containsExactly(tuple(BANDZONE, SyncAction.UPDATE), tuple(BANDSINTOWN, SyncAction.UPDATE));
         assertThat(signals.wakes).isEqualTo(1);
@@ -72,10 +91,10 @@ class GigCatalogServiceTest {
     void an_edit_without_changes_or_of_a_gig_on_no_platform_queues_nothing() {
         onBothPlatforms(gig);
         Gig local = TestGigs.gig("Local only", "Barrák");
-        gigs.save(local);
+        gigs.save(BAND, local);
 
-        assertThat(service.update(gig, gig).queued()).isEmpty();
-        assertThat(service.update(local, renamed(local, "Renamed")).queued()).isEmpty();
+        assertThat(service.update(BAND, gig, gig).queued()).isEmpty();
+        assertThat(service.update(BAND, local, renamed(local, "Renamed")).queued()).isEmpty();
         assertThat(signals.wakes).isZero();
     }
 
@@ -84,8 +103,8 @@ class GigCatalogServiceTest {
         onBothPlatforms(gig);
 
         Gig first = renamed(gig, "Fest 2026");
-        service.update(gig, first);
-        service.update(first, renamed(gig, "Fest 2026 — sold out"));
+        service.update(BAND, gig, first);
+        service.update(BAND, first, renamed(gig, "Fest 2026 — sold out"));
 
         assertThat(pending()).hasSize(2);
     }
@@ -94,42 +113,60 @@ class GigCatalogServiceTest {
     void a_gig_whose_platform_work_is_running_is_not_changed() {
         onBothPlatforms(gig);
         Gig edited = renamed(gig, "Fest 2026");
-        SyncTask first = service.update(gig, edited).queued().getFirst();
+        SyncTask first = service.update(BAND, gig, edited).queued().getFirst();
         outbox.markRunning(first.id(), clock.instant());
 
-        assertThatThrownBy(() -> service.update(edited, renamed(gig, "Fest 2026 — sold out")))
+        assertThatThrownBy(() -> service.update(BAND, edited, renamed(gig, "Fest 2026 — sold out")))
                 .isInstanceOf(GigBusyException.class);
-        assertThatThrownBy(() -> service.delete(edited.id())).isInstanceOf(GigBusyException.class);
-        assertThat(gigs.findById(gig.id())).contains(edited);
+        assertThatThrownBy(() -> service.delete(BAND, edited.id())).isInstanceOf(GigBusyException.class);
+        assertThatThrownBy(() -> service.cancel(BAND, edited.id())).isInstanceOf(GigBusyException.class);
+        assertThat(gigs.findById(BAND, gig.id())).contains(edited);
+    }
+
+    @Test
+    void a_link_is_forgotten_through_the_write_path_unless_the_gigs_platform_work_is_running() {
+        CatalogWrites writes = CatalogFakes.writes(gigs, published, outbox,
+                SyncFakes.requests(outbox, published, signals, clock));
+        onBothPlatforms(gig);
+
+        writes.forgetLink(BAND, BANDZONE, gig.id());
+        assertThat(published.isPublished(BAND, BANDZONE, gig.id())).isFalse();
+
+        SyncTask running = service.update(BAND, gig, renamed(gig, "Fest 2026")).queued().getFirst();
+        outbox.markRunning(running.id(), clock.instant());
+        assertThatThrownBy(() -> writes.forgetLink(BAND, BANDSINTOWN, gig.id()))
+                .isInstanceOfSatisfying(GigBusyException.class,
+                        e -> assertThat(e.getMessage()).contains("Fest 2026").doesNotContain("GigId["));
+        assertThat(published.isPublished(BAND, BANDSINTOWN, gig.id())).isTrue();
     }
 
     @Test
     void a_new_gig_or_an_edit_onto_another_gigs_day_and_venue_is_refused() {
         Gig other = TestGigs.gig("Other", "Lucerna");
-        gigs.save(gig);
-        gigs.save(other);
+        gigs.save(BAND, gig);
+        gigs.save(BAND, other);
         Gig movedOntoOther = new Gig(gig.title(), other.schedule(), other.location(), gig.lineup(), gig.admission(),
                 null, null, null, null, false);
 
-        assertThatThrownBy(() -> service.add(TestGigs.gig("Same place", "Klub 007")))
+        assertThatThrownBy(() -> service.add(BAND, TestGigs.gig("Same place", "Klub 007")))
                 .isInstanceOf(GigIdentityTakenException.class);
-        assertThatThrownBy(() -> service.update(gig, movedOntoOther)).isInstanceOf(GigIdentityTakenException.class);
-        assertThat(gigs.findById(other.id())).contains(other);
-        assertThat(gigs.findById(gig.id())).contains(gig);
+        assertThatThrownBy(() -> service.update(BAND, gig, movedOntoOther)).isInstanceOf(GigIdentityTakenException.class);
+        assertThat(gigs.findById(BAND, other.id())).contains(other);
+        assertThat(gigs.findById(BAND, gig.id())).contains(gig);
     }
 
     @Test
     void an_edit_that_moves_the_gigs_identity_takes_its_records_and_pending_work_along_and_says_so() {
         onBothPlatforms(gig);
         Gig edited = renamed(gig, "Fest 2026");
-        service.update(gig, edited);
+        service.update(BAND, gig, edited);
         Gig moved = TestGigs.gig("Fest 2026", "Klub 007",
                 ZonedDateTime.of(2026, 10, 1, 20, 0, 0, 0, ZoneId.of("Europe/Prague")));
 
-        service.update(edited, moved);
+        service.update(BAND, edited, moved);
 
-        assertThat(gigs.findById(gig.id())).isEmpty();
-        assertThat(published.externalRef(BANDZONE, moved.id())).contains("100");
+        assertThat(gigs.findById(BAND, gig.id())).isEmpty();
+        assertThat(published.externalRef(BAND, BANDZONE, moved.id())).contains("100");
         assertThat(moves.moved).containsExactly(edited.id() + " -> " + moved.id());
         assertThat(pending()).hasSize(2).allSatisfy(t -> {
             assertThat(t.gigId()).isEqualTo(moved.id());
@@ -141,39 +178,39 @@ class GigCatalogServiceTest {
     void an_edit_of_a_gig_changed_or_deleted_meanwhile_is_refused_and_changes_nothing() {
         onBothPlatforms(gig);
         Gig other = renamed(gig, "Changed in another window");
-        service.update(gig, other);
+        service.update(BAND, gig, other);
         int queuedBefore = outbox.all().size();
 
-        assertThatThrownBy(() -> service.update(gig, renamed(gig, "My stale edit")))
+        assertThatThrownBy(() -> service.update(BAND, gig, renamed(gig, "My stale edit")))
                 .isInstanceOf(ConcurrentChangeException.class).hasMessageContaining("changed meanwhile");
-        assertThat(gigs.findById(gig.id())).get().extracting(Gig::title).isEqualTo("Changed in another window");
+        assertThat(gigs.findById(BAND, gig.id())).get().extracting(Gig::title).isEqualTo("Changed in another window");
         assertThat(outbox.all()).hasSize(queuedBefore);
 
-        service.delete(gig.id());
-        assertThatThrownBy(() -> service.update(other, renamed(other, "Too late")))
+        service.delete(BAND, gig.id());
+        assertThatThrownBy(() -> service.update(BAND, other, renamed(other, "Too late")))
                 .isInstanceOf(ConcurrentChangeException.class).hasMessageContaining("deleted meanwhile");
-        assertThat(gigs.findById(gig.id())).isEmpty();
+        assertThat(gigs.findById(BAND, gig.id())).isEmpty();
     }
 
     @Test
     void cancel_and_reactivate_queue_the_same_on_the_platforms() {
         onBothPlatforms(gig);
 
-        QueueResult cancelled = service.cancel(gig.id());
+        QueueResult cancelled = service.cancel(BAND, gig.id());
         outbox.all().forEach(t -> outbox.markDone(t.id(), null, clock.instant()));
-        QueueResult reactivated = service.reactivate(gig.id());
+        QueueResult reactivated = service.reactivate(BAND, gig.id());
 
         assertThat(cancelled.queued()).extracting(SyncTask::action).containsOnly(SyncAction.CANCEL).hasSize(2);
         assertThat(reactivated.queued()).extracting(SyncTask::action).containsOnly(SyncAction.REACTIVATE).hasSize(2);
-        assertThat(gigs.findById(gig.id())).get().extracting(Gig::cancelled).isEqualTo(false);
+        assertThat(gigs.findById(BAND, gig.id())).get().extracting(Gig::cancelled).isEqualTo(false);
     }
 
     @Test
     void a_cancel_and_a_reactivate_that_both_have_not_run_cancel_out_into_an_update() {
         onBothPlatforms(gig);
 
-        service.cancel(gig.id());
-        QueueResult reactivated = service.reactivate(gig.id());
+        service.cancel(BAND, gig.id());
+        QueueResult reactivated = service.reactivate(BAND, gig.id());
 
         assertThat(reactivated.queued()).extracting(SyncTask::action).containsOnly(SyncAction.UPDATE);
         assertThat(pending()).extracting(SyncTask::action).containsOnly(SyncAction.UPDATE);
@@ -185,32 +222,32 @@ class GigCatalogServiceTest {
     void cancelling_a_cancelled_gig_or_an_unknown_one_changes_nothing() {
         onBothPlatforms(gig.cancel());
 
-        assertThat(service.cancel(gig.id()).queued()).isEmpty();
-        assertThat(service.cancel(TestGigs.gig("Unknown", "Nowhere").id()).queued()).isEmpty();
+        assertThat(service.cancel(BAND, gig.id()).queued()).isEmpty();
+        assertThat(service.cancel(BAND, TestGigs.gig("Unknown", "Nowhere").id()).queued()).isEmpty();
         assertThat(outbox.all()).isEmpty();
     }
 
     @Test
     void delete_discards_pending_work_and_queues_a_delete_where_the_gig_is_while_keeping_its_records() {
         onBothPlatforms(gig);
-        service.update(gig, renamed(gig, "Fest 2026"));
+        service.update(BAND, gig, renamed(gig, "Fest 2026"));
 
-        QueueResult deleted = service.delete(gig.id());
+        QueueResult deleted = service.delete(BAND, gig.id());
 
-        assertThat(gigs.findById(gig.id())).isEmpty();
+        assertThat(gigs.findById(BAND, gig.id())).isEmpty();
         assertThat(deleted.queued()).extracting(SyncTask::action).containsOnly(SyncAction.DELETE).hasSize(2);
         assertThat(deleted.queued()).allSatisfy(t -> assertThat(t.gigLabel()).contains("Fest 2026"));
         assertThat(outbox.all()).filteredOn(t -> t.action() == SyncAction.UPDATE)
                 .extracting(SyncTask::status).containsOnly(SyncStatus.DISCARDED);
-        assertThat(published.externalRef(BANDSINTOWN, gig.id())).as("kept until the platform delete succeeds")
+        assertThat(published.externalRef(BAND, BANDSINTOWN, gig.id())).as("kept until the platform delete succeeds")
                 .contains("900");
     }
 
     @Test
     void deleting_a_gig_on_no_platform_queues_nothing() {
-        gigs.save(gig);
+        gigs.save(BAND, gig);
 
-        assertThat(service.delete(gig.id()).queued()).isEmpty();
+        assertThat(service.delete(BAND, gig.id()).queued()).isEmpty();
         assertThat(signals.wakes).isZero();
     }
 
@@ -218,16 +255,16 @@ class GigCatalogServiceTest {
     void publications_are_grouped_by_gig_and_platform() {
         onBothPlatforms(gig);
 
-        assertThat(service.publicationsByGig().get(gig.id())).containsOnlyKeys(BANDZONE, BANDSINTOWN)
+        assertThat(service.publicationsByGig(BAND).get(gig.id())).containsOnlyKeys(BANDZONE, BANDSINTOWN)
                 .containsEntry(BANDZONE, new Publication(BANDZONE, gig.id(), "100"));
     }
 
     @Test
     void a_gig_is_found_by_its_identity_and_one_that_isnt_there_is_not_found() {
-        service.add(gig);
+        service.add(BAND, gig);
 
-        assertThat(service.gig(gig.id())).isEqualTo(gig);
-        assertThatThrownBy(() -> service.gig(TestGigs.gig("Other", "Klub 008").id()))
+        assertThat(service.gig(BAND, gig.id())).isEqualTo(gig);
+        assertThatThrownBy(() -> service.gig(BAND, TestGigs.gig("Other", "Klub 008").id()))
                 .isInstanceOf(NotFoundException.class);
     }
 }

@@ -4,7 +4,6 @@ import sk.drabikp.bzscraper.gig.domain.CityName;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
-import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -23,10 +22,6 @@ public record ImportProposal(Gig local, List<ImportedGig> copies, boolean sugges
 
     /** One version of the gig's details, from the catalog ({@code platform} null) or a platform. */
     public record Version(Platform platform, Gig gig) {
-
-        public String source(Platforms platforms) {
-            return platform == null ? "Catalog" : platforms.name(platform);
-        }
     }
 
     /** {@code copies} in the platforms' import precedence (the planner orders them). */

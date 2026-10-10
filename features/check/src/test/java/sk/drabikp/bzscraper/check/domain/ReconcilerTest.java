@@ -44,6 +44,18 @@ class ReconcilerTest {
     }
 
     @Test
+    void platforms_are_compared_by_id_as_the_database_and_the_platforms_give_them_back() {
+        Gig renamed = gig("SNP", SNP.schedule().start(), SNP.location().venue(), "Košice", Country.SLOVAKIA);
+        Publication stored = new Publication(Platform.of(BANDZONE.id()), SNP.id(), "1");
+        List<ImportedGig> listed = List.of(new ImportedGig(Platform.of(BANDZONE.id()), renamed, "1"),
+                new ImportedGig(Platform.of(BANDZONE.id()), renamed, "2"));
+
+        assertThat(Reconciler.drifts(TestPlatforms.PLATFORMS.traits(BANDZONE), List.of(SNP), List.of(stored), listed,
+                Set.of())).singleElement().extracting(Drift::kind).isEqualTo(Drift.Kind.DIFFERENT);
+        assertThat(Reconciler.unlinked(BANDZONE, List.of(stored), listed)).isEqualTo(1);
+    }
+
+    @Test
     void a_copy_in_a_same_named_town_of_another_country_is_found() {
         Gig czechKosice = gig(SNP.title(), SNP.schedule().start(), SNP.location().venue(), "Košice", Country.CZECHIA);
 

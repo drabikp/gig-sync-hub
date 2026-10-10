@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.calendar.application.port.out;
 
 import sk.drabikp.bzscraper.calendar.domain.KnownCalendarEvent;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -14,18 +15,18 @@ import java.util.Optional;
  */
 public interface CalendarSnapshotStore {
 
-    Map<String, KnownCalendarEvent> all();
+    Map<String, KnownCalendarEvent> all(BandId band);
 
-    Optional<KnownCalendarEvent> find(String eventId);
+    Optional<KnownCalendarEvent> find(BandId band, String eventId);
 
     /** Stores the copy after a read made at {@code readAt}; events not in {@code events} are left as they are. */
-    void saveRead(Collection<KnownCalendarEvent> events, Instant readAt);
+    void saveRead(BandId band, Collection<KnownCalendarEvent> events, Instant readAt);
 
     /** Stores one event's new state without counting as a read (e.g. a change marked seen). */
-    void save(KnownCalendarEvent event);
+    void save(BandId band, KnownCalendarEvent event);
 
-    void remove(String eventId);
+    void remove(BandId band, String eventId);
 
     /** When the calendar was last read, if ever. */
-    Optional<Instant> lastRead();
+    Optional<Instant> lastRead(BandId band);
 }

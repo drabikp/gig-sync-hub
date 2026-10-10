@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.calendar.application.port.out.BandProfileStore;
 import sk.drabikp.bzscraper.calendar.config.CalendarProperties;
 import sk.drabikp.bzscraper.calendar.domain.rules.ProfileRule;
 import sk.drabikp.bzscraper.calendar.domain.rules.RuleOrigin;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -22,10 +23,10 @@ import java.util.List;
 /**
  * Brings the stored band profile up to date on start. The shipped rules
  * ({@code calendar/base.profile} + the configured language presets) replace the
- * {@code PRESET} rules, so a new app version's presets take effect. The band's own file
- * ({@code bzscraper.calendar.profile-file}) replaces the {@code USER} rules — until the
- * rules editor exists it is where a band edits its own rules. A broken band file is
- * reported and the previous rules are kept. {@code LEARNED} rules are never touched here.
+ * {@code PRESET} rules (everyone's), so a new app version's presets take effect. The band rules file
+ * ({@code bzscraper.calendar.profile-file}) — where band #1 kept its own rules before each band edited
+ * them on the page — becomes band #1's {@code USER} rules once, while it has none; after that the page
+ * is where they change. A broken file is reported and skipped. {@code LEARNED} rules are never touched here.
  */
 @Component
 class BandProfileSync implements ApplicationRunner {
@@ -46,22 +47,22 @@ class BandProfileSync implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         List<ProfileRule> shipped = new ArrayList<>(ProfileFile.parse(resource("base"), RuleOrigin.PRESET));
         presets.forEach(preset -> shipped.addAll(ProfileFile.parse(resource(preset), RuleOrigin.PRESET)));
-        store.replace(RuleOrigin.PRESET, shipped);
+        store.replaceShipped(shipped);
 
         if (profileFile.isEmpty()) {
             return;
         }
         Path path = Path.of(profileFile);
-        if (!Files.isRegularFile(path)) {
-            log.info("No band profile file at {}; using the shipped rules only", path);
+        if (!Files.isRegularFile(path)
+                || store.rules(BandId.FIRST).stream().anyMatch(rule -> rule.origin() == RuleOrigin.USER)) {
             return;
         }
         try {
             List<ProfileRule> own = ProfileFile.parse(Files.readString(path, StandardCharsets.UTF_8), RuleOrigin.USER);
-            store.replace(RuleOrigin.USER, own);
-            log.info("Band profile: {} shipped rules, {} from {}", shipped.size(), own.size(), path);
+            store.replace(BandId.FIRST, RuleOrigin.USER, own);
+            log.info("Band #1's own calendar rules: {} from {} (edited on the page from now on)", own.size(), path);
         } catch (IOException | IllegalArgumentException e) {
-            log.error("Band profile file {} not loaded ({}); keeping the previous band rules", path, e.getMessage());
+            log.error("Band profile file {} not loaded ({})", path, e.getMessage());
         }
     }
 

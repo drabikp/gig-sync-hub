@@ -6,7 +6,7 @@ import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -15,7 +15,8 @@ import java.nio.file.Path;
 /**
  * The Bulk Upload dialog: a CSV ({@link BandsintownCsv}) is uploaded; rows without an event
  * id become drafts, rows with one edit that event. After drafts the success dialog offers
- * "Notify my followers" and Publish; otherwise just OK.
+ * "Notify my followers" and Publish; otherwise just OK. Drafts that couldn't be published are
+ * left there for the user (publish or delete them) — uploading again would make more.
  */
 final class BitBulkUpload {
 
@@ -39,8 +40,8 @@ final class BitBulkUpload {
     }
 
     /** Uploads the CSV and returns the portal's reply to it. */
-    public PortalReply upload(String csv) throws BitUploadException {
-        WebElement fileInput = portal.wait.until(ExpectedConditions.presenceOfElementLocated(
+    public PortalReply upload(String csv) throws BitPortalException {
+        WebElement fileInput = portal.until(ExpectedConditions.presenceOfElementLocated(
                 By.cssSelector("input[type=file]")));
         Path file = null;
         try {
@@ -49,12 +50,12 @@ final class BitBulkUpload {
             portal.pause();
             attach(fileInput, file);
             portal.pause();
-            int mark = portal.replies.count();
+            int mark = portal.replies().count();
             portal.click(portal.visibleButton("Upload"));
-            return portal.replies.await(mark, r -> "PATCH".equals(r.method()) && r.urlContains("status=DRAFT"),
+            return portal.replies().await(mark, r -> "PATCH".equals(r.method()) && r.urlContains("status=DRAFT"),
                     "the upload");
         } catch (IOException e) {
-            throw new BitUploadException("Could not write the Bandsintown upload file: " + e.getMessage(), e);
+            throw BitPortalException.temporary("Could not write the Bandsintown upload file: " + e.getMessage(), e);
         } finally {
             if (file != null) {
                 try {
@@ -67,14 +68,14 @@ final class BitBulkUpload {
     }
 
     /** Sets "Notify my followers" and publishes the uploaded drafts. */
-    public void publishDrafts(boolean notifyFollowers) throws BitUploadException {
+    public void publishDrafts(boolean notifyFollowers) throws BitPortalException {
         setNotifySwitch(notifyFollowers);
-        int mark = portal.replies.count();
+        int mark = portal.replies().count();
         portal.pause();
         portal.click(portal.visibleButton("Publish"));
-        PortalReply reply = portal.replies.await(mark, PortalReply::write, "publishing");
+        PortalReply reply = portal.replies().await(mark, PortalReply::write, "publishing");
         if (reply.status() != 200) {
-            throw new BitUploadException("Bandsintown did not publish the uploaded events — " + reply.describe()
+            throw BitPortalException.needsUser("Bandsintown did not publish the uploaded events — " + reply.describe()
                     + " They are left as drafts there.");
         }
         portal.pause();
@@ -87,17 +88,17 @@ final class BitBulkUpload {
         portal.pause();
     }
 
-    private void setNotifySwitch(boolean desired) throws BitUploadException {
+    private void setNotifySwitch(boolean desired) throws BitPortalException {
         Object state = portal.js(READ_NOTIFY_SWITCH);
         if (state == null) {
-            throw new BitUploadException("Could not find Bandsintown's \"Notify my followers\" switch, so "
+            throw BitPortalException.needsUser("Could not find Bandsintown's \"Notify my followers\" switch, so "
                     + "nothing was published — the events are left as drafts there.");
         }
         if (!Boolean.valueOf(desired).equals(state)) {
             portal.pause();
-            portal.click(portal.driver.findElement(By.cssSelector("[data-bz-notify]")));
+            portal.click(portal.find(By.cssSelector("[data-bz-notify]")));
             if (!Boolean.valueOf(desired).equals(portal.js(READ_NOTIFY_SWITCH))) {
-                throw new BitUploadException("Could not switch Bandsintown's \"Notify my followers\" "
+                throw BitPortalException.needsUser("Could not switch Bandsintown's \"Notify my followers\" "
                         + (desired ? "on" : "off") + ", so nothing was published — the events are left as drafts there.");
             }
         }

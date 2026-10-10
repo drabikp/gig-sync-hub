@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 
 /**
@@ -9,5 +10,5 @@ import sk.drabikp.bzscraper.gig.domain.Gig;
  */
 public interface SaveGigUseCase {
 
-    void add(Gig gig);
+    void add(BandId band, Gig gig);
 }

@@ -20,6 +20,7 @@
 	     ports (platforms/); app wires everything and runs. -->
 	<modules>
 		<module>features/gig</module>
+		<module>features/accounts</module>
 		<module>features/places</module>
 		<module>features/sync</module>
 		<module>features/catalog</module>
@@ -39,6 +40,7 @@
 		<!-- H2 now only reads the old database's SQL backup for the one-time import into
 		     PostgreSQL (bzscraper.db.import-h2); pinned to the version that wrote it. -->
 		<h2.version>2.4.240</h2.version>
+		<mapstruct.version>1.6.3</mapstruct.version>
 		<!-- only the app module runs (spring-boot:run) -->
 		<spring-boot.run.skip>true</spring-boot.run.skip>
 	</properties>
@@ -65,6 +67,17 @@
 				<groupId>sk.drabik</groupId>
 				<artifactId>bzscraper-frontend</artifactId>
 				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>sk.drabik</groupId>
+				<artifactId>bzscraper-accounts</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>sk.drabik</groupId>
+				<artifactId>bzscraper-accounts</artifactId>
+				<version>${project.version}</version>
+				<type>test-jar</type>
 			</dependency>
 			<dependency>
 				<groupId>sk.drabik</groupId>
@@ -130,6 +143,11 @@
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
+				<groupId>org.mapstruct</groupId>
+				<artifactId>mapstruct</artifactId>
+				<version>${mapstruct.version}</version>
+			</dependency>
+			<dependency>
 				<groupId>com.tngtech.archunit</groupId>
 				<artifactId>archunit-junit5</artifactId>
 				<version>1.4.2</version>
@@ -154,6 +172,31 @@
 	<build>
 		<pluginManagement>
 			<plugins>
+				<!-- MapStruct writes the mappers between the API's classes and the domain (…Mapper interfaces):
+				     Spring beans, and a response field left unmapped stops the build. Naming the processors
+				     turns discovery off, so Spring Boot's configuration processor is named too. -->
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<configuration>
+						<annotationProcessorPathsUseDepMgmt>true</annotationProcessorPathsUseDepMgmt>
+						<annotationProcessorPaths>
+							<path>
+								<groupId>org.mapstruct</groupId>
+								<artifactId>mapstruct-processor</artifactId>
+								<version>${mapstruct.version}</version>
+							</path>
+							<path>
+								<groupId>org.springframework.boot</groupId>
+								<artifactId>spring-boot-configuration-processor</artifactId>
+							</path>
+						</annotationProcessorPaths>
+						<compilerArgs combine.children="append">
+							<arg>-Amapstruct.defaultComponentModel=spring</arg>
+							<arg>-Amapstruct.unmappedTargetPolicy=ERROR</arg>
+						</compilerArgs>
+					</configuration>
+				</plugin>
 				<!-- The API is written as OpenAPI specs (src/main/openapi/*.yaml, one per module that serves
 				     requests); each module generates its controllers' interfaces and the JSON classes from
 				     its own spec. The page generates its TypeScript side from the same files. -->
@@ -175,7 +218,7 @@
 								<generateApiTests>false</generateApiTests>
 								<generateModelDocumentation>false</generateModelDocumentation>
 								<generateModelTests>false</generateModelTests>
-								<modelNameSuffix>Json</modelNameSuffix>
+								<!-- no suffix: the specs name their schemas …Request (sent), …Response (answered), …Value (enums) -->
 								<!-- instants (format date-time) as java.time.Instant -->
 								<typeMappings>
 									<typeMapping>DateTime=Instant</typeMapping>
@@ -185,10 +228,12 @@
 								</importMappings>
 								<!-- the kernel's shared schemas (gig.yaml) are the kernel's classes, never generated again -->
 								<schemaMappings>
-									<schemaMapping>Problem=sk.drabikp.bzscraper.gig.api.ProblemJson</schemaMapping>
-									<schemaMapping>GigDraft=sk.drabikp.bzscraper.gig.api.GigDraftJson</schemaMapping>
-									<schemaMapping>Country=sk.drabikp.bzscraper.gig.api.CountryJson</schemaMapping>
-									<schemaMapping>EntryType=sk.drabikp.bzscraper.gig.api.EntryTypeJson</schemaMapping>
+									<schemaMapping>ProblemResponse=sk.drabikp.bzscraper.gig.api.ProblemResponse</schemaMapping>
+									<schemaMapping>ProblemCodeValue=sk.drabikp.bzscraper.gig.api.ProblemCodeValue</schemaMapping>
+									<schemaMapping>GigFormRequest=sk.drabikp.bzscraper.gig.api.GigFormRequest</schemaMapping>
+									<schemaMapping>GigFormResponse=sk.drabikp.bzscraper.gig.api.GigFormResponse</schemaMapping>
+									<schemaMapping>CountryValue=sk.drabikp.bzscraper.gig.api.CountryValue</schemaMapping>
+									<schemaMapping>EntryTypeValue=sk.drabikp.bzscraper.gig.api.EntryTypeValue</schemaMapping>
 									<schemaMapping>TimeOfDay=java.lang.String</schemaMapping>
 								</schemaMappings>
 								<configOptions>

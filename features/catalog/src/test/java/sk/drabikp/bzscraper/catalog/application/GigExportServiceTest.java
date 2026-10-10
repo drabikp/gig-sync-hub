@@ -3,6 +3,8 @@ package sk.drabikp.bzscraper.catalog.application;
 import org.junit.jupiter.api.Test;
 import sk.drabikp.bzscraper.catalog.application.port.in.ExportGigsUseCase;
 import sk.drabikp.bzscraper.catalog.application.port.out.GigExporter;
+import sk.drabikp.bzscraper.gig.application.BadRequestException;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.TestGigs;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
@@ -12,6 +14,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDSINTOWN;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
@@ -23,8 +26,8 @@ class GigExportServiceTest {
     void exports_the_whole_catalog_in_the_platforms_own_format() {
         Gig a = TestGigs.gig("A", "Klub 007");
         Gig b = TestGigs.gig("B", "Barrák");
-        gigs.save(a);
-        gigs.save(b);
+        gigs.save(BAND, a);
+        gigs.save(BAND, b);
         GigExporter exporter = new GigExporter() {
             @Override
             public Platform platform() {
@@ -42,15 +45,15 @@ class GigExportServiceTest {
             }
 
             @Override
-            public String export(List<Gig> all) {
+            public String export(BandId band, List<Gig> all) {
                 return all.size() + " gigs";
             }
         };
         GigExportService service = new GigExportService(gigs, List.of(exporter));
 
         assertThat(service.exportable()).containsExactly(BANDSINTOWN);
-        assertThat(service.export(BANDSINTOWN)).isEqualTo(new ExportGigsUseCase.ExportFile("gigs.csv", "text/csv",
+        assertThat(service.export(BAND, BANDSINTOWN)).isEqualTo(new ExportGigsUseCase.ExportFile("gigs.csv", "text/csv",
                 "2 gigs"));
-        assertThatThrownBy(() -> service.export(BANDZONE)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.export(BAND, BANDZONE)).isInstanceOf(BadRequestException.class);
     }
 }

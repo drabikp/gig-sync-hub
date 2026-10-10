@@ -42,3 +42,8 @@ export function errorText(error: unknown): string {
 export function failed(error: unknown) {
   notifications.show({ message: errorText(error), color: 'red', autoClose: 8000 });
 }
+
+/** Something didn't work, as the platform or server said it (not one of the API's coded refusals). */
+export function failedWith(message: string) {
+  notifications.show({ message, color: 'red', autoClose: 10000 });
+}

@@ -3,26 +3,32 @@ package sk.drabikp.bzscraper.web;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * {@code bzscraper.auth.*}: the one account that may use the app. {@code password} as is, or
- * encoded with its id ({@code {bcrypt}$2a$…}); empty → a random one, written to the log on start
- * (fine on a developer's machine, never on a server). {@code remember-me-key} signs the
- * "remember me" cookie; empty → derived from the account, so changing the password signs
- * everyone out. Secrets never leave this record ({@link #toString}).
+ * {@code bzscraper.auth.*}: the sign-in through Rauthy (OpenID Connect).
+ *
+ * @param issuer       Rauthy as the browser reaches it and as its tokens name it
+ *                     ({@code https://<domain>/auth/v1/})
+ * @param internalUrl  Rauthy as the app reaches it (tokens, keys, user info): inside the
+ *                     containers' network ({@code http://rauthy:8080/auth/v1/}); empty = the issuer
+ * @param clientId     the app's client in Rauthy
+ * @param clientSecret its secret — NEVER in source (in Docker the secret {@code auth_client_secret})
  */
 @ConfigurationProperties("bzscraper.auth")
-public record AuthProperties(String username, String password, String rememberMeKey, Integer rememberMeDays) {
+public record AuthProperties(String issuer, String internalUrl, String clientId, String clientSecret) {
 
     public AuthProperties {
-        username = username == null || username.isBlank() ? "admin" : username.strip();
-        password = password == null ? "" : password;
-        rememberMeKey = rememberMeKey == null ? "" : rememberMeKey;
-        rememberMeDays = rememberMeDays == null ? 30 : rememberMeDays;
+        issuer = withSlash(issuer == null || issuer.isBlank() ? "https://localhost/auth/v1/" : issuer.strip());
+        internalUrl = internalUrl == null || internalUrl.isBlank() ? issuer : withSlash(internalUrl.strip());
+        clientId = clientId == null || clientId.isBlank() ? "bzscraper" : clientId.strip();
+        clientSecret = clientSecret == null ? "" : clientSecret.strip();
+    }
+
+    private static String withSlash(String url) {
+        return url.endsWith("/") ? url : url + "/";
     }
 
     @Override
     public String toString() {
-        return "AuthProperties[username=" + username + ", password=" + (password.isEmpty() ? "" : "***")
-                + ", rememberMeKey=" + (rememberMeKey.isEmpty() ? "" : "***") + ", rememberMeDays=" + rememberMeDays
-                + "]";
+        return "AuthProperties[issuer=" + issuer + ", internalUrl=" + internalUrl + ", clientId=" + clientId
+                + ", clientSecret=" + (clientSecret.isEmpty() ? "" : "***") + "]";
     }
 }

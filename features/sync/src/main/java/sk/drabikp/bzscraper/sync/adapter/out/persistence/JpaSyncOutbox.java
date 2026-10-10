@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.sync.adapter.out.persistence;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncOutbox;
@@ -32,78 +33,87 @@ class JpaSyncOutbox implements SyncOutbox {
 
     private final SyncTaskJpaRepository tasks;
     private final SyncLogJpaRepository log;
+    private final SyncEntityMapper mapper;
 
-    public JpaSyncOutbox(SyncTaskJpaRepository tasks, SyncLogJpaRepository log) {
+    public JpaSyncOutbox(SyncTaskJpaRepository tasks, SyncLogJpaRepository log, SyncEntityMapper mapper) {
         this.tasks = tasks;
         this.log = log;
+        this.mapper = mapper;
     }
 
     @Override
-    public SyncTask enqueue(GigId gigId, String gigLabel, Platform platform, SyncAction action, Instant now) {
-        SyncTaskEntity task = tasks.save(new SyncTaskEntity(gigId.key(), gigLabel, platform,
+    public SyncTask enqueue(BandId band, GigId gigId, String gigLabel, Platform platform, SyncAction action,
+                            Instant now) {
+        SyncTaskEntity task = tasks.save(new SyncTaskEntity(band.value(), gigId.key(), gigLabel, platform,
                 action, now));
         write(task, now, "queued");
-        return task.toTask();
+        return mapper.toTask(task);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<SyncTask> find(long id) {
-        return tasks.findById(id).map(SyncTaskEntity::toTask);
+        return tasks.findById(id).map(mapper::toTask);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<SyncTask> openFor(GigId gigId) {
-        return toTasks(tasks.findByGigIdAndStatusInOrderByIdAsc(gigId.key(), OPEN));
+    public List<SyncTask> openFor(BandId band, GigId gigId) {
+        return mapper.toTasks(tasks.findByBandIdAndGigIdAndStatusInOrderByIdAsc(band.value(), gigId.key(), OPEN));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<SyncTask> unfinished() {
-        return toTasks(tasks.findByStatusInOrderByIdAsc(UNFINISHED));
+    public List<SyncTask> unfinished(BandId band) {
+        return mapper.toTasks(tasks.findByBandIdAndStatusInOrderByIdAsc(band.value(), UNFINISHED));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<SyncTask> recent(int limit) {
-        return toTasks(tasks.findAllByOrderByIdDesc(Limit.of(limit)));
+    public List<SyncTask> recent(BandId band, int limit) {
+        return mapper.toTasks(tasks.findByBandIdOrderByIdDesc(band.value(), Limit.of(limit)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SyncTask> history(BandId band, GigId gigId, int limit) {
+        return mapper.toTasks(tasks.findByBandIdAndGigIdOrderByIdDesc(band.value(), gigId.key(), Limit.of(limit)));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<SyncLogEntry> log(long taskId) {
-        return log.findByTaskIdOrderByIdAsc(taskId).stream().map(SyncLogEntity::toEntry).toList();
+        return mapper.toEntries(log.findByTaskIdOrderByIdAsc(taskId));
     }
 
     @Override
-    public List<SyncTask> supersede(GigId gigId, Platform platform, String why, Instant now) {
-        List<SyncTaskEntity> pending = tasks.findByGigIdAndPlatformAndStatusOrderByIdAsc(
-                gigId.key(), platform.id(), SyncStatus.PENDING.name());
+    public List<SyncTask> supersede(BandId band, GigId gigId, Platform platform, String why, Instant now) {
+        List<SyncTaskEntity> pending = tasks.findByBandIdAndGigIdAndPlatformAndStatusOrderByIdAsc(
+                band.value(), gigId.key(), platform.id(), SyncStatus.PENDING.name());
         for (SyncTaskEntity task : pending) {
             task.change(SyncStatus.DISCARDED, null, "superseded: " + why, now);
             write(task, now, "superseded: " + why);
         }
-        return toTasks(pending);
+        return mapper.toTasks(pending);
     }
 
     @Override
-    public List<SyncTask> replaceFailed(GigId gigId, Platform platform, Set<SyncAction> actions, String why,
-                                        Instant now) {
-        List<SyncTaskEntity> failed = tasks.findByGigIdAndPlatformAndStatusOrderByIdAsc(
-                        gigId.key(), platform.id(), SyncStatus.FAILED.name()).stream()
-                .filter(task -> actions.contains(task.toTask().action()))
+    public List<SyncTask> replaceFailed(BandId band, GigId gigId, Platform platform, Set<SyncAction> actions,
+                                        String why, Instant now) {
+        List<SyncTaskEntity> failed = tasks.findByBandIdAndGigIdAndPlatformAndStatusOrderByIdAsc(
+                        band.value(), gigId.key(), platform.id(), SyncStatus.FAILED.name()).stream()
+                .filter(task -> actions.contains(SyncAction.valueOf(task.getAction())))
                 .toList();
         for (SyncTaskEntity task : failed) {
             task.change(SyncStatus.DISCARDED, null, "replaced: " + why, now);
             write(task, now, "replaced: " + why);
         }
-        return toTasks(failed);
+        return mapper.toTasks(failed);
     }
 
     @Override
-    public void move(GigId from, GigId to, String newLabel) {
-        for (SyncTaskEntity task : tasks.findByGigId(from.key())) {
+    public void move(BandId band, GigId from, GigId to, String newLabel) {
+        for (SyncTaskEntity task : tasks.findByBandIdAndGigId(band.value(), from.key())) {
             task.moveTo(to.key(), newLabel);
         }
     }
@@ -112,26 +122,26 @@ class JpaSyncOutbox implements SyncOutbox {
     @Transactional(readOnly = true)
     public Optional<SyncTask> nextDue(Instant now) {
         return tasks.findFirstByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(SyncStatus.PENDING.name(), now)
-                .map(SyncTaskEntity::toTask);
+                .map(mapper::toTask);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<SyncTask> due(Instant now) {
-        return toTasks(tasks.findByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(SyncStatus.PENDING.name(), now));
+        return mapper.toTasks(tasks.findByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(SyncStatus.PENDING.name(), now));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<SyncTask> due(Platform platform, SyncAction action, Instant now) {
-        return toTasks(tasks.findByPlatformAndActionAndStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(
-                platform.id(), action.name(), SyncStatus.PENDING.name(), now));
+    public List<SyncTask> due(BandId band, Platform platform, SyncAction action, Instant now) {
+        return mapper.toTasks(tasks.findByBandIdAndPlatformAndActionAndStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(
+                band.value(), platform.id(), action.name(), SyncStatus.PENDING.name(), now));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<SyncTask> running() {
-        return toTasks(tasks.findByStatusInOrderByIdAsc(List.of(SyncStatus.RUNNING.name())));
+        return mapper.toTasks(tasks.findByStatusInOrderByIdAsc(List.of(SyncStatus.RUNNING.name())));
     }
 
     @Override
@@ -204,14 +214,11 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     private SyncTaskEntity get(long id) {
-        return tasks.findById(id).orElseThrow(() -> new IllegalArgumentException("no sync task " + id));
+        // the engine and the log service ask only for tasks they have seen; tasks are never deleted
+        return tasks.findById(id).orElseThrow(() -> new IllegalStateException("no sync task " + id));
     }
 
     private void write(SyncTaskEntity task, Instant at, String message) {
         log.save(new SyncLogEntity(task.getId(), at, message));
-    }
-
-    private static List<SyncTask> toTasks(List<SyncTaskEntity> entities) {
-        return entities.stream().map(SyncTaskEntity::toTask).toList();
     }
 }

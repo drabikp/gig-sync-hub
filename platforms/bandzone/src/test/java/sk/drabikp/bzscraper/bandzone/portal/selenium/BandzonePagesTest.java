@@ -4,7 +4,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.NoAlertPresentException;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import org.openqa.selenium.NoSuchElementException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Country;
@@ -25,8 +26,9 @@ import static org.assertj.core.api.Assertions.tuple;
 /**
  * The Bandzone page objects against copies of the band admin's forms ({@link BandzoneFixture}):
  * the town picked among same-named towns by its district, the club linked or kept as text,
- * the stored concert read back, the wizard's new id, the delete tab without its confirm(),
- * the lineup tab's performers made the gig's lineup (the band itself kept, a profile or a stub).
+ * the stored concert read back, the wizard's new id, the delete tab without its confirm() (and
+ * what it did checked, a concert already gone left alone), the lineup tab's performers made the
+ * gig's lineup (the band itself kept, a profile or a stub), a field the page lacks.
  */
 class BandzonePagesTest {
 
@@ -59,7 +61,7 @@ class BandzonePagesTest {
 
     @Test
     void the_edit_form_picks_the_town_by_its_district_links_the_club_and_checks_what_was_stored() throws Exception {
-        new BandzoneUpdateForm(bandzone.browser, "100").save(gig("Zámecký klub", HRANICE_PREROV));
+        new BandzoneUpdateForm(bandzone.browser, new PosterDownloader(), "100").save(gig("Zámecký klub", HRANICE_PREROV));
 
         assertThat(bandzone.concerts.get("100")).containsEntry("cityId", "town-hranice-prerov")
                 .containsEntry("venueId", "club-17")
@@ -71,7 +73,7 @@ class BandzonePagesTest {
 
     @Test
     void a_club_bandzone_doesnt_list_is_kept_as_text() throws Exception {
-        new BandzoneUpdateForm(bandzone.browser, "100").save(gig("Nový klub", HRANICE_PREROV));
+        new BandzoneUpdateForm(bandzone.browser, new PosterDownloader(), "100").save(gig("Nový klub", HRANICE_PREROV));
 
         assertThat(bandzone.concerts.get("100")).containsEntry("venueId", "")
                 .containsEntry("venueId__container[textInput]", "Nový klub");
@@ -79,8 +81,8 @@ class BandzonePagesTest {
 
     @Test
     void a_town_bandzone_knows_several_times_is_for_the_user_to_pick_nothing_is_saved() {
-        assertThatThrownBy(() -> new BandzoneUpdateForm(bandzone.browser, "100").save(gig("Zámecký klub", null)))
-                .isInstanceOfSatisfying(BandzoneUploadException.class, e -> {
+        assertThatThrownBy(() -> new BandzoneUpdateForm(bandzone.browser, new PosterDownloader(), "100").save(gig("Zámecký klub", null)))
+                .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
                     assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER);
                     assertThat(e.getMessage()).contains("several towns named Hranice", "okres Cheb");
                 });
@@ -103,14 +105,60 @@ class BandzonePagesTest {
     }
 
     @Test
-    void the_delete_tab_posts_the_pressed_button_without_its_confirm_dialog() {
-        new BandzoneDeleteTab(bandzone.browser, "100").submit(BandzoneDeleteTab.CANCEL);
+    void the_delete_tab_posts_the_pressed_button_without_its_confirm_dialog_and_checks_the_concert_is_gone()
+            throws Exception {
+        assertThat(new BandzoneDeleteTab(bandzone.browser, "100").submit(BandzoneDeleteTab.Action.DELETE)).isTrue();
 
         assertThat(bandzone.posts).singleElement().satisfies(post -> {
             assertThat(post.path()).isEqualTo("/koncert/100/update?do=profileDeleteForm-submit");
-            assertThat(post.fields()).containsEntry("cancelGig", "1").doesNotContainKey("delete");
+            assertThat(post.fields()).containsEntry("delete", "1").doesNotContainKey("cancelGig");
         });
+        assertThat(bandzone.concerts).doesNotContainKey("100");
         assertThatThrownBy(() -> bandzone.driver.switchTo().alert()).isInstanceOf(NoAlertPresentException.class);
+    }
+
+    @Test
+    void a_concert_already_gone_is_not_deleted_again() throws Exception {
+        bandzone.deleted.add("150");
+
+        assertThat(new BandzoneDeleteTab(bandzone.browser, "150").submit(BandzoneDeleteTab.Action.DELETE)).isFalse();
+        assertThat(bandzone.posts).isEmpty();
+    }
+
+    @Test
+    void a_cancel_is_checked_on_the_bands_planned_gigs_or_on_the_year_a_played_one_was_in() throws Exception {
+        bandzone.concert("300", Map.of("name", "Planned", "start[date]", "1.9.2030", "start[time]", "20:00"));
+        bandzone.concert("200", Map.of("name", "Played", "start[date]", "5.6.2020", "start[time]", "20:00"));
+
+        assertThat(new BandzoneDeleteTab(bandzone.browser, "300").submit(BandzoneDeleteTab.Action.CANCEL)).isTrue();
+        assertThat(new BandzoneDeleteTab(bandzone.browser, "200").submit(BandzoneDeleteTab.Action.CANCEL)).isTrue();
+
+        assertThat(bandzone.posts).extracting(BandzoneFixture.Post::path).containsExactly(
+                "/koncert/300/update?do=profileDeleteForm-submit", "/koncert/200/update?do=profileDeleteForm-submit");
+        assertThat(bandzone.posts.getFirst().fields()).containsEntry("cancelGig", "1").doesNotContainKey("delete");
+        assertThat(bandzone.cancelled).containsExactlyInAnyOrder("300", "200");
+    }
+
+    @Test
+    void a_cancel_bandzone_didnt_store_fails_to_be_tried_again() {
+        bandzone.concert("300", Map.of("name", "Planned", "start[date]", "1.9.2030", "start[time]", "20:00"));
+        bandzone.cancelIgnored = true;
+
+        assertThatThrownBy(() -> new BandzoneDeleteTab(bandzone.browser, "300").submit(BandzoneDeleteTab.Action.CANCEL))
+                .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
+                    assertThat(e.kind()).isEqualTo(FailureKind.TEMPORARY);
+                    assertThat(e.getMessage()).contains("did not cancel concert 300");
+                });
+    }
+
+    @Test
+    void a_field_the_page_doesnt_have_is_an_error_not_a_silent_no_op() {
+        bandzone.browser.open("/koncert/100/update?updateTabs-at=updateForm");
+
+        assertThatThrownBy(() -> bandzone.browser.setValue("[name='no-such-field']", "x"))
+                .isInstanceOf(NoSuchElementException.class).hasMessageContaining("Bandzone field [name='no-such-field']");
+        assertThatThrownBy(() -> bandzone.browser.clickByName("no-such-button"))
+                .isInstanceOf(NoSuchElementException.class).hasMessageContaining("[name='no-such-button']");
     }
 
     @Test

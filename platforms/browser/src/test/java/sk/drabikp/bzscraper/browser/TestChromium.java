@@ -38,8 +38,9 @@ public final class TestChromium {
                 .build(), options);
     }
 
-    /** {@link PlatformBrowser} settings for the test Chromium, its profile in {@code profileDir}. */
-    public static PlatformBrowser.Settings settings(String platform, Path profileDir) {
-        return new PlatformBrowser.Settings(platform, profileDir, true, CHROMIUM, CHROMEDRIVER, "basic", "1280,1024");
+    /** {@link PlatformBrowser} settings for the test Chromium, its accounts' profiles in {@code profileRoot}. */
+    public static PlatformBrowser.Settings settings(String platform, Path profileRoot) {
+        return new PlatformBrowser.Settings(platform, profileRoot.toString(), true, CHROMIUM, CHROMEDRIVER, "basic",
+                "1280,1024");
     }
 }

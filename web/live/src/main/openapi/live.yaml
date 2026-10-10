@@ -13,7 +13,9 @@ servers:
 tags:
   - name: Live
 paths:
-  /api/events:
+  /api/bands/{bandId}/events:
+    parameters:
+      - $ref: '../../../../../features/gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     get:
       tags: [Live]
       operationId: liveEvents
@@ -26,6 +28,6 @@ paths:
                 type: string
 components:
   schemas:
-    LiveTopic:
+    LiveTopicValue:
       type: string
       enum: [gigs, sync, check, import, calendar]

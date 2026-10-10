@@ -18,6 +18,10 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
+			<artifactId>bzscraper-accounts</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
 			<artifactId>bzscraper-places</artifactId>
 		</dependency>
 		<dependency>
@@ -63,6 +67,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<!-- the sign-in: OpenID Connect with Rauthy -->
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-oauth2-client</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

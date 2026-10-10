@@ -2,8 +2,10 @@ package sk.drabikp.bzscraper.importing.domain;
 
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * What an import would do, for the user to review before applying.
@@ -15,4 +17,10 @@ import java.util.Map;
  */
 public record ImportPlan(List<ImportProposal> proposals, int alreadyLinked, List<String> skipped,
                          Map<Platform, String> failures) {
+
+    public ImportPlan {
+        proposals = List.copyOf(proposals);
+        skipped = List.copyOf(skipped);
+        failures = Collections.unmodifiableMap(new TreeMap<>(failures));     // in the platforms' order
+    }
 }

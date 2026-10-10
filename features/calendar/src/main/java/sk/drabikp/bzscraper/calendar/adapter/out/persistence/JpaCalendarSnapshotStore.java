@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.bzscraper.calendar.application.port.out.CalendarSnapshotStore;
 import sk.drabikp.bzscraper.calendar.domain.KnownCalendarEvent;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -19,52 +20,58 @@ import java.util.stream.Collectors;
 class JpaCalendarSnapshotStore implements CalendarSnapshotStore {
 
     private final CalendarEventJpaRepository jpaRepository;
+    private final CalendarEntityMapper mapper;
 
-    public JpaCalendarSnapshotStore(CalendarEventJpaRepository jpaRepository) {
+    public JpaCalendarSnapshotStore(CalendarEventJpaRepository jpaRepository, CalendarEntityMapper mapper) {
         this.jpaRepository = jpaRepository;
+        this.mapper = mapper;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Map<String, KnownCalendarEvent> all() {
-        return jpaRepository.findAll().stream().map(CalendarEventEntity::toDomain)
+    public Map<String, KnownCalendarEvent> all(BandId band) {
+        return jpaRepository.findByBandId(band.value()).stream().map(mapper::toDomain)
                 .collect(Collectors.toMap(KnownCalendarEvent::id, Function.identity()));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<KnownCalendarEvent> find(String eventId) {
-        return jpaRepository.findById(eventId).map(CalendarEventEntity::toDomain);
+    public Optional<KnownCalendarEvent> find(BandId band, String eventId) {
+        return jpaRepository.findById(new BandEventKey(band.value(), eventId)).map(mapper::toDomain);
     }
 
     @Override
-    public void saveRead(Collection<KnownCalendarEvent> events, Instant readAt) {
-        Map<String, CalendarEventEntity> stored = jpaRepository.findAllById(
+    public void saveRead(BandId band, Collection<KnownCalendarEvent> events, Instant readAt) {
+        Map<String, CalendarEventEntity> stored = jpaRepository.findByBandIdAndEventUidIn(band.value(),
                         events.stream().map(KnownCalendarEvent::id).toList()).stream()
                 .collect(Collectors.toMap(CalendarEventEntity::getEventUid, Function.identity()));
         List<CalendarEventEntity> changed = events.stream().map(known -> {
-            CalendarEventEntity entity = stored.getOrDefault(known.id(), new CalendarEventEntity(known.id()));
-            entity.set(known, known.removed() ? null : readAt);
+            CalendarEventEntity entity = stored.getOrDefault(known.id(),
+                    new CalendarEventEntity(band.value(), known.id()));
+            mapper.update(known, entity);
+            entity.seen(known.removed() ? null : readAt, known.firstSeen());
             return entity;
         }).toList();
         jpaRepository.saveAll(changed);
     }
 
     @Override
-    public void save(KnownCalendarEvent event) {
-        CalendarEventEntity entity = jpaRepository.findById(event.id()).orElseGet(() -> new CalendarEventEntity(event.id()));
-        entity.set(event, null);
+    public void save(BandId band, KnownCalendarEvent event) {
+        CalendarEventEntity entity = jpaRepository.findById(new BandEventKey(band.value(), event.id()))
+                .orElseGet(() -> new CalendarEventEntity(band.value(), event.id()));
+        mapper.update(event, entity);
+        entity.seen(null, event.firstSeen());
         jpaRepository.save(entity);
     }
 
     @Override
-    public void remove(String eventId) {
-        jpaRepository.deleteById(eventId);
+    public void remove(BandId band, String eventId) {
+        jpaRepository.deleteById(new BandEventKey(band.value(), eventId));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Instant> lastRead() {
-        return Optional.ofNullable(jpaRepository.lastSeen());
+    public Optional<Instant> lastRead(BandId band) {
+        return Optional.ofNullable(jpaRepository.lastSeen(band.value()));
     }
 }

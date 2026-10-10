@@ -1,7 +1,9 @@
 /**
  * The API's shapes under the names the pages use — all generated from the OpenAPI specs
- * (src/api/generated; each module's src/main/openapi/*.yaml). Nothing here is written by hand.
+ * (src/api/generated; each module's src/main/openapi/*.yaml, where they are …Request, …Response
+ * and …Value). Nothing here is written by hand.
  */
+import type { components as AccountsApi } from './generated/accounts';
 import type { components as AuthApi } from './generated/auth';
 import type { components as CalendarApi } from './generated/calendar';
 import type { components as CatalogApi } from './generated/catalog';
@@ -20,55 +22,71 @@ type Check = CheckApi['schemas'];
 type Import = ImportApi['schemas'];
 
 // the shared parts (gig.yaml)
-export type Country = Shared['Country'];
-export type EntryType = Shared['EntryType'];
-/** A gig as the form holds it. Times are "HH:mm" (or "HH:mm:ss"). */
-export type GigDraft = Shared['GigDraft'];
-export type Problem = Shared['Problem'];
+export type Country = Shared['CountryValue'];
+export type EntryType = Shared['EntryTypeValue'];
+/** A gig as the form holds it (sent as GigFormRequest, answered as GigFormResponse — the same fields). Times are "HH:mm". */
+export type GigDraft = Shared['GigFormRequest'];
+export type Problem = Shared['ProblemResponse'];
+/** Every case the API says no with (each has its text, `errors.<code>`). */
+export type ProblemCode = Shared['ProblemCodeValue'];
 
 // the catalog (catalog.yaml)
-export type Gig = Catalog['Gig'];
-export type GigDetail = Catalog['GigDetail'];
-export type GigHistory = Catalog['GigHistory'];
-export type Edited = Catalog['GigEdited'];
-export type PlatformState = Catalog['PlatformState'];
-export type PlatformStateName = Catalog['PlatformStateName'];
-export type Platform = Catalog['Platform'];
-export type QueueResult = Catalog['QueueResult'];
+export type Gig = Catalog['GigResponse'];
+export type GigDetail = Catalog['GigDetailResponse'];
+export type GigHistory = Catalog['GigHistoryResponse'];
+export type Edited = Catalog['GigEditedResponse'];
+export type PlatformState = Catalog['PlatformStateResponse'];
+export type PlatformStateName = Catalog['PlatformStateValue'];
+export type Platform = Catalog['PlatformResponse'];
+/** A field of a band's account on a platform, as the platform describes it. */
+export type AccountField = Catalog['AccountFieldResponse'];
+export type QueueResult = Catalog['QueueResultResponse'];
 
 // the sync (sync.yaml)
-export type SyncAction = Sync['SyncAction'];
-export type SyncStatusName = Sync['SyncTaskStatus'];
-export type Task = Sync['Task'];
-export type TaskLog = Sync['LogEntry'];
-export type Breaker = Sync['Breaker'];
-export type SyncStatus = Sync['SyncStatus'];
+export type SyncAction = Sync['SyncActionValue'];
+export type SyncStatusName = Sync['SyncTaskStatusValue'];
+export type Task = Sync['TaskResponse'];
+export type TaskLog = Sync['LogEntryResponse'];
+export type Breaker = Sync['BreakerResponse'];
+export type SyncStatus = Sync['SyncStatusResponse'];
 
 // the town picker (places.yaml)
-export type Town = PlacesApi['schemas']['Town'];
+export type Town = PlacesApi['schemas']['TownResponse'];
 
 // the band calendar (calendar.yaml)
-export type CalendarKind = Calendar['CalendarKind'];
-export type CalendarFilter = Calendar['CalendarFilter'];
-export type CalendarRow = Calendar['CalendarRow'];
-export type CalendarOverview = Calendar['CalendarOverview'];
-export type CalendarRule = Calendar['Rule'];
-export type GigRef = Calendar['GigRef'];
-export type DifferenceKind = Calendar['MatchDifference']['kind'];
+export type CalendarKind = Calendar['CalendarKindValue'];
+export type CalendarFilter = Calendar['CalendarFilterValue'];
+export type CalendarRow = Calendar['CalendarRowResponse'];
+export type CalendarOverview = Calendar['CalendarOverviewResponse'];
+export type CalendarRule = Calendar['RuleResponse'];
+export type CalendarRuleDraft = Calendar['RuleRequest'];
+export type RuleKind = Calendar['RuleKindResponse'];
+export type CalendarConnection = Calendar['CalendarConnectionResponse'];
+export type GigRef = Calendar['GigRefResponse'];
+export type DifferenceKind = Calendar['MatchDifferenceKindValue'];
 
 // the platform check (check.yaml)
-export type Drift = Check['Drift'];
-export type DriftField = Check['DriftField'];
-export type DriftRef = Check['DriftRef'];
-export type CheckState = Check['CheckState'];
+export type Drift = Check['DriftResponse'];
+export type DriftField = Check['DriftFieldValue'];
+export type DriftRef = Check['DriftRefRequest'];
+export type CheckState = Check['CheckStateResponse'];
 
 // import (import.yaml)
-export type ImportState = Import['ImportState'];
-export type ImportProposal = Import['ImportProposal'];
-export type ImportVersion = Import['ImportVersion'];
-export type ImportDecision = Import['ImportDecision'];
-export type ImportResult = Import['ImportResult'];
+export type ImportState = Import['ImportStateResponse'];
+export type ImportProposal = Import['ImportProposalResponse'];
+export type ImportVersion = Import['ImportVersionResponse'];
+export type ImportDecision = Import['ImportDecisionRequest'];
+export type ImportResult = Import['ImportResultResponse'];
+
+// the bands and their members (accounts.yaml)
+export type MyBand = AccountsApi['schemas']['MyBandResponse'];
+export type Member = AccountsApi['schemas']['MemberResponse'];
+export type Role = AccountsApi['schemas']['RoleValue'];
+export type BandForm = AccountsApi['schemas']['BandRequest'];
+/** A band's account on a platform: its settings, which secrets are kept (never their values), its last test. */
+export type PlatformAccount = AccountsApi['schemas']['PlatformAccountResponse'];
+export type PlatformAccountForm = AccountsApi['schemas']['PlatformAccountRequest'];
 
 // signing in (auth.yaml) and the live updates (live.yaml)
-export type Me = AuthApi['schemas']['Me'];
-export type LiveTopic = LiveApi['schemas']['LiveTopic'];
+export type Me = AuthApi['schemas']['MeResponse'];
+export type LiveTopic = LiveApi['schemas']['LiveTopicValue'];

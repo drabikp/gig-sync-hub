@@ -1,6 +1,7 @@
 package sk.drabikp.bzscraper.places.application;
 
 import org.junit.jupiter.api.Test;
+import sk.drabikp.bzscraper.gig.domain.Coordinates;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.places.domain.Town;
 
@@ -12,9 +13,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PlaceServiceTest {
 
     private static final Town HRANICE_PREROV = new Town("Hranice", "okres Přerov", "Olomoucký kraj", "753 01",
-            Country.CZECHIA, 49.548, 17.735);
+            Country.CZECHIA, new Coordinates(49.548, 17.735));
     private static final Town HRANICE_CHEB = new Town("Hranice", "okres Cheb", "Karlovarský kraj", "351 24",
-            Country.CZECHIA, 50.305, 12.176);
+            Country.CZECHIA, new Coordinates(50.305, 12.176));
 
     private final List<String> asked = new ArrayList<>();
     private final PlaceService service = new PlaceService(text -> {

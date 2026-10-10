@@ -1,23 +1,25 @@
 package sk.drabikp.bzscraper.bandzone.scrape;
 
 import org.springframework.stereotype.Component;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 
 import java.time.Clock;
 import java.util.List;
 
+/** A band's gigs as its public Bandzone page lists them: fetched, then parsed. */
 @Component
 class BandzoneGigProvider implements GigProvider {
 
-    private final BandzoneHtmlFetcher fetcher = new BandzoneHtmlFetcher();
+    private final BandzoneHtmlFetcher fetcher;
     private final BandzoneHtmlParser parser;
 
-    public BandzoneGigProvider(Clock clock) {
+    public BandzoneGigProvider(BandzoneHtmlFetcher fetcher, Clock clock) {
+        this.fetcher = fetcher;
         this.parser = new BandzoneHtmlParser(clock);
     }
 
     @Override
-    public List<GigSummary> findByBand(String bandSlug) throws BandzoneUploadException {
+    public List<GigSummary> findByBand(String bandSlug) throws BandzonePortalException {
         return parser.parse(fetcher.fetchAllGigs(bandSlug));
     }
 }

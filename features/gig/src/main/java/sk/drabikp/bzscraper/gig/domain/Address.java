@@ -1,5 +1,8 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import java.util.Optional;
+import java.util.OptionalDouble;
+
 /**
  * Value object: where exactly a gig is, beyond the town's name — what tells the platforms
  * which of several same-named towns is meant. Every part is optional; a town picked from
@@ -7,6 +10,9 @@ package sk.drabikp.bzscraper.gig.domain;
  */
 public record Address(String street, String postalCode, String district, String region,
                       Double latitude, Double longitude) {
+
+    /** No details at all (a typed town); a {@link Location} keeps null instead. */
+    public static final Address NONE = new Address(null, null, null, null, null, null);
 
     public Address {
         street = blankToNull(street);
@@ -18,21 +24,26 @@ public record Address(String street, String postalCode, String district, String 
         }
     }
 
+    /** The address of these parts, or null when none of them is there. */
+    public static Address ofParts(String street, String postalCode, String district, String region,
+                                  Double latitude, Double longitude) {
+        Address address = new Address(street, postalCode, district, region, latitude, longitude);
+        return address.equals(NONE) ? null : address;
+    }
+
     /** The town was picked from the place search (not just typed). */
     public boolean resolved() {
         return district != null && latitude != null;
     }
 
-    /** Great-circle distance in km to the given point, or null without coordinates. */
-    public Double kilometresTo(double lat, double lon) {
-        if (latitude == null) {
-            return null;
-        }
-        double dLat = Math.toRadians(lat - latitude);
-        double dLon = Math.toRadians(lon - longitude);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(Math.toRadians(latitude))
-                * Math.cos(Math.toRadians(lat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        return 6371.0 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    /** The town's centre, when known. */
+    public Optional<Coordinates> coordinates() {
+        return latitude == null ? Optional.empty() : Optional.of(new Coordinates(latitude, longitude));
+    }
+
+    /** Great-circle distance in km to the point; empty without coordinates. */
+    public OptionalDouble kilometresTo(Coordinates point) {
+        return coordinates().map(c -> OptionalDouble.of(c.kilometresTo(point))).orElse(OptionalDouble.empty());
     }
 
     private static String blankToNull(String text) {

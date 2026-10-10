@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useApplyImport, useImport, useReadForImport } from '../api/hooks';
 import type { ImportProposal, ImportVersion } from '../api/types';
+import { useBandPath } from '../band/band';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { IconCheck } from '@tabler/icons-react';
@@ -27,6 +28,7 @@ function versionText(v: ImportVersion, tba: string): string {
  * platforms (a while — it runs in the background), then decide per gig and import.
  */
 export function ImportPage() {
+  const path = useBandPath();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const name = usePlatformName();
@@ -148,7 +150,7 @@ export function ImportPage() {
               onClick={() => apply.mutate(Object.entries(decisions).map(([index, d]) => ({ index: Number(index), ...d })), {
                 onSuccess: (r) => {
                   done(t('import.done', { added: r.added, updated: r.updated, linked: r.linked }));
-                  navigate('/');
+                  navigate(path('/'));
                 },
                 onError: failed,
               })}>

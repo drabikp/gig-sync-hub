@@ -19,7 +19,8 @@ class BrowserProfileTest {
         assertThat(real).isNotEqualTo(test);
         assertThat(BrowserProfile.dir(null, "bandzone", " Band@Example.com ")).isEqualTo(real);
         assertThat(real.toString()).doesNotContain("example").contains(".bzscraper", "bandzone-browser");
-        assertThat(BrowserProfile.dir("/srv/profile", "bandzone", "band@example.com")).isEqualTo(Path.of("/srv/profile"));
+        assertThat(BrowserProfile.dir("/srv/profiles", "bandzone", "band@example.com"))
+                .isEqualTo(Path.of("/srv/profiles").resolve(real.getFileName()));
     }
 
     @Test

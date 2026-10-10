@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.domain.QueueResult;
@@ -13,5 +14,5 @@ import java.util.Set;
  */
 public interface PublishGigsUseCase {
 
-    QueueResult publish(Set<Platform> targets, Collection<Gig> gigs);
+    QueueResult publish(BandId band, Set<Platform> targets, Collection<Gig> gigs);
 }

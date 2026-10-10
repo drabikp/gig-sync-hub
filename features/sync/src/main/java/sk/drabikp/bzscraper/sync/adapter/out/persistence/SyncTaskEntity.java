@@ -6,14 +6,13 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.domain.StepType;
 import sk.drabikp.bzscraper.sync.domain.SyncAction;
 import sk.drabikp.bzscraper.sync.domain.SyncStatus;
-import sk.drabikp.bzscraper.sync.domain.SyncTask;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /** JPA persistence model for one sync-outbox task; enums stored by name, the gig id serialized. */
 @Entity
@@ -25,6 +24,7 @@ class SyncTaskEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    private UUID bandId;
     private String gigId;
     private String gigLabel;
     private String platform;
@@ -44,7 +44,8 @@ class SyncTaskEntity {
         // for JPA
     }
 
-    SyncTaskEntity(String gigId, String gigLabel, Platform platform, SyncAction action, Instant now) {
+    SyncTaskEntity(UUID bandId, String gigId, String gigLabel, Platform platform, SyncAction action, Instant now) {
+        this.bandId = bandId;
         this.gigId = gigId;
         this.gigLabel = clip(gigLabel, 500);
         this.platform = platform.id();
@@ -56,21 +57,59 @@ class SyncTaskEntity {
         this.updatedAt = now;
     }
 
-    SyncTask toTask() {
-        return new SyncTask(id, GigId.fromKey(gigId), gigLabel, Platform.of(platform),
-                SyncAction.valueOf(action), SyncStatus.valueOf(status), attempts, createdAt, nextAttemptAt,
-                updatedAt, message, step == null ? null : StepType.valueOf(step));
+    public Long getId() {
+        return id;
     }
 
-    Long getId() {
-        return id;
+    public UUID getBandId() {
+        return bandId;
+    }
+
+    public String getGigId() {
+        return gigId;
+    }
+
+    public String getGigLabel() {
+        return gigLabel;
+    }
+
+    public String getPlatform() {
+        return platform;
+    }
+
+    public String getAction() {
+        return action;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public String getStep() {
+        return step;
     }
 
     SyncStatus status() {
         return SyncStatus.valueOf(status);
     }
 
-    int getAttempts() {
+    public int getAttempts() {
         return attempts;
     }
 

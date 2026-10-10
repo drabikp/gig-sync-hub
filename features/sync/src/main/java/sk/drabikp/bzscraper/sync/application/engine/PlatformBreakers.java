@@ -44,7 +44,7 @@ public class PlatformBreakers implements PlatformBreakerUseCase, PlatformHealth 
 
     /** Breakers that never hold a platform back (tests, or switched off). */
     public static PlatformBreakers never(Clock clock) {
-        return new PlatformBreakers(Integer.MAX_VALUE, Duration.ZERO, clock, () -> { }, () -> { });
+        return new PlatformBreakers(Integer.MAX_VALUE, Duration.ZERO, clock, SyncNotifier.NONE, () -> { });
     }
 
     @Override
@@ -69,7 +69,7 @@ public class PlatformBreakers implements PlatformBreakerUseCase, PlatformHealth 
             wasHeldBack = breaker != null && breaker.heldUntil() != null;
         }
         if (wasHeldBack) {
-            notifier.changed();
+            notifier.changedEverywhere();
         }
     }
 
@@ -85,7 +85,7 @@ public class PlatformBreakers implements PlatformBreakerUseCase, PlatformHealth 
             breakers.put(platform, now);
         }
         if (now.heldUntil() != null) {
-            notifier.changed();
+            notifier.changedEverywhere();
         }
     }
 
@@ -103,7 +103,7 @@ public class PlatformBreakers implements PlatformBreakerUseCase, PlatformHealth 
         synchronized (this) {
             breakers.remove(platform);
         }
-        notifier.changed();
+        notifier.changedEverywhere();
         trigger.wake();
     }
 }

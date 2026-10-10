@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.port.out;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.domain.StepOutcome;
@@ -33,10 +34,13 @@ public interface SyncStep {
         return Optional.empty();
     }
 
-    /** Does the work; one outcome per item, in the same order. Never throws for one gig. */
+    /**
+     * Does the work; one outcome per item, in the same order. Never throws for one gig. The items of
+     * one run are always one band's (its platform account does them).
+     */
     List<StepOutcome> run(List<Item> items);
 
-    /** A gig and the platform's id for its copy. */
-    record Item(String externalRef, Gig gig) {
+    /** A band's gig and the platform's id for its copy. */
+    record Item(BandId band, String externalRef, Gig gig) {
     }
 }

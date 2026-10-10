@@ -4,6 +4,7 @@ import sk.drabikp.bzscraper.catalog.application.port.in.GigWrites;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
@@ -17,6 +18,7 @@ import sk.drabikp.bzscraper.importing.domain.ImportPlanner;
 import sk.drabikp.bzscraper.importing.domain.ImportProposal;
 import sk.drabikp.bzscraper.importing.domain.ImportResult;
 import sk.drabikp.bzscraper.importing.domain.ImportedGig;
+import sk.drabikp.bzscraper.sync.application.port.in.QueueSyncWork;
 import sk.drabikp.bzscraper.sync.application.port.out.PlatformException;
 import sk.drabikp.bzscraper.sync.domain.QueueResult;
 
@@ -41,10 +43,11 @@ public class GigImportService implements ImportGigsUseCase {
     private final Transactions transactions;
     private final Platforms platforms;
     private final GigWrites writes;
+    private final QueueSyncWork sync;
 
     public GigImportService(List<GigImporter> importers, GigRepository gigRepository,
                             PublishedGigStore publishedGigStore, Transactions transactions, Platforms platforms,
-                            GigWrites writes) {
+                            GigWrites writes, QueueSyncWork sync) {
         for (GigImporter importer : importers) {
             if (this.importers.put(importer.platform(), importer) != null) {
                 throw new IllegalStateException("Two GigImporters registered for platform " + importer.platform());
@@ -55,6 +58,7 @@ public class GigImportService implements ImportGigsUseCase {
         this.transactions = transactions;
         this.platforms = platforms;
         this.writes = writes;
+        this.sync = sync;
     }
 
     @Override
@@ -63,7 +67,7 @@ public class GigImportService implements ImportGigsUseCase {
     }
 
     @Override
-    public ImportPlan plan(Set<Platform> from) {
+    public ImportPlan plan(BandId band, Set<Platform> from) {
         List<ImportedGig> imported = new ArrayList<>();
         Map<Platform, String> failures = new TreeMap<>();
         for (Platform platform : from) {
@@ -73,19 +77,20 @@ public class GigImportService implements ImportGigsUseCase {
                 continue;
             }
             try {
-                imported.addAll(importer.importGigs());
+                imported.addAll(importer.importGigs(band));
             } catch (PlatformException e) {
                 failures.put(platform, e.getMessage());
             } catch (RuntimeException e) {
                 failures.put(platform, PlatformReads.unexpected(platform, e));
             }
         }
-        return ImportPlanner.plan(gigRepository.findAll(), publishedGigStore.all(), imported, failures, platforms);
+        return ImportPlanner.plan(gigRepository.findAll(band), publishedGigStore.all(band), imported, failures,
+                platforms);
     }
 
     @Override
-    public ImportResult apply(List<ImportDecision> decisions) {
-        int[] counts = new int[4];             // added, updated, linked, skipped
+    public ImportResult apply(BandId band, List<ImportDecision> decisions) {
+        Tally tally = new Tally();
         List<QueueResult> queued = new ArrayList<>();
         transactions.inTransaction(() -> {
             for (ImportDecision decision : decisions) {
@@ -94,14 +99,14 @@ public class GigImportService implements ImportGigsUseCase {
                 }
                 ImportProposal proposal = decision.proposal();
                 if (proposal.suggested() && !decision.sameGig()) {
-                    proposal.copies().forEach(copy -> importOnItsOwn(copy, counts));
+                    proposal.copies().forEach(copy -> importOnItsOwn(band, copy, tally));
                 } else {
-                    queued.add(importTogether(proposal, decision.chosen(), counts));
+                    queued.add(importTogether(band, proposal, decision.chosen(), tally));
                 }
             }
         });
-        queued.forEach(writes::signal);
-        return new ImportResult(counts[0], counts[1], counts[2], counts[3]);
+        queued.forEach(result -> sync.signal(band, result));
+        return tally.result();
     }
 
     /**
@@ -110,33 +115,47 @@ public class GigImportService implements ImportGigsUseCase {
      * replaced only as it was when the plan was read, and its platforms (those it was on
      * before this import) get the update. Then the imported copies are linked to it.
      */
-    private QueueResult importTogether(ImportProposal proposal, ImportProposal.Version chosen, int[] counts) {
+    private QueueResult importTogether(BandId band, ImportProposal proposal, ImportProposal.Version chosen,
+                                       Tally tally) {
         Gig merged = GigMerge.merge(chosen, proposal.versions(), platforms);
         Gig local = proposal.local();
         QueueResult queued = QueueResult.NOTHING;
         if (local == null) {
-            writes.add(merged);
-            counts[0]++;
+            writes.add(band, merged);
+            tally.added++;
         } else if (!merged.equals(local)) {
-            queued = writes.replace(local, merged);
-            counts[1]++;
+            queued = writes.replace(band, local, merged);
+            tally.updated++;
         }
         for (ImportedGig copy : proposal.copies()) {
-            publishedGigStore.record(copy.platform(), merged.id(), copy.externalRef());
-            counts[2]++;
+            writes.link(band, copy.platform(), merged.id(), copy.externalRef());
+            tally.linked++;
         }
         return queued;
     }
 
     /** A suggested match the user rejected: the copy becomes its own catalog gig. */
-    private void importOnItsOwn(ImportedGig copy, int[] counts) {
-        if (gigRepository.findById(copy.gig().id()).isPresent()) {
-            counts[3]++;                         // would overwrite another catalog gig
+    private void importOnItsOwn(BandId band, ImportedGig copy, Tally tally) {
+        if (gigRepository.findById(band, copy.gig().id()).isPresent()) {
+            tally.skipped++;                     // would overwrite another catalog gig
             return;
         }
-        writes.add(copy.gig());
-        publishedGigStore.record(copy.platform(), copy.gig().id(), copy.externalRef());
-        counts[0]++;
-        counts[2]++;
+        writes.add(band, copy.gig());
+        writes.link(band, copy.platform(), copy.gig().id(), copy.externalRef());
+        tally.added++;
+        tally.linked++;
+    }
+
+    /** What the import did, counted as it goes. */
+    private static final class Tally {
+
+        private int added;
+        private int updated;
+        private int linked;
+        private int skipped;
+
+        ImportResult result() {
+            return new ImportResult(added, updated, linked, skipped);
+        }
     }
 }

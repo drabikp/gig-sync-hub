@@ -1,25 +1,20 @@
 package sk.drabikp.bzscraper.bandzone.portal.selenium;
 
 import jakarta.annotation.PreDestroy;
-import org.openqa.selenium.By;
-import org.openqa.selenium.JavascriptExecutor;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import sk.drabikp.bzscraper.accounts.application.port.in.PlatformAccounts;
+import sk.drabikp.bzscraper.bandzone.BandzoneAccount;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
 import sk.drabikp.bzscraper.bandzone.BandzoneProperties;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
 import sk.drabikp.bzscraper.bandzone.portal.BandzonePortalClient;
 import sk.drabikp.bzscraper.bandzone.portal.BandzoneSession;
 import sk.drabikp.bzscraper.browser.BrowserProperties;
 import sk.drabikp.bzscraper.browser.PlatformBrowser;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Duration;
-import java.util.List;
 
 /**
  * Real Bandzone publisher: opens ONE headless-browser session per batch (single
@@ -27,10 +22,12 @@ import java.util.List;
  * the concert's update form (details, venue, poster) and performing-bands tab (lineup),
  * and cancels/deletes it through the update delete tab. Active only
  * when {@code bzscraper.bandzone.selenium.enabled=true} (otherwise the stub is
- * used, so the app boots without a browser). Credentials come from {@link BandzoneProperties}.
+ * used, so the app boots without a browser). The login is the band's own ({@link BandzoneAccount}).
  *
- * The browser ({@link PlatformBrowser}: one at a time, kept warm, a private per-account
- * profile) keeps a saved login: the password is used only when Bandzone ended that login.
+ * The browser ({@link PlatformBrowser}: one at a time, kept warm, a private profile per band's
+ * account) keeps a saved login: the password is used only when Bandzone ended that login
+ * ({@link BandzoneLoginPage}). This client only takes the browser, logs in through that page
+ * and makes the session.
  *
  * Field values are set via JavaScript (with input/change events) rather than
  * sendKeys, because Bandzone's date/city inputs are JS-wrapped and not directly
@@ -40,96 +37,38 @@ import java.util.List;
 @ConditionalOnProperty(name = "bzscraper.bandzone.selenium.enabled", havingValue = "true")
 class SeleniumBandzonePortalClient implements BandzonePortalClient {
 
-    private static final Logger logger = LoggerFactory.getLogger(SeleniumBandzonePortalClient.class);
+    /** What a failure in Bandzone's browser means, as a {@link BandzonePortalException}. */
+    static final PlatformBrowser.Failures<BandzonePortalException> FAILURES = new PlatformBrowser.Failures<>(
+            "Bandzone", BandzonePortalException::temporary, BandzonePortalException::busy);
     private static final Duration WAIT = Duration.ofSeconds(20);
 
     private final String baseUrl;
-    private final String userLogin;
-    private final String userSecret;
-    private final String bandSlug;
+    private final PlatformAccounts accounts;
     private final PlatformBrowser browser;
+    private final PosterDownloader posters = new PosterDownloader();
 
-    public SeleniumBandzonePortalClient(BandzoneProperties properties, BrowserProperties browserProperties) {
-        properties.requireLogin();
+    public SeleniumBandzonePortalClient(BandzoneProperties properties, BrowserProperties browserProperties,
+                                        PlatformAccounts accounts) {
         this.baseUrl = properties.baseUrl();
-        this.userLogin = properties.login();
-        this.userSecret = properties.password();
-        this.bandSlug = properties.bandSlug();
-        this.browser = new PlatformBrowser(properties.selenium().browser("bandzone", userLogin, browserProperties,
-                "1280,1024"), new PlatformBrowser.Customizer() {
-        });
+        this.accounts = accounts;
+        this.browser = new PlatformBrowser(properties.selenium().browser("bandzone", browserProperties, "1280,1024"),
+                new PlatformBrowser.Customizer() {
+                });
     }
 
     @Override
-    public BandzoneSession openSession(Duration waitForBrowser) throws BandzoneUploadException {
-        PlatformBrowser.Lease lease = browser.acquire(waitForBrowser).orElseThrow(() ->
-                BandzoneUploadException.busy("Another Bandzone operation is using the browser."));
-        try {
-            WebDriver driver = lease.driver();
-            WebDriverWait wait = new WebDriverWait(driver, WAIT);
-            if (loggedIn(driver)) {
-                logger.info("Bandzone: reusing the saved login");
-            } else {
-                logIn(driver, wait);
-            }
-            dismissCookies(driver);
-            return new SeleniumBandzoneSession(lease, wait, baseUrl, bandSlug);
-        } catch (BandzoneUploadException | RuntimeException e) {
-            lease.screenshot("login");
-            lease.discard();
-            if (e instanceof BandzoneUploadException bz) {
-                throw bz;
-            }
-            throw new BandzoneUploadException("Bandzone login failed: " + e.getMessage(), e);
-        }
+    public BandzoneSession openSession(BandId band, Duration waitForBrowser) throws BandzonePortalException {
+        BandzoneAccount account = BandzoneAccount.of(accounts, band);
+        return browser.open(account.browserKey(), waitForBrowser, FAILURES, lease -> {
+            BandzoneBrowser bandzone = new BandzoneBrowser(lease.driver(), new WebDriverWait(lease.driver(), WAIT),
+                    baseUrl, account.bandSlug());
+            new BandzoneLoginPage(bandzone, account.login(), account.password()).logIn();
+            return new SeleniumBandzoneSession(lease, bandzone, posters);
+        });
     }
 
     @PreDestroy
     void closeBrowser() {
         browser.close();
-    }
-
-    /** A still-valid saved login shows the logout link on any page. */
-    private boolean loggedIn(WebDriver driver) {
-        driver.get(baseUrl + "/");
-        return !driver.findElements(By.cssSelector("a[href*='logout']")).isEmpty();
-    }
-
-    private void logIn(WebDriver driver, WebDriverWait wait) throws BandzoneUploadException {
-        driver.get(baseUrl + "/login.html?do=login");
-        wait.until(ExpectedConditions.presenceOfElementLocated(By.id("frmloginForm-login")));
-        setValue(driver, "#frmloginForm-login", userLogin);
-        setValue(driver, "#frmloginForm-password", userSecret);
-        driver.findElement(By.id("frmloginForm-doLogin")).click();
-        try {
-            wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("a[href*='logout']")));
-        } catch (RuntimeException e) {
-            throw new BandzoneUploadException("Bandzone login failed (check credentials).");
-        }
-    }
-
-    private static void dismissCookies(WebDriver driver) {
-        List<WebElement> consent = driver.findElements(By.xpath(
-                "//a[contains(@href,'approveCookies')] | //button[contains(.,'pořádku')]"));
-        if (!consent.isEmpty()) {
-            try {
-                jsClick(driver, consent.get(0));
-            } catch (RuntimeException ignored) {
-                // best-effort; the JS field-setters do not require the banner gone
-            }
-        }
-    }
-
-    private static void setValue(WebDriver driver, String cssSelector, String value) {
-        ((JavascriptExecutor) driver).executeScript(
-                "var e=document.querySelector(arguments[0]);"
-                        + "if(e){e.value=arguments[1];"
-                        + "e.dispatchEvent(new Event('input',{bubbles:true}));"
-                        + "e.dispatchEvent(new Event('change',{bubbles:true}));}",
-                cssSelector, value);
-    }
-
-    private static void jsClick(WebDriver driver, WebElement element) {
-        ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
     }
 }

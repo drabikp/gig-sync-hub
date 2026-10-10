@@ -3,12 +3,16 @@ package sk.drabikp.bzscraper.places.adapter.out.photon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import sk.drabikp.bzscraper.gig.domain.Coordinates;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.places.application.port.out.PlaceSearch;
 import sk.drabikp.bzscraper.places.config.PlacesProperties;
 import sk.drabikp.bzscraper.places.domain.Town;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -20,6 +24,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * {@link PlaceSearch} on OpenStreetMap's Photon geocoder (photon.komoot.io — free, no key;
@@ -50,46 +55,55 @@ class PhotonPlaceSearch implements PlaceSearch {
         }
         String url = baseUrl + "?q=" + URLEncoder.encode(text.strip(), StandardCharsets.UTF_8) + "&limit=" + LIMIT
                 + "&bbox=" + CZ_SK_BOX + "&layer=city&layer=locality";
+        HttpResponse<String> response;
         try {
-            HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(url))
+            response = http.send(HttpRequest.newBuilder(URI.create(url))
                     .timeout(Duration.ofSeconds(6))
                     .header("User-Agent", "bzscraper-gig-sync/1.0 (a band's gig tool)")
                     .GET().build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                logger.warn("Place search answered HTTP {}", response.statusCode());
-                return List.of();
-            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
+        } catch (IOException e) {
+            logger.warn("Place search failed: {}", e.toString());
+            logger.debug("Place search failed", e);
+            return List.of();
+        }
+        if (response.statusCode() != 200) {
+            logger.warn("Place search answered HTTP {}", response.statusCode());
+            return List.of();
+        }
+        try {
             return parse(response.body());
-        } catch (Exception e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            logger.warn("Place search failed: {}", e.getMessage());
+        } catch (JacksonException e) {
+            logger.warn("Place search answered something that isn't its JSON: {}", e.getOriginalMessage());
             return List.of();
         }
     }
 
-    @SuppressWarnings("unchecked")
+    /** The towns of Photon's answer, one per name and district; a feature that isn't a usable town is left out. */
     List<Town> parse(String body) {
-        Map<String, Object> root = json.readValue(body, Map.class);
-        Map<String, Town> towns = new LinkedHashMap<>();         // one per name + district
-        for (Object item : (List<Object>) root.getOrDefault("features", List.of())) {
-            Map<String, Object> feature = (Map<String, Object>) item;
-            Map<String, Object> p = (Map<String, Object>) feature.get("properties");
-            List<Number> xy = (List<Number>) ((Map<String, Object>) feature.get("geometry")).get("coordinates");
-            Country country = switch (String.valueOf(p.get("countrycode"))) {
-                case "CZ" -> Country.CZECHIA;
-                case "SK" -> Country.SLOVAKIA;
-                default -> null;
-            };
-            String name = (String) p.get("name");
-            if (country == null || name == null) {
-                continue;
-            }
-            Town town = new Town(name, (String) p.get("county"), (String) p.get("state"), (String) p.get("postcode"),
-                    country, xy.get(1).doubleValue(), xy.get(0).doubleValue());
-            towns.putIfAbsent(name + "|" + town.district(), town);
+        Map<String, Town> towns = new LinkedHashMap<>();
+        for (JsonNode feature : json.readTree(body).path("features")) {
+            town(feature).ifPresent(town -> towns.putIfAbsent(town.name() + "|" + town.district(), town));
         }
         return new ArrayList<>(towns.values());
+    }
+
+    private static Optional<Town> town(JsonNode feature) {
+        JsonNode p = feature.path("properties");
+        JsonNode xy = feature.path("geometry").path("coordinates");
+        Optional<Country> country = Country.named(p.path("countrycode").asString(""));
+        String name = text(p, "name");
+        if (country.isEmpty() || name == null || !xy.path(0).isNumber() || !xy.path(1).isNumber()) {
+            return Optional.empty();
+        }
+        return Optional.of(new Town(name, text(p, "county"), text(p, "state"), text(p, "postcode"), country.get(),
+                new Coordinates(xy.path(1).asDouble(), xy.path(0).asDouble())));
+    }
+
+    private static String text(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isString() ? value.asString() : null;
     }
 }

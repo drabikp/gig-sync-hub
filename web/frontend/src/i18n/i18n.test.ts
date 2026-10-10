@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { en } from './en';
 import { sk } from './sk';
+import { problemCodeValueValues } from '../api/generated/gig';
 
 type Tree = { [key: string]: string | Tree };
 
@@ -40,6 +41,10 @@ describe('the language bundles', () => {
     for (const base of sk1.filter((k) => k.endsWith('_one')).map((k) => k.slice(0, -4))) {
       expect(sk1).toEqual(expect.arrayContaining([`${base}_few`, `${base}_many`, `${base}_other`]));
     }
+  });
+
+  it('say every code the API can say no with (the spec\'s ProblemCodeValue)', () => {
+    expect(problemCodeValueValues.filter((code) => !english.has(`errors.${code}`))).toEqual([]);
   });
 
   it('hold every key the pages ask for by name', () => {

@@ -1,0 +1,278 @@
+openapi: 3.0.3
+info:
+  title: bzscraper — bands and their members
+  version: "1"
+  description: |
+    The bands the signed-in user manages, making a new one (they become its owner) and renaming
+    one (owners), and who else manages it; the band's accounts on the platforms — what is connected
+    (a secret is never sent back, only that it is set), connecting and disconnecting one (owners)
+    and testing its sign-in. A band the user isn't a member of is "not found".
+servers:
+  - url: /
+tags:
+  - name: Bands
+  - name: PlatformAccounts
+paths:
+  /api/bands:
+    get:
+      tags: [Bands]
+      operationId: myBands
+      responses:
+        "200":
+          description: The user's bands, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MyBandResponse'
+    post:
+      tags: [Bands]
+      operationId: createBand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BandRequest'
+      responses:
+        "201":
+          description: Made; the user is its owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyBandResponse'
+        "409":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
+  /api/bands/{bandId}:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    get:
+      tags: [Bands]
+      operationId: band
+      responses:
+        "200":
+          description: The band.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyBandResponse'
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+    put:
+      tags: [Bands]
+      operationId: updateBand
+      summary: A new name and address (owners only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BandRequest'
+      responses:
+        "200":
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyBandResponse'
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+        "409":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
+  /api/bands/{bandId}/members:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    get:
+      tags: [Bands]
+      operationId: members
+      responses:
+        "200":
+          description: Who manages the band, owners first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberResponse'
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+  /api/bands/{bandId}/platform-accounts:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    get:
+      tags: [PlatformAccounts]
+      operationId: platformAccounts
+      responses:
+        "200":
+          description: Every platform that has an account, connected or not, in the platforms' order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformAccountResponse'
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+  /api/bands/{bandId}/platform-accounts/{platform}:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+      - $ref: '#/components/parameters/PlatformId'
+    put:
+      tags: [PlatformAccounts]
+      operationId: connectPlatformAccount
+      summary: Connects or changes the band's account there (owners only); a blank secret keeps the one kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformAccountRequest'
+      responses:
+        "200":
+          description: Saved (its last test forgotten).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAccountResponse'
+        "400":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/BadRequest'
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+        "409":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
+    delete:
+      tags: [PlatformAccounts]
+      operationId: disconnectPlatformAccount
+      summary: Forgets the band's account there, secrets and all (owners only).
+      responses:
+        "204":
+          description: Forgotten.
+        "400":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/BadRequest'
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+        "409":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
+  /api/bands/{bandId}/platform-accounts/{platform}/check:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+      - $ref: '#/components/parameters/PlatformId'
+    post:
+      tags: [PlatformAccounts]
+      operationId: checkPlatformAccount
+      summary: Signs in there once with the band's account (may take a minute) and keeps what it said.
+      responses:
+        "200":
+          description: Tested — `lastCheck` says how it went.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAccountResponse'
+        "400":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/BadRequest'
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+components:
+  parameters:
+    PlatformId:
+      name: platform
+      in: path
+      required: true
+      description: The platform's id (as /api/platforms names it).
+      schema:
+        type: string
+  schemas:
+    RoleValue:
+      description: OWNER — everything, the band itself too; MANAGER — the band's gigs, platforms, calendar.
+      type: string
+      enum: [OWNER, MANAGER]
+    BandRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+        slug:
+          description: The band's address (/b/<slug>, /gigs/<slug>) — lower case letters, digits, dashes.
+          type: string
+    MyBandResponse:
+      type: object
+      required: [id, slug, name, role, displayName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/RoleValue'
+        displayName:
+          description: How the user appears in this band (null = their own name).
+          type: string
+          nullable: true
+    MemberResponse:
+      type: object
+      required: [name, email, role, displayName]
+      properties:
+        name:
+          description: How they appear (their name, else their e-mail).
+          type: string
+        email:
+          type: string
+          nullable: true
+        role:
+          $ref: '#/components/schemas/RoleValue'
+        displayName:
+          type: string
+          nullable: true
+    PlatformAccountRequest:
+      description: The account's fields by their names (the platform's `accountFields`).
+      type: object
+      required: [settings, secrets]
+      properties:
+        settings:
+          description: Its text and yes/no fields ("true" / "false").
+          type: object
+          additionalProperties:
+            type: string
+        secrets:
+          description: Its secret fields; one left out or blank keeps the one kept.
+          type: object
+          additionalProperties:
+            type: string
+    PlatformAccountResponse:
+      type: object
+      required: [platform, connected, settings, secretsSet, lastCheck]
+      properties:
+        platform:
+          type: string
+        connected:
+          type: boolean
+        settings:
+          type: object
+          additionalProperties:
+            type: string
+        secretsSet:
+          description: The names of the secrets kept (never their values).
+          type: array
+          items:
+            type: string
+        lastCheck:
+          $ref: '#/components/schemas/AccountCheckResponse'
+    AccountCheckResponse:
+      description: The last sign-in test; null when it wasn't tested since it was saved.
+      type: object
+      nullable: true
+      required: [ok, message, at]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+          nullable: true
+        at:
+          type: string
+          format: date-time

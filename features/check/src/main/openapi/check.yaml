@@ -12,7 +12,9 @@ servers:
 tags:
   - name: Check
 paths:
-  /api/check:
+  /api/bands/{bandId}/check:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     get:
       tags: [Check]
       operationId: checkState
@@ -22,15 +24,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CheckState'
-  /api/check/run:
+                $ref: '#/components/schemas/CheckStateResponse'
+  /api/bands/{bandId}/check/run:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Check]
       operationId: runCheck
       responses:
         "202":
           description: Started (or one already runs).
-  /api/check/forget:
+  /api/bands/{bandId}/check/forget:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Check]
       operationId: forgetLink
@@ -40,7 +46,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DriftRef'
+              $ref: '#/components/schemas/DriftRefRequest'
       responses:
         "204":
           description: Forgotten.
@@ -48,7 +54,9 @@ paths:
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/BadRequest'
         "409":
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
-  /api/check/dismiss:
+  /api/bands/{bandId}/check/dismiss:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Check]
       operationId: dismissDrift
@@ -58,7 +66,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DriftRef'
+              $ref: '#/components/schemas/DriftRefRequest'
       responses:
         "204":
           description: Taken off.
@@ -66,7 +74,7 @@ paths:
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/BadRequest'
 components:
   schemas:
-    CheckState:
+    CheckStateResponse:
       type: object
       required: [running, last]
       properties:
@@ -74,9 +82,9 @@ components:
           type: boolean
         last:
           allOf:
-            - $ref: '#/components/schemas/CheckResult'
+            - $ref: '#/components/schemas/CheckResultResponse'
           nullable: true
-    CheckResult:
+    CheckResultResponse:
       type: object
       required: [checkedAt, drifts, unreadable, unlinked]
       properties:
@@ -86,7 +94,7 @@ components:
         drifts:
           type: array
           items:
-            $ref: '#/components/schemas/Drift'
+            $ref: '#/components/schemas/DriftResponse'
         unreadable:
           description: Per platform that couldn't be read, why.
           type: object
@@ -97,19 +105,19 @@ components:
           type: object
           additionalProperties:
             type: integer
-    DriftKind:
+    DriftKindValue:
       description: MISSING — the event is gone from the platform; DIFFERENT — its copy differs.
       type: string
       enum: [MISSING, DIFFERENT]
-    DriftField:
+    DriftFieldValue:
       type: string
       enum: [DATE, TIME, NAME, VENUE, TOWN, COUNTRY, PLACE, CANCELLED]
-    DriftDifference:
+    DriftDifferenceResponse:
       type: object
       required: [field, catalog, platform, text]
       properties:
         field:
-          $ref: '#/components/schemas/DriftField'
+          $ref: '#/components/schemas/DriftFieldValue'
         catalog:
           type: string
           nullable: true
@@ -119,7 +127,7 @@ components:
         text:
           description: The difference in English (the page says it from field and the values).
           type: string
-    Drift:
+    DriftResponse:
       type: object
       required: [platform, gigId, gigLabel, externalRef, kind, differences]
       properties:
@@ -133,12 +141,12 @@ components:
         externalRef:
           type: string
         kind:
-          $ref: '#/components/schemas/DriftKind'
+          $ref: '#/components/schemas/DriftKindValue'
         differences:
           type: array
           items:
-            $ref: '#/components/schemas/DriftDifference'
-    DriftRef:
+            $ref: '#/components/schemas/DriftDifferenceResponse'
+    DriftRefRequest:
       type: object
       required: [platform, gig]
       properties:

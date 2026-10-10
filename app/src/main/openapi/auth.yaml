@@ -3,10 +3,14 @@ info:
   title: bzscraper — signing in
   version: "1"
   description: |
-    One account. GET /csrf hands out the CSRF token (and sets its cookie XSRF-TOKEN; every
-    change sends it back as the header X-XSRF-TOKEN); POST /login starts the session (and the
-    "remember me" cookie when asked); GET /me says who is signed in. Every /api address but
-    these answers 401 until signed in.
+    Signing in is Rauthy's (OpenID Connect): the page sends the browser to
+    /oauth2/authorization/rauthy (not an API call — a page load), Rauthy signs the user in and
+    sends them back to /login/oauth2/code/rauthy, which starts the session; then GET /me says
+    who it is (the first time, it makes them a user of the app). Every /api address but these
+    answers 401 until signed in; which bands one may use is their memberships' (accounts.yaml).
+    GET /csrf hands out the CSRF token (and sets its cookie XSRF-TOKEN; every change sends it
+    back as the header X-XSRF-TOKEN). POST /logout ends the session and says where to send the
+    browser to sign out of Rauthy too.
 servers:
   - url: /
 tags:
@@ -24,7 +28,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CsrfToken'
+                $ref: '#/components/schemas/CsrfTokenResponse'
   /api/auth/me:
     get:
       tags: [Auth]
@@ -35,42 +39,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Me'
+                $ref: '#/components/schemas/MeResponse'
         "401":
           description: Not signed in.
-  /api/auth/login:
-    post:
-      tags: [Auth]
-      operationId: login
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Login'
-      responses:
-        "200":
-          description: Signed in (a fresh session; the remember-me cookie when asked).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Me'
-        "401":
-          description: Wrong name or password (code badCredentials).
-          content:
-            application/json:
-              schema:
-                $ref: '../../../../features/gig/src/main/openapi/gig.yaml#/components/schemas/Problem'
   /api/auth/logout:
     post:
       tags: [SignOut]
       operationId: logout
       responses:
-        "204":
-          description: Signed out; the session and the remember-me cookie are gone.
+        "200":
+          description: Signed out of the app; the browser goes to `redirect` to sign out of Rauthy too.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
 components:
   schemas:
-    CsrfToken:
+    CsrfTokenResponse:
       type: object
       required: [headerName, token]
       properties:
@@ -78,20 +63,20 @@ components:
           type: string
         token:
           type: string
-    Me:
+    MeResponse:
       type: object
-      required: [username]
+      required: [username, name]
       properties:
         username:
+          description: How Rauthy names the user (the e-mail address).
           type: string
-    Login:
+        name:
+          description: How the app shows the user (their name, else the e-mail address).
+          type: string
+    LogoutResponse:
       type: object
-      required: [username, password, remember]
+      required: [redirect]
       properties:
-        username:
+        redirect:
+          description: Rauthy's sign-out, which then leads back to the page.
           type: string
-        password:
-          type: string
-          format: password
-        remember:
-          type: boolean

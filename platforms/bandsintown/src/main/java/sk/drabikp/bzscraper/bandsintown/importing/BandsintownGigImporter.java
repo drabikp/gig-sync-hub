@@ -2,9 +2,10 @@ package sk.drabikp.bzscraper.bandsintown.importing;
 
 import org.springframework.stereotype.Component;
 import sk.drabikp.bzscraper.bandsintown.BandsintownPlatform;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 import sk.drabikp.bzscraper.bandsintown.portal.BitPortalClient;
 import sk.drabikp.bzscraper.bandsintown.portal.BitSession;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.importing.application.port.out.GigImporter;
 import sk.drabikp.bzscraper.importing.domain.ImportedGig;
@@ -31,8 +32,8 @@ class BandsintownGigImporter implements GigImporter {
     }
 
     @Override
-    public List<ImportedGig> importGigs() throws BitUploadException {
-        try (BitSession session = portalClient.openSession(BitPortalClient.READ_WAIT)) {
+    public List<ImportedGig> importGigs(BandId band) throws BitPortalException {
+        try (BitSession session = portalClient.openSession(band, BitPortalClient.READ_WAIT)) {
             return session.listEvents();
         }
     }

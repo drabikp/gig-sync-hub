@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.sync.domain.QueueResult;
 
@@ -10,5 +11,5 @@ import sk.drabikp.bzscraper.sync.domain.QueueResult;
  */
 public interface DeleteGigUseCase {
 
-    QueueResult delete(GigId id);
+    QueueResult delete(BandId band, GigId id);
 }

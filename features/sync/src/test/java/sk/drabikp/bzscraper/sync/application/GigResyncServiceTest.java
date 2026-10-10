@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.sync.domain.SyncTask;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
 class GigResyncServiceTest {
@@ -26,11 +27,11 @@ class GigResyncServiceTest {
     void queues_an_update_where_the_gig_is_published_and_says_which_gigs_had_nothing_to_do() {
         Gig onBandzone = TestGigs.gig("On Bandzone", "Klub 007");
         Gig local = TestGigs.gig("Local", "Barrák");
-        gigs.save(onBandzone);
-        gigs.save(local);
-        published.record(BANDZONE, onBandzone.id(), "100");
+        gigs.save(BAND, onBandzone);
+        gigs.save(BAND, local);
+        published.record(BAND, BANDZONE, onBandzone.id(), "100");
 
-        QueueResult result = service.resync(List.of(onBandzone.id(), local.id()));
+        QueueResult result = service.resync(BAND, List.of(onBandzone.id(), local.id()));
 
         assertThat(result.queued()).extracting(SyncTask::action).containsExactly(SyncAction.UPDATE);
         assertThat(result.notQueued()).singleElement().asString().startsWith("Local:");

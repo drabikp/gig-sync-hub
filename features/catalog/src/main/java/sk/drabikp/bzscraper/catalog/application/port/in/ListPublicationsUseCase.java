@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Publication;
@@ -10,5 +11,5 @@ import java.util.Map;
 public interface ListPublicationsUseCase {
 
     /** Gigs never published anywhere are absent. */
-    Map<GigId, Map<Platform, Publication>> publicationsByGig();
+    Map<GigId, Map<Platform, Publication>> publicationsByGig(BandId band);
 }

@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.calendar.domain;
 
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
 import sk.drabikp.bzscraper.calendar.domain.rules.BandProfile;
+import sk.drabikp.bzscraper.calendar.domain.rules.NotesLabels;
 import sk.drabikp.bzscraper.calendar.domain.rules.ProfileRule;
 import sk.drabikp.bzscraper.calendar.domain.rules.RuleKind;
 import sk.drabikp.bzscraper.gig.domain.CityName;
@@ -74,8 +75,7 @@ public final class CalendarGigDrafter {
         String folded = TextFold.fold(notes);
         for (ProfileRule rule : profile.enabled(RuleKind.SHOWTIME_LABEL)) {
             for (String label : rule.alternatives()) {
-                Matcher m = Pattern.compile("(?<![\\p{L}\\p{N}])" + spaced(label) + "\\s*:\\s*(\\d{1,2})[:.](\\d{2})")
-                        .matcher(folded);
+                Matcher m = NotesLabels.time(label).matcher(folded);
                 while (m.find()) {
                     int hour = Integer.parseInt(m.group(1));
                     int minute = Integer.parseInt(m.group(2));
@@ -155,9 +155,5 @@ public final class CalendarGigDrafter {
         }
         city = LEADING_NUMBER.matcher(city.strip()).replaceFirst("");
         return DISTRICT_NUMBER.matcher(city.strip()).replaceFirst("").strip();
-    }
-
-    private static String spaced(String folded) {
-        return Arrays.stream(folded.split(" ")).map(Pattern::quote).collect(Collectors.joining("\\s*"));
     }
 }

@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDSINTOWN;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
@@ -34,12 +35,12 @@ class SyncDispatcherTest {
     private final Gig gig = TestGigs.gig("Fest", "Klub 007");
 
     private SyncTask queue(Gig g, Platform platform, SyncAction action) {
-        return outbox.enqueue(g.id(), SyncTask.labelOf(g), platform, action, clock.instant());
+        return outbox.enqueue(BAND, g.id(), SyncTask.labelOf(g), platform, action, clock.instant());
     }
 
     @Test
     void the_next_due_task_runs_until_nothing_is_due() {
-        published.record(BANDZONE, gig.id(), "100");
+        published.record(BAND, BANDZONE, gig.id(), "100");
         SyncTask delete = queue(gig, BANDZONE, SyncAction.DELETE);
 
         assertThat(dispatcher.runNext()).isTrue();
@@ -59,10 +60,10 @@ class SyncDispatcherTest {
                 gigs, published, outbox, signals, clock, never, breakers), outbox, signals, clock, never, breakers);
         List<Gig> onBit = List.of(TestGigs.gig("A", "Klub A"), TestGigs.gig("B", "Klub B"), TestGigs.gig("C", "Klub C"));
         onBit.forEach(g -> {
-            published.record(BANDSINTOWN, g.id(), "bit-" + g.title());
+            published.record(BAND, BANDSINTOWN, g.id(), "bit-" + g.title());
             queue(g, BANDSINTOWN, SyncAction.DELETE);
         });
-        published.record(BANDZONE, gig.id(), "100");
+        published.record(BAND, BANDZONE, gig.id(), "100");
         SyncTask onBandzone = queue(gig, BANDZONE, SyncAction.DELETE);
 
         while (guarded.runNext()) {
@@ -94,7 +95,7 @@ class SyncDispatcherTest {
 
     @Test
     void a_discarded_task_is_not_run() {
-        published.record(BANDZONE, gig.id(), "100");
+        published.record(BAND, BANDZONE, gig.id(), "100");
         SyncTask task = queue(gig, BANDZONE, SyncAction.DELETE);
         outbox.discard(task.id(), clock.instant());
 
@@ -118,18 +119,18 @@ class SyncDispatcherTest {
 
     @Test
     void a_paused_sync_starts_nothing_until_resumed() {
-        published.record(BANDZONE, gig.id(), "100");
+        published.record(BAND, BANDZONE, gig.id(), "100");
         queue(gig, BANDZONE, SyncAction.DELETE);
         SyncPause pause = new SyncPause(signals, signals, new SyncFakes.Settings());
         SyncDispatcher pausable = SyncFakes.dispatcher(SyncFakes.engine(SyncFakes.registry(published, bzRemove), gigs,
                 published, outbox, signals, clock, pause, PlatformBreakers.never(clock)), outbox, signals, clock, pause,
                 PlatformBreakers.never(clock));
 
-        pause.pause();
+        pause.pause(BAND);
         assertThat(pausable.runNext()).isFalse();
         assertThat(bzRemove.calls).isEmpty();
 
-        pause.resume();
+        pause.resume(BAND);
         assertThat(pausable.runNext()).isTrue();
         assertThat(signals.wakes).as("resuming wakes the worker").isPositive();
     }

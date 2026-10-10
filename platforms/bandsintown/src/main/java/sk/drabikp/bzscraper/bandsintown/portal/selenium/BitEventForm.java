@@ -1,11 +1,10 @@
 package sk.drabikp.bzscraper.bandsintown.portal.selenium;
 
 import org.openqa.selenium.By;
-import org.openqa.selenium.Keys;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 
 import java.time.Duration;
@@ -37,11 +36,11 @@ final class BitEventForm {
     public static Optional<BitEventForm> open(BitPortal portal, String eventId) {
         portal.open("events/" + eventId + "?version=single-page");
         try {
-            portal.wait.until(ExpectedConditions.presenceOfElementLocated(By.name("venue_name")));
+            portal.until(ExpectedConditions.presenceOfElementLocated(By.name("venue_name")));
         } catch (TimeoutException e) {
             return Optional.empty();
         }
-        portal.replies.install();
+        portal.replies().install();
         portal.pause();
         return Optional.of(new BitEventForm(portal, eventId));
     }
@@ -51,10 +50,10 @@ final class BitEventForm {
      * the user has to set the place. The field's own "Clear value" drops the old place first
      * (typing over it would keep it); the pick is checked in the field.
      */
-    public void pickVenue(Gig gig) throws BitUploadException {
+    public void pickVenue(Gig gig) throws BitPortalException {
         String city = gig.location().city();
         String query = BitPlaces.query(gig);
-        int mark = portal.replies.count();
+        int mark = portal.replies().count();
         WebElement clear = (WebElement) portal.js("var e = arguments[0]; for (var i = 0; i < 4 && e.parentElement; i++)"
                 + " e = e.parentElement; return e.querySelector(\"button[aria-label='Clear value']\");", venueField());
         if (clear != null) {
@@ -63,20 +62,20 @@ final class BitEventForm {
         }
         portal.type(venueField(), query);
         // the search answers while typing — the reply to the whole query is the last one
-        PortalReply reply = portal.replies.awaitLast(mark, r -> r.urlContains("/venues/autocomplete"), "the venue search",
+        PortalReply reply = portal.replies().awaitLast(mark, r -> r.urlContains("/venues/autocomplete"), "the venue search",
                 Duration.ofMillis(1500));
         BitPlace place = BitPlaces.choose(reply.places(), gig.location().venue(), city);
         if (place == null) {
-            throw BitUploadException.needsUser("Bandsintown's venue search (Google places) has nothing for '" + query
+            throw BitPortalException.needsUser("Bandsintown's venue search (Google places) has nothing for '" + query
                     + "' in " + city + " — set the place there by hand.");
         }
-        WebElement option = portal.wait.until(ExpectedConditions.elementToBeClickable(
+        WebElement option = portal.until(ExpectedConditions.elementToBeClickable(
                 By.cssSelector("li[role='option'][value='" + place.placeId().replace("'", "") + "'] button")));
         portal.click(option);
         portal.pause();
         String picked = venueField().getDomProperty("value");
         if (!place.description().equals(picked)) {
-            throw new BitUploadException("Bandsintown's venue field didn't take the place ('" + picked
+            throw BitPortalException.temporary("Bandsintown's venue field didn't take the place ('" + picked
                     + "') — nothing was saved.");
         }
     }
@@ -107,13 +106,13 @@ final class BitEventForm {
     }
 
     /** Saves the form; the portal's reply to it (refused unless HTTP 200 and OK). */
-    public PortalReply save() throws BitUploadException {
-        int mark = portal.replies.count();
+    public PortalReply save() throws BitPortalException {
+        int mark = portal.replies().count();
         portal.pause();
         portal.click(portal.visibleButton("Save"));
-        PortalReply reply = portal.replies.await(mark, r -> r.write() && r.urlContains(eventId), "saving the form");
+        PortalReply reply = portal.replies().await(mark, r -> r.write() && r.urlContains(eventId), "saving the form");
         if (reply.status() != 200 || !reply.ok()) {
-            throw BitUploadException.refused("Bandsintown didn't save event " + eventId + " — "
+            throw BitPortalException.refused("Bandsintown didn't save event " + eventId + " — "
                     + (reply.rowErrors().isEmpty() ? reply.describe() : String.join(", ", reply.rowErrors())));
         }
         return reply;
@@ -126,11 +125,11 @@ final class BitEventForm {
     }
 
     private WebElement venueField() {
-        return portal.driver.findElement(By.name("venue_name"));
+        return portal.find(By.name("venue_name"));
     }
 
     private void setField(By by, String value) {
-        setField(portal.wait.until(ExpectedConditions.presenceOfElementLocated(by)), value);
+        setField(portal.until(ExpectedConditions.presenceOfElementLocated(by)), value);
     }
 
     /** Types the value when the field holds something else; a picker's matching option is clicked. */
@@ -138,12 +137,10 @@ final class BitEventForm {
         if (value.equals(field.getDomProperty("value"))) {
             return;
         }
-        portal.click(field);
-        field.sendKeys(Keys.chord(Keys.CONTROL, "a"), Keys.BACK_SPACE);
-        portal.typeIntoFocused(value);
+        portal.clearAndType(field, value);
         portal.pause();
-        portal.driver.findElements(By.xpath("//*[@role='option' or self::li]")).stream()
+        portal.findAll(By.xpath("//*[@role='option' or self::li]")).stream()
                 .filter(WebElement::isDisplayed).filter(e -> value.equals(e.getText().trim()))
-                .findFirst().ifPresentOrElse(portal::click, () -> field.sendKeys(Keys.TAB));
+                .findFirst().ifPresentOrElse(portal::click, () -> portal.pressTab(field));
     }
 }

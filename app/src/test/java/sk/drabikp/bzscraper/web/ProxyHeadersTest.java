@@ -3,19 +3,20 @@ package sk.drabikp.bzscraper.web;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Behind the proxy (online, HTTPS ends there): the request the app gets is plain HTTP, and the
- * proxy's X-Forwarded-Proto says how it really came in — then the sign-in's cookies are Secure.
- * A real server, as Tomcat itself reads the header (here from 127.0.0.1, a trusted address).
+ * Behind the proxy (HTTPS ends there): the request the app gets is plain HTTP, and the proxy's
+ * X-Forwarded-Proto says how it really came in — then Rauthy is told to send the user back over
+ * HTTPS, and the session's cookie is Secure. A real server, as Tomcat itself reads the header
+ * (here from 127.0.0.1, a trusted address).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ProxyHeadersTest {
@@ -26,43 +27,41 @@ class ProxyHeadersTest {
     private final HttpClient http = HttpClient.newHttpClient();
 
     @Test
-    void signed_in_over_https_at_the_proxy_the_cookies_are_secure() throws Exception {
-        assertThat(signInCookies(true)).isNotEmpty()
-                .filteredOn(c -> c.startsWith("JSESSIONID=") || c.startsWith("bzscraper-remember="))
-                .hasSize(2)
-                .allMatch(c -> c.contains("Secure"));
+    void signing_in_over_https_at_the_proxy_comes_back_over_https_with_a_secure_session() throws Exception {
+        HttpResponse<Void> start = startSignIn(true);
+
+        assertThat(redirectUri(start)).startsWith("https://");
+        assertThat(sessionCookie(start)).contains("Secure");
     }
 
     @Test
-    void signed_in_over_plain_http_on_this_machine_they_are_not() throws Exception {
-        assertThat(signInCookies(false))
-                .filteredOn(c -> c.startsWith("JSESSIONID=") || c.startsWith("bzscraper-remember="))
-                .hasSize(2)
-                .noneMatch(c -> c.contains("Secure"));
+    void signing_in_over_plain_http_on_this_machine_stays_plain() throws Exception {
+        HttpResponse<Void> start = startSignIn(false);
+
+        assertThat(redirectUri(start)).startsWith("http://");
+        assertThat(sessionCookie(start)).doesNotContain("Secure");
     }
 
-    private List<String> signInCookies(boolean https) throws Exception {
-        HttpRequest.Builder csrf = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/csrf"));
+    private HttpResponse<Void> startSignIn(boolean https) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/oauth2/authorization/rauthy"));
         if (https) {
-            csrf.header("X-Forwarded-Proto", "https");
+            request.header("X-Forwarded-Proto", "https");
         }
-        HttpResponse<String> first = http.send(csrf.build(), HttpResponse.BodyHandlers.ofString());
-        String token = first.headers().allValues("Set-Cookie").stream()
-                .filter(c -> c.startsWith("XSRF-TOKEN="))
-                .map(c -> c.substring("XSRF-TOKEN=".length(), c.indexOf(';')))
-                .findFirst().orElseThrow();
+        HttpResponse<Void> response = http.send(request.build(), HttpResponse.BodyHandlers.discarding());
+        assertThat(response.statusCode()).isEqualTo(302);
+        return response;
+    }
 
-        HttpRequest.Builder login = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
-                .header("Content-Type", "application/json")
-                .header("Cookie", "XSRF-TOKEN=" + token)
-                .header("X-XSRF-TOKEN", token)
-                .POST(HttpRequest.BodyPublishers.ofString(
-                        "{\"username\":\"tester\",\"password\":\"test-only\",\"remember\":true}"));
-        if (https) {
-            login.header("X-Forwarded-Proto", "https");
-        }
-        HttpResponse<String> signedIn = http.send(login.build(), HttpResponse.BodyHandlers.ofString());
-        assertThat(signedIn.statusCode()).isEqualTo(200);
-        return signedIn.headers().allValues("Set-Cookie");
+    /** Where Rauthy is to send the user back. */
+    private static String redirectUri(HttpResponse<Void> start) {
+        return UriComponentsBuilder.fromUriString(start.headers().firstValue("Location").orElseThrow()).build()
+                .getQueryParams().getFirst("redirect_uri");
+    }
+
+    /** The session that keeps the sign-in's state until the user comes back. */
+    private static String sessionCookie(HttpResponse<Void> start) {
+        return start.headers().allValues("Set-Cookie").stream().filter(c -> c.startsWith("JSESSIONID="))
+                .findFirst().orElseThrow();
     }
 }

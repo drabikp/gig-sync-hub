@@ -31,7 +31,15 @@ class SyncLogEntity {
         this.message = SyncTaskEntity.clip(message, SyncTaskEntity.TEXT_MAX);
     }
 
-    SyncLogEntry toEntry() {
-        return new SyncLogEntry(taskId, loggedAt, message);
+    public Long getTaskId() {
+        return taskId;
+    }
+
+    public Instant getLoggedAt() {
+        return loggedAt;
+    }
+
+    public String getMessage() {
+        return message;
     }
 }

@@ -1,6 +1,6 @@
 package sk.drabikp.bzscraper.check.application;
 
-import sk.drabikp.bzscraper.catalog.application.port.in.GigBusyException;
+import sk.drabikp.bzscraper.catalog.application.port.in.GigWrites;
 import sk.drabikp.bzscraper.check.application.port.in.CheckPlatformsUseCase;
 import sk.drabikp.bzscraper.check.domain.Drift;
 import sk.drabikp.bzscraper.check.domain.PlatformCheck;
@@ -9,6 +9,7 @@ import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
@@ -28,35 +29,38 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Checks the platforms against the catalog ({@link Reconciler}) for the upcoming gigs and
  * those of the last {@code pastDays}, reading each platform through its importer — the same
  * read-only reading as Import. A platform held back by its circuit breaker
- * is not read; one that can't be read is reported as such. One check at a time; the latest
- * result is kept in memory (a restart forgets it — the next check finds the same again).
+ * is not read; one that can't be read is reported as such. One check at a time per band; each
+ * band's latest result is kept in memory (a restart forgets it — the next check finds the same again).
  */
 public class PlatformCheckService implements CheckPlatformsUseCase {
 
     private final List<GigImporter> importers;
     private final GigRepository gigRepository;
     private final PublishedGigStore publishedGigStore;
+    private final GigWrites writes;
     private final SyncStateUseCase sync;
     private final Transactions transactions;
     private final Platforms platforms;
     private final Clock clock;
     private final LiveUpdates live;
     private final int pastDays;
-    private final AtomicBoolean running = new AtomicBoolean();
-    private volatile PlatformCheck last;
+    private final Set<BandId> running = ConcurrentHashMap.newKeySet();
+    private final Map<BandId, PlatformCheck> last = new ConcurrentHashMap<>();
 
     public PlatformCheckService(List<GigImporter> importers, GigRepository gigRepository,
-                                PublishedGigStore publishedGigStore, SyncStateUseCase sync, Transactions transactions,
-                                Platforms platforms, Clock clock, int pastDays, LiveUpdates live) {
+                                PublishedGigStore publishedGigStore, GigWrites writes, SyncStateUseCase sync,
+                                Transactions transactions, Platforms platforms, Clock clock, int pastDays,
+                                LiveUpdates live) {
         this.importers = importers;
         this.gigRepository = gigRepository;
         this.publishedGigStore = publishedGigStore;
+        this.writes = writes;
         this.sync = sync;
         this.transactions = transactions;
         this.platforms = platforms;
@@ -66,11 +70,11 @@ public class PlatformCheckService implements CheckPlatformsUseCase {
     }
 
     @Override
-    public Optional<PlatformCheck> check() {
-        if (!running.compareAndSet(false, true)) {
+    public Optional<PlatformCheck> check(BandId band) {
+        if (!running.add(band)) {
             return Optional.empty();
         }
-        live.changed(LiveUpdates.Topic.CHECK);
+        live.changed(band, LiveUpdates.Topic.CHECK);
         try {
             List<Drift> drifts = new ArrayList<>();
             Map<Platform, String> unreadable = new TreeMap<>();
@@ -83,7 +87,7 @@ public class PlatformCheckService implements CheckPlatformsUseCase {
                 }
                 List<ImportedGig> listed;
                 try {
-                    listed = importer.importGigs();
+                    listed = importer.importGigs(band);
                 } catch (PlatformException e) {
                     unreadable.put(platform, e.getMessage());
                     continue;
@@ -94,50 +98,44 @@ public class PlatformCheckService implements CheckPlatformsUseCase {
                 // the catalog as it is once the platform has been read (that read takes a while):
                 // upcoming gigs and the recent past — older history isn't worth reconciling
                 LocalDate since = LocalDate.now(clock).minusDays(pastDays);
-                List<Gig> catalog = gigRepository.findAll().stream()
+                List<Gig> catalog = gigRepository.findAll(band).stream()
                         .filter(g -> !g.schedule().start().toLocalDate().isBefore(since)).toList();
-                List<Publication> records = publishedGigStore.all();
-                Set<GigId> syncing = sync.gigsWithOpenWork();
+                List<Publication> records = publishedGigStore.all(band);
+                Set<GigId> syncing = sync.gigsWithOpenWork(band);
                 drifts.addAll(Reconciler.drifts(platforms.traits(platform), catalog, records, listed, syncing));
                 unlinked.put(platform, Reconciler.unlinked(platform, records, listed));
             }
-            last = new PlatformCheck(clock.instant(), drifts, unreadable, unlinked);
-            return Optional.of(last);
+            PlatformCheck check = new PlatformCheck(clock.instant(), drifts, unreadable, unlinked);
+            last.put(band, check);
+            return Optional.of(check);
         } finally {
-            running.set(false);
-            live.changed(LiveUpdates.Topic.CHECK);
+            running.remove(band);
+            live.changed(band, LiveUpdates.Topic.CHECK);
         }
     }
 
     @Override
-    public Optional<PlatformCheck> lastCheck() {
-        return Optional.ofNullable(last);
+    public Optional<PlatformCheck> lastCheck(BandId band) {
+        return Optional.ofNullable(last.get(band));
     }
 
     @Override
-    public boolean running() {
-        return running.get();
+    public boolean running(BandId band) {
+        return running.contains(band);
     }
 
+    /** Through the catalog's write path (refused while the gig's platform work runs); the gig pages follow. */
     @Override
-    public void forget(Platform platform, GigId gigId) {
-        transactions.inTransaction(() -> {
-            if (sync.busy(gigId)) {
-                throw new GigBusyException(gigId.toString());
-            }
-            publishedGigStore.remove(platform, gigId);
-        });
-        dismiss(platform, gigId);
+    public void forget(BandId band, Platform platform, GigId gigId) {
+        transactions.inTransaction(() -> writes.forgetLink(band, platform, gigId));
+        live.changed(band, LiveUpdates.Topic.GIGS);
+        dismiss(band, platform, gigId);
     }
 
+    /** A check that ends meanwhile replaces the result; a dismiss never brings an older one back. */
     @Override
-    public synchronized void dismiss(Platform platform, GigId gigId) {
-        PlatformCheck check = last;
-        if (check != null) {
-            last = new PlatformCheck(check.checkedAt(), check.drifts().stream()
-                    .filter(d -> d.platform() != platform || !d.gigId().equals(gigId)).toList(),
-                    check.unreadable(), check.unlinked());
-        }
-        live.changed(LiveUpdates.Topic.CHECK);
+    public void dismiss(BandId band, Platform platform, GigId gigId) {
+        last.computeIfPresent(band, (b, check) -> check.without(platform, gigId));
+        live.changed(band, LiveUpdates.Topic.CHECK);
     }
 }

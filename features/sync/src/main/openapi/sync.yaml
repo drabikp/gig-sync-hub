@@ -11,7 +11,9 @@ servers:
 tags:
   - name: Sync
 paths:
-  /api/sync/tasks:
+  /api/bands/{bandId}/sync/tasks:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     get:
       tags: [Sync]
       operationId: listTasks
@@ -31,8 +33,10 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Task'
-  /api/sync/tasks/{id}/log:
+                  $ref: '#/components/schemas/TaskResponse'
+  /api/bands/{bandId}/sync/tasks/{id}/log:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     get:
       tags: [Sync]
       operationId: taskLog
@@ -46,8 +50,10 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/LogEntry'
-  /api/sync/tasks/{id}/retry:
+                  $ref: '#/components/schemas/LogEntryResponse'
+  /api/bands/{bandId}/sync/tasks/{id}/retry:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Sync]
       operationId: retryTask
@@ -57,9 +63,13 @@ paths:
       responses:
         "204":
           description: Queued again.
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
         "409":
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
-  /api/sync/tasks/{id}/discard:
+  /api/bands/{bandId}/sync/tasks/{id}/discard:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Sync]
       operationId: discardTask
@@ -69,9 +79,13 @@ paths:
       responses:
         "204":
           description: Discarded.
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
         "409":
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
-  /api/sync/status:
+  /api/bands/{bandId}/sync/status:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     get:
       tags: [Sync]
       operationId: syncStatus
@@ -81,8 +95,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SyncStatus'
-  /api/sync/pause:
+                $ref: '#/components/schemas/SyncStatusResponse'
+  /api/bands/{bandId}/sync/pause:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Sync]
       operationId: pauseSync
@@ -90,14 +106,18 @@ paths:
       responses:
         "204":
           description: Paused.
-  /api/sync/resume:
+  /api/bands/{bandId}/sync/resume:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Sync]
       operationId: resumeSync
       responses:
         "204":
           description: Running again.
-  /api/sync/breakers/{platform}/resume:
+  /api/bands/{bandId}/sync/breakers/{platform}/resume:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
     post:
       tags: [Sync]
       operationId: resumePlatform
@@ -123,13 +143,13 @@ components:
         type: integer
         format: int64
   schemas:
-    SyncAction:
+    SyncActionValue:
       type: string
       enum: [PUBLISH, UPDATE, CANCEL, DELETE, REACTIVATE]
-    SyncTaskStatus:
+    SyncTaskStatusValue:
       type: string
       enum: [PENDING, RUNNING, DONE, FAILED, DISCARDED]
-    Task:
+    TaskResponse:
       description: A platform task. `retrying` — failed and tried again at nextAttemptAt.
       type: object
       required: [id, gigId, gigLabel, platform, action, status, retrying, attempts, createdAt, updatedAt,
@@ -146,9 +166,9 @@ components:
         platform:
           type: string
         action:
-          $ref: '#/components/schemas/SyncAction'
+          $ref: '#/components/schemas/SyncActionValue'
         status:
-          $ref: '#/components/schemas/SyncTaskStatus'
+          $ref: '#/components/schemas/SyncTaskStatusValue'
         retrying:
           type: boolean
         attempts:
@@ -170,7 +190,7 @@ components:
           description: Where its workflow is, e.g. "bulk edit".
           type: string
           nullable: true
-    LogEntry:
+    LogEntryResponse:
       type: object
       required: [at, message]
       properties:
@@ -179,7 +199,7 @@ components:
           format: date-time
         message:
           type: string
-    Breaker:
+    BreakerResponse:
       description: |
         A platform whose breaker isn't plainly closed: `failures` in a row; `held` while its work
         is held back (until heldUntil); `trial` when the next batch decides.
@@ -201,7 +221,7 @@ components:
         lastFailure:
           type: string
           nullable: true
-    SyncCounts:
+    SyncCountsResponse:
       description: The open tasks by what they are doing now.
       type: object
       required: [queued, running, retrying, failed]
@@ -218,7 +238,7 @@ components:
         failed:
           type: integer
           format: int64
-    SyncStatus:
+    SyncStatusResponse:
       type: object
       required: [paused, breakers, counts]
       properties:
@@ -227,6 +247,6 @@ components:
         breakers:
           type: array
           items:
-            $ref: '#/components/schemas/Breaker'
+            $ref: '#/components/schemas/BreakerResponse'
         counts:
-          $ref: '#/components/schemas/SyncCounts'
+          $ref: '#/components/schemas/SyncCountsResponse'

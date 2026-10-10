@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.bandsintown.portal.selenium;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sk.drabikp.bzscraper.bandsintown.BandsintownPlatform;
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Country;
@@ -20,9 +22,12 @@ import java.util.Optional;
 /**
  * Maps one event of the artist portal's event list ({@link BitEvent}) to a gig. Bandsintown has no entry fee, so
  * entry is "free" unless something better is known (see the import merge). Deleted
- * events and events without a city or date are left out.
+ * events and events without a city or date are left out; one that can't be read is left out
+ * with a warning saying why. An unknown time zone is read in the country's.
  */
 final class BitEventMapper {
+
+    private static final Logger logger = LoggerFactory.getLogger(BitEventMapper.class);
 
     private BitEventMapper() {
     }
@@ -34,7 +39,7 @@ final class BitEventMapper {
         }
         try {
             Country country = country(event.venueCountry());
-            ZoneId zone = zone(event.venueTimezone(), country);
+            ZoneId zone = zone(event, country);
             ZonedDateTime start = at(event.startDate(), event.startTime(), zone);
             ZonedDateTime end = event.endDate() == null ? null : at(event.endDate(), event.endTime(), zone);
             if (end != null && !end.isAfter(start)) {
@@ -50,6 +55,7 @@ final class BitEventMapper {
             return Optional.of(new ImportedGig(BandsintownPlatform.PLATFORM, gig, event.id(),
                     placed ? event.latitude() : null, placed ? event.longitude() : null));
         } catch (DateTimeException | IllegalArgumentException e) {
+            logger.warn("Bandsintown event {} left out: {}", event.id(), e.getMessage());
             return Optional.empty();
         }
     }
@@ -76,11 +82,19 @@ final class BitEventMapper {
         return LocalDate.parse(date).atTime(clock).atZone(zone);
     }
 
-    private static ZoneId zone(String timezone, Country country) {
-        if (timezone != null) {
-            return ZoneId.of(timezone);
+    /** The venue's time zone; the country's (else UTC) when the portal names none or one Java doesn't know. */
+    private static ZoneId zone(BitEvent event, Country country) {
+        ZoneId countryZone = country != null ? ZoneId.of(country.timezone()) : ZoneId.of("UTC");
+        if (event.venueTimezone() == null) {
+            return countryZone;
         }
-        return country != null ? ZoneId.of(country.timezone()) : ZoneId.of("UTC");
+        try {
+            return ZoneId.of(event.venueTimezone());
+        } catch (DateTimeException e) {
+            logger.warn("Bandsintown event {} has an unknown time zone '{}' — read in {}", event.id(),
+                    event.venueTimezone(), countryZone);
+            return countryZone;
+        }
     }
 
     static Country country(String name) {

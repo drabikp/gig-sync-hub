@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.catalog.application;
 
 import sk.drabikp.bzscraper.catalog.application.port.out.GigMovedListener;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.sync.application.SyncFakes;
 import sk.drabikp.bzscraper.sync.application.SyncRequests;
@@ -21,7 +22,7 @@ public final class CatalogFakes {
         public final List<String> moved = new ArrayList<>();
 
         @Override
-        public void gigMoved(GigId from, GigId to) {
+        public void gigMoved(BandId band, GigId from, GigId to) {
             moved.add(from + " -> " + to);
         }
     }

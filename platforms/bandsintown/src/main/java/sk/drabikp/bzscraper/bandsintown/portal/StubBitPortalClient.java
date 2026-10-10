@@ -2,7 +2,8 @@ package sk.drabikp.bzscraper.bandsintown.portal;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Duration;
 
@@ -15,9 +16,8 @@ import java.time.Duration;
 class StubBitPortalClient implements BitPortalClient {
 
     @Override
-    public BitSession openSession(Duration wait) throws BitUploadException {
-        throw BitUploadException.needsUser("Bandsintown publishing is switched off — set "
-                + "bzscraper.bandsintown.selenium.enabled=true and the bzscraper.bandsintown.login/"
-                + "password/totp-secret.");
+    public BitSession openSession(BandId band, Duration wait) throws BitPortalException {
+        throw BitPortalException.needsUser(
+                "This server doesn't drive Bandsintown (bzscraper.bandsintown.selenium.enabled is off).");
     }
 }

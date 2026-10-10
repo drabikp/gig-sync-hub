@@ -3,6 +3,8 @@ package sk.drabikp.bzscraper.sync.application;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
+import static sk.drabikp.bzscraper.gig.domain.TestBands.OTHER;
 
 class SyncPauseTest {
 
@@ -11,13 +13,23 @@ class SyncPauseTest {
 
     @Test
     void a_pause_survives_a_restart_until_the_user_resumes() {
-        new SyncPause(signals, signals, settings).pause();
+        new SyncPause(signals, signals, settings).pause(BAND);
 
         SyncPause afterRestart = new SyncPause(signals, signals, settings);
-        assertThat(afterRestart.paused()).isTrue();
+        assertThat(afterRestart.paused(BAND)).isTrue();
 
-        afterRestart.resume();
-        assertThat(new SyncPause(signals, signals, settings).paused()).isFalse();
+        afterRestart.resume(BAND);
+        assertThat(new SyncPause(signals, signals, settings).paused(BAND)).isFalse();
         assertThat(signals.wakes).as("resuming wakes the worker").isEqualTo(1);
+    }
+
+    @Test
+    void one_bands_pause_is_its_own() {
+        SyncPause pause = new SyncPause(signals, signals, settings);
+
+        pause.pause(BAND);
+
+        assertThat(pause.paused(OTHER)).isFalse();
+        assertThat(pause.pausedBands()).containsExactly(BAND);
     }
 }

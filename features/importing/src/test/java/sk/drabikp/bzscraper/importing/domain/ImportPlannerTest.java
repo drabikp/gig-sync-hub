@@ -74,7 +74,7 @@ class ImportPlannerTest {
         ImportProposal p = plan.proposals().getFirst();
         assertThat(p.local()).isEqualTo(local);
         assertThat(p.hasConflict()).isTrue();
-        assertThat(p.versions()).extracting(v -> v.source(TestPlatforms.PLATFORMS)).containsExactly("Catalog", "Bandzone");
+        assertThat(p.versions()).extracting(ImportProposal.Version::platform).containsExactly(null, TestPlatforms.BANDZONE);
         assertThat(p.defaultVersion().platform()).isNull();     // the catalog's details by default
     }
 

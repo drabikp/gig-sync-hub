@@ -28,8 +28,9 @@ import java.util.Set;
  *       when a desktop session bus is reachable and Chromium's own store otherwise (a
  *       server: there the private directory — on an encrypted volume, owned by the service
  *       user — is the protection);</li>
- *   <li>one profile per ACCOUNT: a profile only ever holds one account's login, so a test
- *       account can't act as the real band or the other way round.</li>
+ *   <li>one profile per ACCOUNT — a band's login on the platform: a profile only ever holds one
+ *       band's login, so a test account can't act as the real band, nor one band (who typed
+ *       another band's login, without its password) reuse another band's saved login.</li>
  * </ul>
  * The platform decides how long a login stays valid; when it expired, the client logs in
  * with the password again. Deleting the directory forgets the saved login.
@@ -42,14 +43,14 @@ final class BrowserProfile {
     }
 
     /**
-     * {@code configured} when set, else {@code ~/.bzscraper/<platform>-browser/<account key>} —
-     * the key is a hash, so the account name is not spelled out on disk.
+     * The account's own directory: {@code <root>/<account key>}, the root {@code configured} when set,
+     * else {@code ~/.bzscraper/<platform>-browser} — the key is a hash, so the account is not spelled out
+     * on disk.
      */
     public static Path dir(String configured, String platform, String account) {
-        if (configured != null && !configured.isBlank()) {
-            return Paths.get(configured);
-        }
-        return Paths.get(System.getProperty("user.home"), ".bzscraper", platform + "-browser", accountKey(account));
+        Path root = configured != null && !configured.isBlank() ? Paths.get(configured)
+                : Paths.get(System.getProperty("user.home"), ".bzscraper", platform + "-browser");
+        return root.resolve(accountKey(account));
     }
 
     /** Creates the directory (and missing parents) readable by the owner only, and tightens an existing one. */

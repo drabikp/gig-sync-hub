@@ -23,11 +23,23 @@ class WarmBrowserTest {
         WarmBrowser warm = new WarmBrowser(oneBrowser, Duration.ofMinutes(1), "test");
         WebDriver driver = mock(WebDriver.class);
 
-        warm.park(driver);
+        warm.park(driver, "a");
 
-        assertThat(warm.take()).isSameAs(driver);
-        assertThat(warm.take()).as("taken once").isNull();
+        assertThat(warm.take("a")).isSameAs(driver);
+        assertThat(warm.take("a")).as("taken once").isNull();
         verify(driver, never()).quit();
+    }
+
+    @Test
+    void another_accounts_browser_is_closed_not_handed_out() {
+        WarmBrowser warm = new WarmBrowser(oneBrowser, Duration.ofMinutes(1), "test");
+        WebDriver driver = mock(WebDriver.class);
+
+        warm.park(driver, "a");
+
+        assertThat(warm.take("b")).as("its profile is another account's").isNull();
+        verify(driver).quit();
+        assertThat(warm.take("a")).as("gone for its own account too").isNull();
     }
 
     @Test
@@ -36,9 +48,9 @@ class WarmBrowserTest {
         WebDriver driver = mock(WebDriver.class);
         when(driver.getWindowHandle()).thenThrow(new WebDriverException("gone"));
 
-        warm.park(driver);
+        warm.park(driver, "a");
 
-        assertThat(warm.take()).isNull();
+        assertThat(warm.take("a")).isNull();
         verify(driver).quit();
     }
 
@@ -46,16 +58,28 @@ class WarmBrowserTest {
     void an_idle_browser_is_closed_unless_someone_holds_the_browser() throws Exception {
         WarmBrowser warm = new WarmBrowser(oneBrowser, Duration.ofMillis(50), "test");
         WebDriver idle = mock(WebDriver.class);
-        warm.park(idle);
+        warm.park(idle, "a");
         verify(idle, timeout(2000)).quit();
 
         WebDriver busy = mock(WebDriver.class);
         oneBrowser.acquire();                       // a session is using the platform's browser
-        warm.park(busy);
+        warm.park(busy, "a");
         Thread.sleep(200);
         verify(busy, never()).quit();
         oneBrowser.release();
         warm.close();
         verify(busy).quit();
+    }
+
+    @Test
+    void once_closed_a_browser_handed_back_is_closed_at_once() {
+        WarmBrowser warm = new WarmBrowser(oneBrowser, Duration.ofMinutes(1), "test");
+        WebDriver driver = mock(WebDriver.class);
+
+        warm.close();
+        warm.park(driver, "a");                          // no RejectedExecutionException from the stopped timer
+
+        verify(driver).quit();
+        assertThat(warm.take("a")).isNull();
     }
 }

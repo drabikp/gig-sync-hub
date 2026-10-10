@@ -3,6 +3,7 @@ import { IconListCheck } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useCheck, useCheckAction } from '../api/hooks';
+import { useBandPath } from '../band/band';
 import { ActionButtons } from '../components/ActionButtons';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
@@ -12,6 +13,7 @@ import { failed } from '../lib/notify';
 
 /** Reads what the platforms really show and lists where they differ from the catalog. */
 export function CheckPage() {
+  const path = useBandPath();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const check = useCheck();
@@ -66,7 +68,7 @@ export function CheckPage() {
         <Paper key={p} withBorder p="md">
           <Group justify="space-between" wrap="wrap">
             <Text>{t('check.unlinked', { count: n, platform: name(p) })}</Text>
-            <Button variant="light" onClick={() => navigate('/import')}>{t('check.toImport')}</Button>
+            <Button variant="light" onClick={() => navigate(path('/import'))}>{t('check.toImport')}</Button>
           </Group>
         </Paper>
       ))}

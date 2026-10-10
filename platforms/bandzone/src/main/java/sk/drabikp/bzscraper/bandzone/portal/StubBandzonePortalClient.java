@@ -4,7 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import sk.drabikp.bzscraper.bandzone.BandzoneUploadException;
+import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
+import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Duration;
 
@@ -21,11 +22,10 @@ class StubBandzonePortalClient implements BandzonePortalClient {
     private static final Logger logger = LoggerFactory.getLogger(StubBandzonePortalClient.class);
 
     @Override
-    public BandzoneSession openSession(Duration wait) throws BandzoneUploadException {
+    public BandzoneSession openSession(BandId band, Duration wait) throws BandzonePortalException {
         logger.warn("StubBandzonePortalClient: openSession requested but no real portal client "
                 + "is wired. Set bzscraper.bandzone.selenium.enabled=true to publish for real.");
-        throw BandzoneUploadException.needsUser(
-                "Bandzone publishing is not enabled (set bzscraper.bandzone.selenium.enabled=true "
-                        + "and configure credentials).");
+        throw BandzonePortalException.needsUser(
+                "This server doesn't drive Bandzone (bzscraper.bandzone.selenium.enabled is off).");
     }
 }

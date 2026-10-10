@@ -28,7 +28,7 @@ export default defineConfig({
       },
       workbox: {
         // the API is never served from the cache: the page keeps its last data itself
-        navigateFallbackDenylist: [/^\/api\//, /^\/actuator\//],
+        navigateFallbackDenylist: [/^\/api\//, /^\/actuator\//, /^\/oauth2\//, /^\/login\//, /^\/auth\//],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
       },
     }),
@@ -42,6 +42,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': { target: 'http://localhost:8080', changeOrigin: false },
+      // signing in (Rauthy at https://localhost through the stack's proxy; the client knows :5173)
+      '/oauth2': { target: 'http://localhost:8080', changeOrigin: false },
+      '/login/oauth2': { target: 'http://localhost:8080', changeOrigin: false },
     },
   },
   test: {

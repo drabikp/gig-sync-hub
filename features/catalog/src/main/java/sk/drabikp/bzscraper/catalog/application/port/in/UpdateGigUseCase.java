@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application.port.in;
 
+import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.sync.domain.QueueResult;
 
@@ -11,9 +12,9 @@ import sk.drabikp.bzscraper.sync.domain.QueueResult;
  *
  * <p>{@code seen} is the gig as the user saw it when they started editing: if the catalog's
  * gig is no longer that (changed or deleted meanwhile), nothing is changed and
- * {@link ConcurrentChangeException} is thrown — the user reloads and edits again.
+ * {@link sk.drabikp.bzscraper.gig.application.ConcurrentChangeException} is thrown — the user reloads and edits again.
  */
 public interface UpdateGigUseCase {
 
-    QueueResult update(Gig seen, Gig updated);
+    QueueResult update(BandId band, Gig seen, Gig updated);
 }

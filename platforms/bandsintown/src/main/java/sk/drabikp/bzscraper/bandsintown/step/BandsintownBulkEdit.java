@@ -2,7 +2,7 @@ package sk.drabikp.bzscraper.bandsintown.step;
 
 import org.springframework.stereotype.Component;
 import sk.drabikp.bzscraper.bandsintown.BandsintownPlatform;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 import sk.drabikp.bzscraper.bandsintown.portal.BitPortalClient;
 import sk.drabikp.bzscraper.bandsintown.portal.BitSession;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -12,11 +12,9 @@ import sk.drabikp.bzscraper.sync.domain.StepOutcome;
 import sk.drabikp.bzscraper.sync.domain.StepType;
 
 import java.time.Clock;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -27,8 +25,6 @@ import java.util.Optional;
  */
 @Component
 class BandsintownBulkEdit implements SyncStep {
-
-    static final int MAX_ROWS = 25;
 
     private final BitPortalClient portalClient;
     private final Clock clock;
@@ -50,7 +46,7 @@ class BandsintownBulkEdit implements SyncStep {
 
     @Override
     public int batchSize() {
-        return MAX_ROWS;
+        return BitSession.MAX_ROWS_PER_UPLOAD;
     }
 
     @Override
@@ -63,27 +59,27 @@ class BandsintownBulkEdit implements SyncStep {
     public List<StepOutcome> run(List<Item> items) {
         StepOutcome[] outcomes = new StepOutcome[items.size()];
         List<Integer> uploaded = new ArrayList<>();
-        List<Map.Entry<String, Gig>> edits = new ArrayList<>();
+        List<BitSession.EventEdit> edits = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
             Item item = items.get(i);
             if (item.gig().cancelled()) {
                 outcomes[i] = StepOutcome.done("cancelled — Bandsintown keeps no cancelled copy to edit");
             } else {
                 uploaded.add(i);
-                edits.add(new AbstractMap.SimpleEntry<>(item.externalRef(), item.gig()));
+                edits.add(new BitSession.EventEdit(item.externalRef(), item.gig()));
             }
         }
         if (edits.isEmpty()) {
             return List.of(outcomes);
         }
-        try (BitSession session = portalClient.openSession()) {
+        try (BitSession session = portalClient.openSession(items.getFirst().band())) {
             List<BitSession.Edited> edited = session.updateEvents(edits);
             for (int k = 0; k < uploaded.size(); k++) {
                 BitSession.Edited result = k < edited.size() ? edited.get(k) : null;
                 outcomes[uploaded.get(k)] = result == null ? StepOutcome.failed("no result for this event")
                         : result.outcome();
             }
-        } catch (BitUploadException e) {
+        } catch (BitPortalException e) {
             StepOutcome failure = e.outcome();
             uploaded.forEach(i -> outcomes[i] = failure);
         }

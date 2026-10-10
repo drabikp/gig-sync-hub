@@ -4,7 +4,7 @@ import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.support.ui.WebDriverWait;
-import sk.drabikp.bzscraper.bandsintown.BitUploadException;
+import sk.drabikp.bzscraper.bandsintown.BitPortalException;
 
 import java.time.Duration;
 import java.util.List;
@@ -65,18 +65,18 @@ final class PortalReplies {
         return count instanceof Number n ? n.intValue() : 0;
     }
 
-    PortalReply await(int from, Predicate<PortalReply> match, String what) throws BitUploadException {
+    PortalReply await(int from, Predicate<PortalReply> match, String what) throws BitPortalException {
         return await(from, match, what, WAIT);
     }
 
     /** The first reply after {@code from} that matches; a timeout is a temporary failure. */
     PortalReply await(int from, Predicate<PortalReply> match, String what, Duration timeout)
-            throws BitUploadException {
+            throws BitPortalException {
         try {
             return new WebDriverWait(driver, timeout).until(d ->
                     after(from).stream().filter(match).findFirst().orElse(null));
         } catch (TimeoutException e) {
-            throw new BitUploadException("Bandsintown did not answer " + what + " in time.");
+            throw BitPortalException.temporary("Bandsintown did not answer " + what + " in time.");
         }
     }
 
@@ -85,7 +85,7 @@ final class PortalReplies {
      * for a search that answers while the user types (the reply to the whole query comes last).
      */
     PortalReply awaitLast(int from, Predicate<PortalReply> match, String what, Duration quiet)
-            throws BitUploadException {
+            throws BitPortalException {
         int[] seen = {0};
         long[] since = {0};
         try {
@@ -100,7 +100,7 @@ final class PortalReplies {
                 return !matching.isEmpty() && now - since[0] >= quiet.toNanos() ? matching.getLast() : null;
             });
         } catch (TimeoutException e) {
-            throw new BitUploadException("Bandsintown did not answer " + what + " in time.");
+            throw BitPortalException.temporary("Bandsintown did not answer " + what + " in time.");
         }
     }
 
