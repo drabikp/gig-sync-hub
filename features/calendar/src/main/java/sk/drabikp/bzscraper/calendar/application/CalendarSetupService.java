@@ -8,6 +8,7 @@ import sk.drabikp.bzscraper.calendar.domain.BandCalendar;
 import sk.drabikp.bzscraper.calendar.domain.rules.ProfileRule;
 import sk.drabikp.bzscraper.calendar.domain.rules.RuleKind;
 import sk.drabikp.bzscraper.calendar.domain.rules.RuleOrigin;
+import sk.drabikp.bzscraper.gig.application.PublicAddresses;
 import sk.drabikp.bzscraper.gig.application.UserFacingException;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.domain.BandId;
@@ -48,8 +49,9 @@ public class CalendarSetupService implements CalendarSetupUseCase {
     @Override
     public Connection connect(BandId band, String address, String zone) {
         List<String> wrong = new ArrayList<>();
-        if (!BandCalendar.validAddress(address)) {
-            wrong.add("address");
+        if (!BandCalendar.validAddress(address)
+                || !PublicAddresses.fetchable(address.strip().replaceFirst("(?i)^webcal://", "https://"))) {
+            wrong.add("address");                         // not one, or not on the public internet
         }
         ZoneId zoneId = defaultZone;
         if (zone != null && !zone.isBlank()) {

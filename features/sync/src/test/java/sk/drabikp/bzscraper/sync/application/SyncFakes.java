@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.sync.application;
 
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
+import sk.drabikp.bzscraper.gig.application.port.out.RowScope;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
@@ -506,7 +507,7 @@ public final class SyncFakes {
     public static SyncDispatcher dispatcher(WorkflowEngine engine, Outbox outbox, Signals signals, Clock clock,
                                      PauseSyncUseCase pause, PlatformHealth health) {
         return new SyncDispatcher(engine, outbox, signals, clock, pause, health, TestPlatforms.PLATFORMS,
-                new FairTurns());
+                new FairTurns(), RowScope.NONE);
     }
 
     public static SyncDispatcher dispatcher(WorkflowEngine engine, Outbox outbox, Signals signals, Clock clock) {

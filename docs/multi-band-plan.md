@@ -292,6 +292,24 @@ account, the pool limit holds (a load test with the platforms' page fixtures).
 **Done when**: a stranger can sign up, create a band, invite a co-manager, connect platforms and
 publish — and can't see anything else; the security review passes.
 
+**Status (2026-10-10)** — done, and live on the local stack: invitations (a link, no e-mail yet), roles,
+leave / remove / hand over, delete a band (its slug typed) and one's own account (the Rauthy login
+stays: no admin API key yet); row-level security (V6) — the app's own login `bzscraper_app`, fail-closed
+(nothing opened = no band's rows), the cross-band reads say so; the audit log (`AuditInterceptor`:
+every change through a band's API, rather than written by each use case); export (one JSON file, no
+secret); rate limits (per user / address, 429), the bands-owned quota, live-stream caps; the public
+list opt-in (V7); a security review and its fixes (the band's addresses fetched only from the public
+internet, redirects checked, 10 MB cap; gig links http(s) only; failed logins without the browser's
+message; tokens out of Caddy's log; unverified e-mails ignored).
+Still the operator's to decide or do before opening sign-up: SMTP for Rauthy (verification, recovery,
+invitation mails); open registration and drop the group restriction; ToS, privacy policy and who the
+operator is; ask Bandsintown (and Bandzone) for API / partner access; a Rauthy API key (delete the login
+with the account); the browsers in their own container (Chromium runs `--no-sandbox` next to the
+secrets); Rauthy on its own database instance and its admin reachable only from a known address; an
+egress proxy for the bands' addresses (DNS rebinding remains possible between the check and the
+fetch); encrypted, offsite backups with `data_keys` kept apart; require `first-owner-email`;
+MDC logs, alerts, dependency scanning.
+
 ---
 
 ## Risks

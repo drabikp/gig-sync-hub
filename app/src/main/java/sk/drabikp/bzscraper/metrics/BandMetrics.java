@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import sk.drabikp.bzscraper.accounts.application.port.in.BandDirectory;
 import sk.drabikp.bzscraper.browser.BrowserPool;
+import sk.drabikp.bzscraper.gig.application.port.out.RowScope;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.sync.application.port.in.PlatformBreakerUseCase;
 import sk.drabikp.bzscraper.sync.application.port.in.SyncLogUseCase;
@@ -40,13 +41,16 @@ class BandMetrics implements MeterBinder {
     private final SyncLogUseCase syncLog;
     private final PlatformBreakerUseCase breakers;
     private final BrowserPool browsers;
+    private final RowScope rows;
     private final ScheduledExecutorService refresh = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "band-metrics");
         thread.setDaemon(true);
         return thread;
     });
 
-    BandMetrics(BandDirectory bands, SyncLogUseCase syncLog, PlatformBreakerUseCase breakers, BrowserPool browsers) {
+    BandMetrics(BandDirectory bands, SyncLogUseCase syncLog, PlatformBreakerUseCase breakers, BrowserPool browsers,
+                RowScope rows) {
+        this.rows = rows;
         this.bands = bands;
         this.syncLog = syncLog;
         this.breakers = breakers;
@@ -73,7 +77,7 @@ class BandMetrics implements MeterBinder {
                 List<MultiGauge.Row<?>> heldRows = new ArrayList<>();
                 Instant now = Instant.now();
                 for (BandId band : bands.all()) {
-                    SyncCounts counts = syncLog.counts(band);
+                    SyncCounts counts = rows.as(band, () -> syncLog.counts(band));
                     Tags tags = Tags.of("band", band.toString());
                     taskRows.add(MultiGauge.Row.of(tags.and("status", "queued"), counts.queued()));
                     taskRows.add(MultiGauge.Row.of(tags.and("status", "running"), counts.running()));

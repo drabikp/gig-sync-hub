@@ -48,7 +48,8 @@ default 1000); compose runs `db` (PostgreSQL 18, volume `db-data`, on `127.0.0.1
 `app`, `rauthy-db` + `rauthy` (the sign-in), `proxy` (Caddy) and `backup` (`docker/backup.sh`:
 `pg_dump` of the app's and Rauthy's databases on start and daily into `./data/backups`, the newest 14
 of each kept). **Secrets are files** under `./secrets` (git-ignored, `600`; `docker/make-secrets.sh` makes
-them: random ones — the database passwords, Rauthy's secrets, the app's client secret, **`data_keys`** (the
+them: random ones — the database passwords (`db_password`: the owner, for Flyway; `db_app_password`: the
+app's own login `bzscraper_app`, which row-level security holds), Rauthy's secrets, the app's client secret, **`data_keys`** (the
 key every band's secrets are sealed with in the database: back it up apart from the database dumps, lose it
 and they can't be read) — and band #1's old logins from `.bz-creds`, `.bit-test-creds`, `calendar`, which
 the app keeps once in the database and doesn't read after),
@@ -100,8 +101,12 @@ features/gig        shared kernel: Gig + its value objects (GigId.key() = how re
                     persistence, SpringTransactions, the H2 import, the Clock; THE schema (db/migration,
                     Flyway); test-jar: TestGigs, TestBands (BAND = band #1, OTHER), TestPlatforms, TestLiveUpdates
 features/accounts   users, bands, memberships (User, Band — id, slug, name —, Membership, Role OWNER/MANAGER);
-                    UsersUseCase (the signed-in user, made just in time from CurrentLogin), BandsUseCase,
-                    MembersUseCase, BandAccess (a user's role in a band), BandDirectory (every band, by slug);
+                    UsersUseCase (the signed-in user, made just in time from CurrentLogin; deleting oneself),
+                    BandsUseCase (+ deleting a band, the owner quota), MembersUseCase (roles, removing,
+                    leaving — a band keeps an owner), InvitationsUseCase (an owner's link for one address,
+                    7 days, once; only the token's SHA-256 kept), AuditUseCase (who changed what — written by
+                    the app's AuditInterceptor), BandAccess (a user's role in a band), BandDirectory (every
+                    band, by slug);
                     a band's platform accounts (PlatformAccount: settings + secrets by the platform's
                     AccountField names, last sign-in test): PlatformAccounts (the platforms read them; adopt =
                     band #1's from the configuration, once), PlatformAccountsUseCase (the page: owners connect,
@@ -142,7 +147,9 @@ web/frontend        the page: React + TypeScript + Vite + Mantine 8, TanStack Qu
 app/                BzscraperApplication; web (security: sign-in through Rauthy (OIDC), session + CSRF
                     for a single-page app; OidcCurrentLogin; BandAccessInterceptor: a band's addresses
                     for its members; ApiErrors; SinglePageApp: the page's own addresses load
-                    index.html); metrics (BandMetrics, the operator's); application.properties;
+                    index.html; RowScopeFilter + BandAccessInterceptor: the database's row-level security scope;
+                    AuditInterceptor; RateLimits); bands (BandExport: a band's data as one file, bands.yaml);
+                    metrics (BandMetrics, the operator's); application.properties;
                     ArchitectureTest, PlatformNamesTest,
                     ApiSecurityTest, BandIsolationTest, ErrorCodesTest
 ```
@@ -334,6 +341,35 @@ no thread-local "current band": the worker and the nightly check work for every 
   `bzscraper.bandsintown.login/…`, `bzscraper.calendar.ical-url`, the rules file) is kept once on start
   while band #1 has none, then unused. The shipped calendar presets are everyone's
   (`calendar_rule.band_id` null); each band's own rules are edited on the page.
+- **Going public** (phase 4): **invitations** — an owner invites an e-mail address as a role and passes
+  the link on (`/invite/<token>`; no e-mail is sent yet), whoever is signed in with that address joins
+  (once, 7 days); owners change roles and remove members, anyone leaves, a band keeps an owner
+  (`lastOwner`); owners delete the band (its address typed in; the database's cascades take everything)
+  and **export** it (`GET …/export`, one JSON file — never a secret); one's own account is deleted
+  (`DELETE /api/me`; a band one is alone in goes too; the Rauthy login stays). The **audit log**
+  (`audit_event`): every change a member makes through a band's API (`AuditInterceptor`: the operation,
+  what it named, how it ended), read by owners. **Row-level security** (V6): the app's connections work
+  as the role `bzscraper_app` — in Docker its own login (`SPRING_DATASOURCE_USERNAME`, the secret
+  `db_app_password`, given its password after each migration by `AppRoleLogin`), not the database's
+  superuser; Flyway connects as the owner (`spring.flyway.user/password`); `set role` on each pooled
+  connection either way — told at checkout which band's rows they may see (`app.band`: a band's id, ''
+  none, '*' every band's — `RowScope`, `ThreadRowScope`, `RowScopedDataSource`). **Fail-closed**: a thread
+  that opened nothing sees no band's rows; every request starts at none (`RowScopeFilter`), a member's
+  band address opens its band (`BandAccessInterceptor`; no band in the address = 404), the public list,
+  each sync lane, the import, the check and the metrics open theirs (`rows.as(band, …)`); only the
+  cross-band reads say so (`rows.acrossBands(…)`: the worker's due work and pauses, the restart's
+  recovery; `StartUpRowScope`: start-up, until the app is ready). **Limits**:
+  `bzscraper.limits.requests-per-minute` (600) / `changes-per-minute` (120) per user (per address before
+  signing in) on `/api`, `/gigs`, `/oauth2`, `/login` → 429 `tooManyRequests`;
+  `bzscraper.accounts.max-bands-owned` (10) → `tooManyBands`; live streams: 100 per band, 2000 in all
+  (the oldest ends), each ends after 30 min (the page reconnects). **Addresses a band gives** (its
+  calendar, a gig's poster) are fetched only from the public internet, every redirect checked by hand
+  (`PublicAddresses`; a gig's links must be http(s), `links`), at most 10 MB, and a failure says nothing of
+  what answered. **The public list** (`/gigs/<slug>`) is a band's choice (`band.public_list`, V7, Settings
+  → This band; band #1's on). An e-mail Rauthy hasn't verified is no e-mail to the app (invitations, the
+  first owner); a login's e-mail and name are refreshed at each sign-in. A failed platform login says only
+  the error's type (a browser message may quote the password typed in). Caddy's log never holds a token
+  (invitation links, the sign-out's `id_token_hint`).
 - **Many bands on one server** (phase 3): the sync runs `bzscraper.sync.worker.threads` (2) **lanes** at
   once — a lane is a band's work on a platform (`Lane`), run by one worker at a time — and the bands take
   turns (`FairTurns`: round-robin by band, a band's oldest due task first), so one band's hundred tasks
@@ -683,7 +719,11 @@ the log goes with its task), `calendar_rule.band_id` null for the shipped preset
 deletes all its rows. `V3__band_connections.sql`: `band_platform_account (band_id, platform)` (settings
 JSON, `secrets` sealed + `key_id`, the last sign-in test) and `band_calendar (band_id)` (the sealed
 address, `key_id`, zone). `V4__band_check.sql`: `band_check (band_id)` — the band's latest platform
-check as JSON.
+check as JSON. `V5__invitations_audit.sql`: `invitation` (the token's hash only), `audit_event`.
+`V6__row_level_security.sql`: the role `bzscraper_app`, `band_visible(band_id)` and a policy on every
+band's table (`calendar_rule`'s shipped rows readable by all, written only by '*'; `sync_log` through its
+task); not on `band`, `membership`, `app_user`, `invitation`. `V7__public_list.sql`: `band.public_list`
+(off; band #1's on — it had the list before).
 
 **From H2** (the database until 2026-10): `H2Import` (a Flyway `afterMigrate` callback in the kernel)
 copies an H2 SQL backup (`SCRIPT TO`, `bzscraper.db.import-h2`) into an EMPTY database right after
@@ -718,7 +758,10 @@ its code, the page's own addresses load `index.html`. `BandIsolationTest`: every
 spec (read from the YAML) is 404 for a non-member, both ways. The test properties carry a made-up data
 key (`bzscraper.accounts.data-keys`; `AccountsFakes.TEST_KEYS` for module tests); the JPA tests of the
 sealed rows check the secret isn't in the row, that a row copied to another band doesn't open, and key
-rotation. `ManyBandsSyncTest` (sync): ten bands queued at once on three workers all finish, a lane is never
+rotation. The app's tests connect as `bzscraper_app` like production, so every API test runs under
+row-level security (`BandMembershipApiTest` checks it; `RowLevelSecurityTest` in the kernel checks the
+policies themselves); `BandMembershipApiTest`: an invitation joins whom it's for, once; the audit log;
+the export without a secret; `RateLimitsTest`. `ManyBandsSyncTest` (sync): ten bands queued at once on three workers all finish, a lane is never
 run twice at once, one band's broken account holds back only it, many failing bands hold the platform back;
 `BrowserPoolTest` (browser, mock drivers): the server's limit, the idlest warm browser closed for a new
 account, one session per account, the platform's limit. Each feature's tests run with a band

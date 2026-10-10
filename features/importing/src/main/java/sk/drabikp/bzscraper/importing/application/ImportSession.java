@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.importing.application;
 import sk.drabikp.bzscraper.gig.application.BadRequestException;
 import sk.drabikp.bzscraper.gig.application.UserFacingException;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
+import sk.drabikp.bzscraper.gig.application.port.out.RowScope;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.importing.application.port.in.ImportErrorCode;
@@ -35,6 +36,7 @@ public class ImportSession implements ImportSessionUseCase {
     private final ImportGigsUseCase importGigs;
     private final Executor executor;
     private final LiveUpdates live;
+    private final RowScope rows;
     /** Where the import stands, as one value: whoever reads it never sees half of a change. */
     private final Map<BandId, AtomicReference<Progress>> progress = new ConcurrentHashMap<>();
 
@@ -61,9 +63,15 @@ public class ImportSession implements ImportSessionUseCase {
     }
 
     public ImportSession(ImportGigsUseCase importGigs, Executor executor, LiveUpdates live) {
+        this(importGigs, executor, live, RowScope.NONE);
+    }
+
+    /** {@code rows}: the background read sees the band's rows only. */
+    public ImportSession(ImportGigsUseCase importGigs, Executor executor, LiveUpdates live, RowScope rows) {
         this.importGigs = importGigs;
         this.executor = executor;
         this.live = live;
+        this.rows = rows;
     }
 
     /** The band's import (each band has its own, one at a time). */
@@ -89,7 +97,7 @@ public class ImportSession implements ImportSessionUseCase {
         }
         progress.updateAndGet(Progress::startReading);
         live.changed(band, LiveUpdates.Topic.IMPORT);
-        executor.execute(() -> {
+        executor.execute(() -> rows.as(band, () -> {
             try {
                 ImportPlan plan = importGigs.plan(band, from);
                 progress.updateAndGet(p -> p.read(plan));
@@ -101,7 +109,7 @@ public class ImportSession implements ImportSessionUseCase {
             } finally {
                 live.changed(band, LiveUpdates.Topic.IMPORT);
             }
-        });
+        }));
     }
 
     /** Refused while the platforms are read: the plan the user decided on is about to be replaced. */

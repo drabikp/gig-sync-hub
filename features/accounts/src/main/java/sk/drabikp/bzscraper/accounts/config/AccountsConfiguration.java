@@ -8,11 +8,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import sk.drabikp.bzscraper.accounts.application.AccountsService;
 import sk.drabikp.bzscraper.accounts.application.AesGcmSecretBox;
+import sk.drabikp.bzscraper.accounts.application.AuditService;
+import sk.drabikp.bzscraper.accounts.application.MembershipService;
 import sk.drabikp.bzscraper.accounts.application.PlatformAccountDirectory;
 import sk.drabikp.bzscraper.accounts.application.PlatformAccountService;
 import sk.drabikp.bzscraper.accounts.application.port.in.SecretBox;
+import sk.drabikp.bzscraper.accounts.application.port.out.AuditStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.BandStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.CurrentLogin;
+import sk.drabikp.bzscraper.accounts.application.port.out.InvitationStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.MembershipStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.PlatformAccountCheck;
 import sk.drabikp.bzscraper.accounts.application.port.out.PlatformAccountStore;
@@ -35,7 +39,21 @@ class AccountsConfiguration {
     @Bean
     AccountsService accountsService(CurrentLogin login, UserStore users, BandStore bands, MembershipStore memberships,
                                     Transactions transactions, AccountsProperties accounts) {
-        return new AccountsService(login, users, bands, memberships, transactions, accounts.firstOwnerEmail());
+        return new AccountsService(login, users, bands, memberships, transactions, accounts.firstOwnerEmail(),
+                accounts.maxBandsOwned());
+    }
+
+    /** A band's members and the invitations that bring new ones. */
+    @Bean
+    MembershipService membershipService(UserStore users, BandStore bands, MembershipStore memberships,
+                                        InvitationStore invitations, Transactions transactions, Clock clock) {
+        return new MembershipService(users, bands, memberships, invitations, transactions, clock);
+    }
+
+    /** Who changed what in a band. */
+    @Bean
+    AuditService auditService(AuditStore audit, MembershipStore memberships, UserStore users) {
+        return new AuditService(audit, memberships, users);
     }
 
     @Bean

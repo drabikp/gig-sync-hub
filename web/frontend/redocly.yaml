@@ -14,6 +14,10 @@ apis:
     root: ../../app/src/main/openapi/auth.yaml
     x-openapi-ts:
       output: ./src/api/generated/auth.ts
+  bands:
+    root: ../../app/src/main/openapi/bands.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/bands.ts
   catalog:
     root: ../../features/catalog/src/main/openapi/catalog.yaml
     x-openapi-ts:

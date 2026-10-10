@@ -45,6 +45,12 @@ else
     head -c 32 /dev/urandom | base64 | tr -d '/+=\n' > secrets/db_password
     echo "made    secrets/db_password (random)"
 fi
+if [[ -s secrets/db_app_password ]]; then
+    echo "kept    secrets/db_app_password"
+else
+    head -c 32 /dev/urandom | base64 | tr -d '/+=\n' > secrets/db_app_password
+    echo "made    secrets/db_app_password (random: the app's own database login, bzscraper_app)"
+fi
 if [[ -s secrets/data_keys ]]; then
     echo "kept    secrets/data_keys"
 else

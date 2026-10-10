@@ -134,6 +134,18 @@
 							<modelPackage>sk.drabikp.bzscraper.web.api</modelPackage>
 						</configuration>
 					</execution>
+					<execution>
+						<!-- src/main/openapi/bands.yaml (a band's data as a whole) → sk.drabikp.bzscraper.bands.api -->
+						<id>bands-api</id>
+						<goals>
+							<goal>generate</goal>
+						</goals>
+						<configuration>
+							<inputSpec>${project.basedir}/src/main/openapi/bands.yaml</inputSpec>
+							<apiPackage>sk.drabikp.bzscraper.bands.api</apiPackage>
+							<modelPackage>sk.drabikp.bzscraper.bands.api</modelPackage>
+						</configuration>
+					</execution>
 				</executions>
 			</plugin>
 			<plugin>

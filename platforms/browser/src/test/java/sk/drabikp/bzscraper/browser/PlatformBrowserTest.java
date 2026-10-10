@@ -151,7 +151,8 @@ class PlatformBrowserTest {
             throw new IllegalStateException("no login form");
         })).isInstanceOfSatisfying(Failure.class, e -> {
             assertThat(e.busy).isFalse();
-            assertThat(e).hasMessage("Test login failed: no login form");
+            assertThat(e).as("only the error's type: a browser message may quote the password typed in")
+                    .hasMessage("Test login failed: IllegalStateException");
         });
         PlatformBrowser.Lease next = browser.acquire("a", Duration.ZERO).orElseThrow();
         assertThat(next.wasWarm()).as("the failed login's browser was discarded").isFalse();

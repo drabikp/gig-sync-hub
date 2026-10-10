@@ -199,7 +199,9 @@ public final class PlatformBrowser {
             return login.open(lease);
         } catch (RuntimeException e) {
             lease.discard("login");
-            throw failure(failures, failures.platform() + " login failed", e);
+            // the browser's own message may quote the script arguments — the password typed in: only its type
+            throw failure(failures, failures.platform() + " login failed",
+                    new IllegalStateException(e.getClass().getSimpleName()));
         } catch (Exception e) {
             lease.discard("login");
             throw e;

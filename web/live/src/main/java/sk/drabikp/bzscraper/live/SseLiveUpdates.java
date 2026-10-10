@@ -24,7 +24,9 @@ import java.util.concurrent.TimeUnit;
  * ({@link #open(BandId)}); a band's change is sent to that band's streams, a change everyone's pages
  * show to all of them, as an event named after its topic. Changes come in bursts (a sync batch, an
  * import), so a topic is sent once per {@value #COALESCE_MS} ms at most (per band); a comment every
- * {@value #HEARTBEAT_S} s keeps idle streams open through proxies.
+ * {@value #HEARTBEAT_S} s keeps idle streams open through proxies. A stream ends after {@value #LIFETIME_MIN}
+ * minutes (the page opens a new one by itself — so a member removed from the band stops hearing it); at most
+ * {@value #MAX_PER_BAND} streams per band and {@value #MAX_STREAMS} on the server — over that, the oldest ends.
  */
 @Component
 class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
@@ -32,6 +34,9 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
     private static final Logger log = LoggerFactory.getLogger(SseLiveUpdates.class);
     static final long COALESCE_MS = 300;
     static final long HEARTBEAT_S = 25;
+    static final long LIFETIME_MIN = 30;
+    static final int MAX_PER_BAND = 100;
+    static final int MAX_STREAMS = 2000;
 
     /** A page's stream and the band it shows. */
     private record Stream(BandId band, SseEmitter emitter) {
@@ -61,12 +66,19 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
 
     /** A new stream for a page showing the band; it ends when the page goes away (or the server stops). */
     SseEmitter open(BandId band) {
-        return open(band, new SseEmitter(0L));
+        return open(band, new SseEmitter(TimeUnit.MINUTES.toMillis(LIFETIME_MIN)));
     }
 
     SseEmitter open(BandId band, SseEmitter emitter) {
         Stream stream = new Stream(band, emitter);
         streams.add(stream);
+        List<Stream> bands = streams.stream().filter(s -> s.band().equals(band)).toList();
+        if (bands.size() > MAX_PER_BAND) {
+            end(bands.getFirst());
+        }
+        if (streams.size() > MAX_STREAMS) {
+            end(streams.getFirst());
+        }
         emitter.onCompletion(() -> streams.remove(stream));
         emitter.onTimeout(() -> streams.remove(stream));
         emitter.onError(e -> streams.remove(stream));
@@ -102,6 +114,16 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
 
     int streams() {
         return streams.size();
+    }
+
+    /** Ends a stream to make room (the oldest). */
+    private void end(Stream stream) {
+        streams.remove(stream);
+        try {
+            stream.emitter().complete();
+        } catch (RuntimeException e) {
+            log.debug("Ending a live stream failed", e);
+        }
     }
 
     private void heartbeat() {

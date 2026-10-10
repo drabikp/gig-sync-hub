@@ -15,6 +15,7 @@ import { GigPage } from './pages/GigPage';
 import { GigsPage } from './pages/GigsPage';
 import { ImportPage } from './pages/ImportPage';
 import { InboxPage } from './pages/InboxPage';
+import { InvitePage } from './pages/InvitePage';
 import { LoginPage } from './pages/LoginPage';
 import { takeReturnPath } from './lib/signIn';
 import { MorePage } from './pages/MorePage';
@@ -42,6 +43,7 @@ export function App() {
       <Routes>
         <Route index element={<StartPage />} />
         <Route path="new-band" element={<CreateBandPage />} />
+        <Route path="invite/:token" element={<InvitePage />} />
         <Route path="b/:slug" element={<BandPages />}>
           <Route index element={<GigsPage />} />
           <Route path="gig/new" element={<GigFormPage mode="new" />} />

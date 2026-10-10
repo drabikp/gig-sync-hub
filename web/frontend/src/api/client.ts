@@ -1,6 +1,7 @@
 import createClient from 'openapi-fetch';
 import type { paths as AccountsPaths } from './generated/accounts';
 import type { paths as AuthPaths } from './generated/auth';
+import type { paths as BandsPaths } from './generated/bands';
 import type { paths as CalendarPaths } from './generated/calendar';
 import type { paths as CatalogPaths } from './generated/catalog';
 import type { paths as CheckPaths } from './generated/check';
@@ -70,7 +71,7 @@ async function apiFetch(request: Request, retried = false): Promise<Response> {
   return response;
 }
 
-type Paths = AuthPaths & AccountsPaths & CatalogPaths & PlacesPaths & SyncPaths & CalendarPaths & CheckPaths & ImportPaths;
+type Paths = AuthPaths & BandsPaths & AccountsPaths & CatalogPaths & PlacesPaths & SyncPaths & CalendarPaths & CheckPaths & ImportPaths;
 
 export const api = createClient<Paths>({
   baseUrl: window.location.origin,

@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.check.application.port.out.CheckResultStore;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
+import sk.drabikp.bzscraper.gig.application.port.out.RowScope;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
 import sk.drabikp.bzscraper.importing.application.port.out.GigImporter;
@@ -34,7 +35,7 @@ class CheckConfiguration {
 
     /** A check the user starts runs on Spring's task executor. */
     @Bean
-    BackgroundCheck backgroundCheck(PlatformCheckService platformCheckService, TaskExecutor executor) {
-        return new BackgroundCheck(platformCheckService, executor);
+    BackgroundCheck backgroundCheck(PlatformCheckService platformCheckService, TaskExecutor executor, RowScope rows) {
+        return new BackgroundCheck(platformCheckService, executor, rows);
     }
 }

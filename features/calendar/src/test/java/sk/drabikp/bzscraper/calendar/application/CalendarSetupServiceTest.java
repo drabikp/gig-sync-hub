@@ -21,7 +21,7 @@ import static sk.drabikp.bzscraper.gig.domain.TestBands.OTHER;
 
 class CalendarSetupServiceTest {
 
-    private static final String ADDRESS = "webcal://calendar.example.test/ical/secret-part/basic.ics";
+    private static final String ADDRESS = "webcal://1.1.1.1/ical/secret-part/basic.ics";
 
     private final CalendarFakes.Calendars calendars = new CalendarFakes.Calendars();
     private final CalendarFakes.Profiles profiles = new CalendarFakes.Profiles();
@@ -35,7 +35,7 @@ class CalendarSetupServiceTest {
 
         Connection connected = setup.connect(BAND, ADDRESS, "Europe/Bratislava");
 
-        assertThat(connected).isEqualTo(new Connection(true, "calendar.example.test", "Europe/Bratislava"));
+        assertThat(connected).isEqualTo(new Connection(true, "1.1.1.1", "Europe/Bratislava"));
         assertThat(connected.toString()).doesNotContain("secret-part");
         assertThat(calendars.of(BAND).orElseThrow().address()).startsWith("https://").contains("secret-part");
         assertThat(calendars.of(BAND).orElseThrow().toString()).doesNotContain("secret-part");
@@ -45,12 +45,15 @@ class CalendarSetupServiceTest {
 
     @Test
     void an_address_or_zone_that_isnt_one_is_refused() {
-        assertThatThrownBy(() -> setup.connect(BAND, "calendar.example.test/x.ics", "Mars/Olympus"))
+        assertThatThrownBy(() -> setup.connect(BAND, "1.1.1.1/x.ics", "Mars/Olympus"))
                 .isInstanceOfSatisfying(UserFacingException.class, e -> {
                     assertThat(e.code()).isEqualTo(CalendarErrorCode.INVALID_CALENDAR);
                     assertThat(e.args()).containsEntry("fields", "address,zone");
                 });
         assertThat(setup.connect(BAND, ADDRESS, " ").zone()).as("blank: the default").isEqualTo("Europe/Prague");
+        assertThatThrownBy(() -> setup.connect(BAND, "https://10.0.0.1/ical/x.ics", null))
+                .as("never the server's own network").isInstanceOfSatisfying(UserFacingException.class,
+                        e -> assertThat(e.args()).containsEntry("fields", "address"));
     }
 
     @Test
@@ -90,7 +93,7 @@ class CalendarSetupServiceTest {
     void the_configurations_calendar_is_kept_once() {
         assertThat(setup.adopt(BAND, ADDRESS, ZoneId.of("Europe/Prague"))).isTrue();
         assertThat(setup.adopt(BAND, "https://elsewhere.test/x.ics", ZoneId.of("Europe/Prague"))).isFalse();
-        assertThat(calendars.of(BAND).orElseThrow().host()).isEqualTo("calendar.example.test");
+        assertThat(calendars.of(BAND).orElseThrow().host()).isEqualTo("1.1.1.1");
         assertThat(live.updates).isEmpty();
     }
 }

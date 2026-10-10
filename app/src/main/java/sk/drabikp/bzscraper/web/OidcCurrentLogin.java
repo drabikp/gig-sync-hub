@@ -8,7 +8,10 @@ import sk.drabikp.bzscraper.accounts.application.port.out.CurrentLogin;
 
 import java.util.Optional;
 
-/** Who Rauthy signed in on this request ({@link CurrentLogin}): the ID token's subject, e-mail and name. */
+/**
+ * Who Rauthy signed in on this request ({@link CurrentLogin}): the ID token's subject, e-mail (unless Rauthy
+ * says it isn't verified) and name.
+ */
 @Component
 class OidcCurrentLogin implements CurrentLogin {
 
@@ -19,6 +22,8 @@ class OidcCurrentLogin implements CurrentLogin {
             return Optional.empty();
         }
         String name = user.getFullName() != null ? user.getFullName() : user.getPreferredUsername();
-        return Optional.of(new Login(user.getSubject(), user.getEmail(), name));
+        // an address the sign-in says it hasn't verified is no address (invitations are matched on it)
+        String email = Boolean.FALSE.equals(user.getEmailVerified()) ? null : user.getEmail();
+        return Optional.of(new Login(user.getSubject(), email, name));
     }
 }

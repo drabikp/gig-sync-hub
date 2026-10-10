@@ -16,6 +16,7 @@ class BandEntity {
     private UUID id;
     private String slug;
     private String name;
+    private boolean publicList;
     private Instant createdAt;
 
     public BandEntity() {
@@ -44,6 +45,14 @@ class BandEntity {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public boolean isPublicList() {
+        return publicList;
+    }
+
+    public void setPublicList(boolean publicList) {
+        this.publicList = publicList;
     }
 
     public Instant getCreatedAt() {

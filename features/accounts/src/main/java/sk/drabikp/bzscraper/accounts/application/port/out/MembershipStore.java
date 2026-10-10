@@ -16,4 +16,6 @@ public interface MembershipStore {
     List<Membership> ofBand(BandId band);
 
     void save(Membership membership);
+
+    void delete(UserId user, BandId band);
 }

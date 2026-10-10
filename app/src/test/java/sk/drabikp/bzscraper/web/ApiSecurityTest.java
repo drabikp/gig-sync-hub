@@ -97,9 +97,9 @@ class ApiSecurityTest {
     void a_bands_calendar_address_is_kept_but_only_whose_it_is_is_shown() throws Exception {
         mvc.perform(put(BAND + "/calendar/connection").with(owner()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"address\":\"https://calendar.example.test/ical/secret-part/basic.ics\"}"))
+                        .content("{\"address\":\"https://1.1.1.1/ical/secret-part/basic.ics\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.host").value("calendar.example.test"))
+                .andExpect(jsonPath("$.host").value("1.1.1.1"))
                 .andExpect(content().string(not(containsString("secret-part"))));
         mvc.perform(get(BAND + "/calendar/connection").with(owner())).andExpect(jsonPath("$.connected").value(true));
         mvc.perform(delete(BAND + "/calendar/connection").with(owner()).with(csrf())).andExpect(status().isNoContent());

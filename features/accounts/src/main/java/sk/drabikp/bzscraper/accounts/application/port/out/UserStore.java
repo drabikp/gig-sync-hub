@@ -12,4 +12,7 @@ public interface UserStore {
     Optional<User> byId(UserId id);
 
     void save(User user);
+
+    /** Deletes the user with their memberships (invitations and audit events keep no reference to them). */
+    void delete(UserId user);
 }

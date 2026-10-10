@@ -204,55 +204,56 @@
 					<groupId>org.openapitools</groupId>
 					<artifactId>openapi-generator-maven-plugin</artifactId>
 					<version>7.26.0</version>
+					<!-- every execution's: the spec and packages are each module's -->
+					<configuration>
+						<generatorName>spring</generatorName>
+						<library>spring-boot</library>
+						<generateSupportingFiles>false</generateSupportingFiles>
+						<generateApiDocumentation>false</generateApiDocumentation>
+						<generateApiTests>false</generateApiTests>
+						<generateModelDocumentation>false</generateModelDocumentation>
+						<generateModelTests>false</generateModelTests>
+						<!-- no suffix: the specs name their schemas …Request (sent), …Response (answered), …Value (enums) -->
+						<!-- instants (format date-time) as java.time.Instant -->
+						<typeMappings>
+							<typeMapping>DateTime=Instant</typeMapping>
+						</typeMappings>
+						<importMappings>
+							<importMapping>Instant=java.time.Instant</importMapping>
+						</importMappings>
+						<!-- the kernel's shared schemas (gig.yaml) are the kernel's classes, never generated again -->
+						<schemaMappings>
+							<schemaMapping>ProblemResponse=sk.drabikp.bzscraper.gig.api.ProblemResponse</schemaMapping>
+							<schemaMapping>ProblemCodeValue=sk.drabikp.bzscraper.gig.api.ProblemCodeValue</schemaMapping>
+							<schemaMapping>GigFormRequest=sk.drabikp.bzscraper.gig.api.GigFormRequest</schemaMapping>
+							<schemaMapping>GigFormResponse=sk.drabikp.bzscraper.gig.api.GigFormResponse</schemaMapping>
+							<schemaMapping>CountryValue=sk.drabikp.bzscraper.gig.api.CountryValue</schemaMapping>
+							<schemaMapping>EntryTypeValue=sk.drabikp.bzscraper.gig.api.EntryTypeValue</schemaMapping>
+							<schemaMapping>TimeOfDay=java.lang.String</schemaMapping>
+						</schemaMappings>
+						<configOptions>
+							<useSpringBoot4>true</useSpringBoot4>
+							<useJackson3>true</useJackson3>
+							<useJakartaEe>true</useJakartaEe>
+							<interfaceOnly>true</interfaceOnly>
+							<skipDefaultInterface>true</skipDefaultInterface>
+							<useTags>true</useTags>
+							<requestMappingMode>none</requestMappingMode>
+							<openApiNullable>false</openApiNullable>
+							<documentationProvider>none</documentationProvider>
+							<annotationLibrary>none</annotationLibrary>
+							<useBeanValidation>false</useBeanValidation>
+							<hideGenerationTimestamp>true</hideGenerationTimestamp>
+							<generateJsonIncludeAnnotations>false</generateJsonIncludeAnnotations>
+							<generateJsonSetterNullsAnnotations>false</generateJsonSetterNullsAnnotations>
+						</configOptions>
+					</configuration>
 					<executions>
 						<execution>
 							<id>api</id>
 							<goals>
 								<goal>generate</goal>
 							</goals>
-							<configuration>
-								<generatorName>spring</generatorName>
-								<library>spring-boot</library>
-								<generateSupportingFiles>false</generateSupportingFiles>
-								<generateApiDocumentation>false</generateApiDocumentation>
-								<generateApiTests>false</generateApiTests>
-								<generateModelDocumentation>false</generateModelDocumentation>
-								<generateModelTests>false</generateModelTests>
-								<!-- no suffix: the specs name their schemas …Request (sent), …Response (answered), …Value (enums) -->
-								<!-- instants (format date-time) as java.time.Instant -->
-								<typeMappings>
-									<typeMapping>DateTime=Instant</typeMapping>
-								</typeMappings>
-								<importMappings>
-									<importMapping>Instant=java.time.Instant</importMapping>
-								</importMappings>
-								<!-- the kernel's shared schemas (gig.yaml) are the kernel's classes, never generated again -->
-								<schemaMappings>
-									<schemaMapping>ProblemResponse=sk.drabikp.bzscraper.gig.api.ProblemResponse</schemaMapping>
-									<schemaMapping>ProblemCodeValue=sk.drabikp.bzscraper.gig.api.ProblemCodeValue</schemaMapping>
-									<schemaMapping>GigFormRequest=sk.drabikp.bzscraper.gig.api.GigFormRequest</schemaMapping>
-									<schemaMapping>GigFormResponse=sk.drabikp.bzscraper.gig.api.GigFormResponse</schemaMapping>
-									<schemaMapping>CountryValue=sk.drabikp.bzscraper.gig.api.CountryValue</schemaMapping>
-									<schemaMapping>EntryTypeValue=sk.drabikp.bzscraper.gig.api.EntryTypeValue</schemaMapping>
-									<schemaMapping>TimeOfDay=java.lang.String</schemaMapping>
-								</schemaMappings>
-								<configOptions>
-									<useSpringBoot4>true</useSpringBoot4>
-									<useJackson3>true</useJackson3>
-									<useJakartaEe>true</useJakartaEe>
-									<interfaceOnly>true</interfaceOnly>
-									<skipDefaultInterface>true</skipDefaultInterface>
-									<useTags>true</useTags>
-									<requestMappingMode>none</requestMappingMode>
-									<openApiNullable>false</openApiNullable>
-									<documentationProvider>none</documentationProvider>
-									<annotationLibrary>none</annotationLibrary>
-									<useBeanValidation>false</useBeanValidation>
-									<hideGenerationTimestamp>true</hideGenerationTimestamp>
-									<generateJsonIncludeAnnotations>false</generateJsonIncludeAnnotations>
-									<generateJsonSetterNullsAnnotations>false</generateJsonSetterNullsAnnotations>
-								</configOptions>
-							</configuration>
 						</execution>
 					</executions>
 				</plugin>

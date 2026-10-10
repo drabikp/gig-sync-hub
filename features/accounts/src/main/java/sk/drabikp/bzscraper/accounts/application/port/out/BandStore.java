@@ -15,4 +15,7 @@ public interface BandStore {
     List<Band> all();
 
     void save(Band band);
+
+    /** Deletes the band and everything it has (its gigs, work, calendar, accounts — the database's cascades). */
+    void delete(BandId band);
 }

@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
+import sk.drabikp.bzscraper.gig.application.port.out.RowScope;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
 import sk.drabikp.bzscraper.sync.application.GigPublishingService;
@@ -15,8 +16,8 @@ import sk.drabikp.bzscraper.sync.application.SyncPause;
 import sk.drabikp.bzscraper.sync.application.SyncRequests;
 import sk.drabikp.bzscraper.sync.application.SyncState;
 import sk.drabikp.bzscraper.sync.application.SyncWakeUp;
-import sk.drabikp.bzscraper.sync.application.engine.OutcomeSettlement;
 import sk.drabikp.bzscraper.sync.application.engine.FairTurns;
+import sk.drabikp.bzscraper.sync.application.engine.OutcomeSettlement;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformBreakers;
 import sk.drabikp.bzscraper.sync.application.engine.RecreateStep;
 import sk.drabikp.bzscraper.sync.application.engine.RunPreparation;
@@ -118,9 +119,9 @@ class SyncConfiguration {
     @Bean
     SyncDispatcher syncDispatcher(WorkflowEngine workflowEngine, SyncOutbox outbox, SyncNotifier notifier,
                                   Clock clock, SyncPause syncPause, PlatformBreakers platformBreakers,
-                                  Platforms platforms, FairTurns fairTurns) {
+                                  Platforms platforms, FairTurns fairTurns, RowScope rowScope) {
         return new SyncDispatcher(workflowEngine, outbox, notifier, clock, syncPause, platformBreakers, platforms,
-                fairTurns);
+                fairTurns, rowScope);
     }
 
     @Bean

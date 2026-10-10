@@ -4,7 +4,6 @@ import sk.drabikp.bzscraper.accounts.application.port.in.AccountsErrorCode;
 import sk.drabikp.bzscraper.accounts.application.port.in.BandAccess;
 import sk.drabikp.bzscraper.accounts.application.port.in.BandDirectory;
 import sk.drabikp.bzscraper.accounts.application.port.in.BandsUseCase;
-import sk.drabikp.bzscraper.accounts.application.port.in.MembersUseCase;
 import sk.drabikp.bzscraper.accounts.application.port.in.UsersUseCase;
 import sk.drabikp.bzscraper.accounts.application.port.out.BandStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.CurrentLogin;
@@ -25,6 +24,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,7 +34,7 @@ import java.util.UUID;
  * gets its first owner then: the user with {@code firstOwnerEmail}, or — when that isn't set —
  * the first one to sign in.
  */
-public class AccountsService implements UsersUseCase, BandsUseCase, MembersUseCase, BandAccess, BandDirectory {
+public class AccountsService implements UsersUseCase, BandsUseCase, BandAccess, BandDirectory {
 
     /** The name and address migration V2 gave the first band, until it is named. */
     static final String FIRST_SLUG = "first";
@@ -46,15 +46,17 @@ public class AccountsService implements UsersUseCase, BandsUseCase, MembersUseCa
     private final MembershipStore memberships;
     private final Transactions transactions;
     private final String firstOwnerEmail;
+    private final int maxBandsOwned;
 
     public AccountsService(CurrentLogin login, UserStore users, BandStore bands, MembershipStore memberships,
-                           Transactions transactions, String firstOwnerEmail) {
+                           Transactions transactions, String firstOwnerEmail, int maxBandsOwned) {
         this.login = login;
         this.users = users;
         this.bands = bands;
         this.memberships = memberships;
         this.transactions = transactions;
         this.firstOwnerEmail = firstOwnerEmail == null ? "" : firstOwnerEmail.strip();
+        this.maxBandsOwned = maxBandsOwned;
     }
 
     @Override
@@ -66,6 +68,10 @@ public class AccountsService implements UsersUseCase, BandsUseCase, MembersUseCa
                 users.save(made);
                 return made;
             });
+            if (!Objects.equals(user.email(), signedIn.email()) || !Objects.equals(user.displayName(), signedIn.name())) {
+                user = new User(user.id(), user.subject(), signedIn.email(), signedIn.name());   // as the sign-in says now
+                users.save(user);
+            }
             claimFirstBand(user);
             return user;
         }));
@@ -103,6 +109,11 @@ public class AccountsService implements UsersUseCase, BandsUseCase, MembersUseCa
         return transactions.computeInTransaction(() -> {
             Band band = valid(new BandId(UUID.randomUUID()), name, slug);
             requireFree(band.slug(), band.id());
+            long owned = memberships.ofUser(user).stream().filter(m -> m.role() == Role.OWNER).count();
+            if (owned >= maxBandsOwned) {
+                throw new UserFacingException(AccountsErrorCode.TOO_MANY_BANDS,
+                        Map.of("max", String.valueOf(maxBandsOwned)), "One may own at most " + maxBandsOwned + " bands.");
+            }
             bands.save(band);
             memberships.save(new Membership(user, band.id(), Role.OWNER, null));
             return new MyBand(band, Role.OWNER, null);
@@ -110,14 +121,15 @@ public class AccountsService implements UsersUseCase, BandsUseCase, MembersUseCa
     }
 
     @Override
-    public MyBand update(UserId user, BandId band, String name, String slug) {
+    public MyBand update(UserId user, BandId band, String name, String slug, Boolean publicList) {
         return transactions.computeInTransaction(() -> {
             MyBand mine = band(user, band);
             if (!mine.role().mayChangeTheBand()) {
                 throw new UserFacingException(AccountsErrorCode.OWNER_ONLY, Map.of(),
                         "Only the band's owners may change it.");
             }
-            Band renamed = valid(band, name, slug);
+            Band renamed = valid(band, name, slug)
+                    .listedPublicly(publicList != null ? publicList : mine.band().publicList());
             requireFree(renamed.slug(), band);
             bands.save(renamed);
             return new MyBand(renamed, mine.role(), mine.displayName());
@@ -136,13 +148,39 @@ public class AccountsService implements UsersUseCase, BandsUseCase, MembersUseCa
     }
 
     @Override
-    public List<Member> members(UserId asker, BandId band) {
-        band(asker, band);                              // members only
-        return memberships.ofBand(band).stream()
-                .flatMap(m -> users.byId(m.user()).map(u -> new Member(u, m.role(), m.displayName())).stream())
-                .sorted(Comparator.comparing((Member m) -> m.role() != Role.OWNER)
-                        .thenComparing(m -> String.valueOf(m.user().shownAs())))
-                .toList();
+    public void deleteMe(UserId user) {
+        transactions.inTransaction(() -> {
+            List<BandId> alone = new ArrayList<>();
+            for (Membership mine : memberships.ofUser(user)) {
+                List<Membership> all = memberships.ofBand(mine.band());
+                if (all.size() == 1) {
+                    alone.add(mine.band());
+                } else if (mine.role() == Role.OWNER
+                        && all.stream().noneMatch(m -> m.role() == Role.OWNER && !m.user().equals(user))) {
+                    String name = bands.byId(mine.band()).map(Band::name).orElse("");
+                    throw new UserFacingException(AccountsErrorCode.LAST_OWNER, Map.of("band", name),
+                            "You're the only owner of " + name + " — make another member an owner first.");
+                }
+            }
+            alone.forEach(bands::delete);
+            users.delete(user);
+        });
+    }
+
+    @Override
+    public void delete(UserId owner, BandId band, String confirmSlug) {
+        transactions.inTransaction(() -> {
+            MyBand mine = band(owner, band);
+            if (!mine.role().mayChangeTheBand()) {
+                throw new UserFacingException(AccountsErrorCode.OWNER_ONLY, Map.of(),
+                        "Only the band's owners may delete it.");
+            }
+            if (!mine.band().slug().equals(confirmSlug == null ? null : confirmSlug.strip())) {
+                throw new UserFacingException(AccountsErrorCode.CONFIRM_DELETE, Map.of("slug", mine.band().slug()),
+                        "Type the band's address to delete it.");
+            }
+            bands.delete(band);
+        });
     }
 
     @Override

@@ -26,7 +26,14 @@
 		Referrer-Policy strict-origin-when-cross-origin
 	}
 
+	# no token in the log: an invitation link's (/invite/…, /api/invitations/…) nor the sign-out's id_token_hint
 	log {
 		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "(invite/|invitations/|id_token_hint=)[^/?&]+" "${1}REDACTED"
+			}
+		}
 	}
 }

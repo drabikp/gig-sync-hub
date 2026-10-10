@@ -57,7 +57,7 @@ class PosterDownloaderTest {
 
     @Test
     void downloads_the_poster_into_a_temp_file_with_its_extension() throws Exception {
-        Path file = new PosterDownloader().download(base + "/poster.png");
+        Path file = new PosterDownloader(Duration.ofSeconds(10), Duration.ofSeconds(30), false).download(base + "/poster.png");
         try {
             assertThat(file.getFileName().toString()).endsWith(".png");
             assertThat(Files.readAllBytes(file)).containsExactly(1, 2, 3);
@@ -68,19 +68,25 @@ class PosterDownloaderTest {
 
     @Test
     void a_poster_the_host_doesnt_have_is_a_temporary_failure() {
-        assertThatThrownBy(() -> new PosterDownloader().download(base + "/missing.jpg"))
+        assertThatThrownBy(() -> new PosterDownloader(Duration.ofSeconds(10), Duration.ofSeconds(30), false).download(base + "/missing.jpg"))
                 .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
                     assertThat(e.kind()).isEqualTo(FailureKind.TEMPORARY);
-                    assertThat(e.getMessage()).contains("HTTP 404");
+                    assertThat(e.getMessage()).contains("Poster download failed").doesNotContain("404");
                 });
     }
 
     @Test
     void a_host_that_doesnt_answer_is_given_up_on_in_time() {
-        PosterDownloader downloader = new PosterDownloader(Duration.ofSeconds(1), Duration.ofMillis(300));
+        PosterDownloader downloader = new PosterDownloader(Duration.ofSeconds(1), Duration.ofMillis(300), false);
 
         assertThatThrownBy(() -> downloader.download(base + "/slow.jpg"))
                 .isInstanceOfSatisfying(BandzonePortalException.class, e ->
                         assertThat(e.kind()).isEqualTo(FailureKind.TEMPORARY));
+    }
+
+    @Test
+    void a_poster_on_the_servers_own_network_is_never_fetched() {
+        assertThatThrownBy(() -> new PosterDownloader().download(base + "/poster.png"))
+                .isInstanceOf(BandzonePortalException.class).hasMessageContaining("Poster download failed");
     }
 }

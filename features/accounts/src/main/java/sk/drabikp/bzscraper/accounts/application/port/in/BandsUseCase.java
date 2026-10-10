@@ -20,9 +20,18 @@ public interface BandsUseCase {
     /** The user's band; NotFoundException when they aren't its member (or it isn't there). */
     MyBand band(UserId user, BandId band);
 
-    /** A new band, the user its owner; refused when the address is taken or the name or address isn't one. */
+    /**
+     * A new band, the user its owner; refused when the address is taken, the name or address isn't one, or the
+     * user owns as many bands as one may already.
+     */
     MyBand create(UserId user, String name, String slug);
 
-    /** A new name and address (owners only). */
-    MyBand update(UserId user, BandId band, String name, String slug);
+    /** A new name and address, and whether its gigs are listed publicly (null: as it was) — owners only. */
+    MyBand update(UserId user, BandId band, String name, String slug, Boolean publicList);
+
+    /**
+     * Deletes the band and everything it has — gigs, platform work, calendar, accounts, members (owners only;
+     * {@code confirmSlug} must be its address). Nothing changes on the platforms.
+     */
+    void delete(UserId owner, BandId band, String confirmSlug);
 }

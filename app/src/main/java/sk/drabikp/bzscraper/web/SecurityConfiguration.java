@@ -10,10 +10,12 @@ import org.springframework.security.oauth2.client.registration.InMemoryClientReg
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.savedrequest.NullRequestCache;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Clock;
 import java.util.Map;
 
 /**
@@ -59,8 +61,8 @@ class SecurityConfiguration {
     }
 
     @Bean
-    SecurityFilterChain api(HttpSecurity http, ClientRegistrationRepository registrations, JsonMapper json)
-            throws Exception {
+    SecurityFilterChain api(HttpSecurity http, ClientRegistrationRepository registrations, JsonMapper json,
+                            LimitsProperties limits) throws Exception {
         http.authorizeHttpRequests(requests -> requests
                         // the actuator answers on the management port only (this machine, the operator)
                         .requestMatchers("/api/auth/**", "/actuator/**").permitAll()
@@ -76,7 +78,9 @@ class SecurityConfiguration {
                         .logoutSuccessHandler(new RauthySignOut(registrations.findByRegistrationId(REGISTRATION), json)))
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .formLogin(form -> form.disable())
-                .httpBasic(basic -> basic.disable());
+                .httpBasic(basic -> basic.disable())
+                // after the session is known (counted per user), before anything is decided or done
+                .addFilterBefore(new RateLimits(limits, json, Clock.systemUTC()), AuthorizationFilter.class);
         return http.build();
     }
 }

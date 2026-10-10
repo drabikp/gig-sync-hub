@@ -51,7 +51,9 @@ public record GigDraft(String title, When when, Where where, About about, boolea
     /** What is missing or doesn't fit; {@link #field()} is the form's name for it. */
     public enum Problem {
         TITLE("title"), DATE("date"), TIME("time"), CITY("city"), COUNTRY("country"), PRICE("price"),
-        SLOT("slot"), END_TIME("endTime"), COORDINATES("coordinates"), DATES("dates");
+        SLOT("slot"), END_TIME("endTime"), COORDINATES("coordinates"), DATES("dates"),
+        /** A Facebook, ticket or poster link that isn't an http(s) address (shown as a link, sent to the platforms). */
+        LINKS("links");
 
         private final String field;
 
@@ -144,7 +146,15 @@ public record GigDraft(String title, When when, Where where, About about, boolea
         if ((where.latitude() == null) != (where.longitude() == null)) {
             missing.add(Problem.COORDINATES);
         }
+        if (!webLink(about.facebookUrl()) || !webLink(about.ticketUrl()) || !webLink(about.posterUrl())) {
+            missing.add(Problem.LINKS);
+        }
         return missing;
+    }
+
+    /** Blank, or an http(s) address — never {@code javascript:} or the like. */
+    private static boolean webLink(String link) {
+        return blank(link) || link.strip().matches("(?i)https?://\\S+");
     }
 
     /** The event's and the band's times in the gig's country (call only when nothing is {@link #missing()}). */

@@ -14,7 +14,21 @@ public enum AccountsErrorCode implements ErrorCode {
     /** A platform account missing what it needs, or with what the platform doesn't have; {@code fields}. */
     INVALID_ACCOUNT("invalidAccount"),
     /** This server has no key to keep secrets with ({@code bzscraper.accounts.data-keys}). */
-    SECRETS_UNAVAILABLE("secretsUnavailable");
+    SECRETS_UNAVAILABLE("secretsUnavailable"),
+    /** Not an e-mail address; {@code email}. */
+    INVALID_EMAIL("invalidEmail"),
+    /** Whoever has that address is the band's member already; {@code email}. */
+    ALREADY_MEMBER("alreadyMember"),
+    /** The invitation was accepted, revoked or has expired. */
+    INVITATION_GONE("invitationGone"),
+    /** The invitation is for another address than the one signed in; {@code email} (masked). */
+    INVITATION_NOT_FOR_YOU("invitationNotForYou"),
+    /** A band keeps at least one owner: hand it over first. */
+    LAST_OWNER("lastOwner"),
+    /** Deleting a band needs its address typed in. */
+    CONFIRM_DELETE("confirmDelete"),
+    /** A user may own only so many bands; {@code max}. */
+    TOO_MANY_BANDS("tooManyBands");
 
     private final String code;
 

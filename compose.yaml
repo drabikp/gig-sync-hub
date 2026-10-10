@@ -45,13 +45,20 @@ services:
         required: false
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/bzscraper
+      # the app signs in as bzscraper_app (row-level security holds it, no superuser); the migrations as the owner
+      SPRING_DATASOURCE_USERNAME: bzscraper_app
+      SPRING_FLYWAY_USER: bzscraper
       # the sign-in: Rauthy as the browser sees it, and as the app reaches it inside the network
       BZSCRAPER_AUTH_ISSUER: https://${BZ_DOMAIN:-localhost}/auth/v1/
       BZSCRAPER_AUTH_INTERNALURL: http://rauthy:8080/auth/v1/
     # each secret appears as /run/secrets/<property name>, read by spring.config.import=configtree
     secrets:
       - source: db_password
+        target: spring.flyway.password
+      - source: db_app_password
         target: spring.datasource.password
+      - source: db_app_password
+        target: bzscraper.db.app-role-password
       - source: auth_client_secret
         target: bzscraper.auth.client-secret
       # the key the bands' secrets (their platform accounts, calendar addresses) are sealed with
@@ -185,6 +192,8 @@ services:
 secrets:
   db_password:
     file: ./secrets/db_password
+  db_app_password:
+    file: ./secrets/db_app_password
   auth_client_secret:
     file: ./secrets/auth_client_secret
   rauthy_secrets:

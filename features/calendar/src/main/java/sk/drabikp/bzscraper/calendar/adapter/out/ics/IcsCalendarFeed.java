@@ -6,9 +6,11 @@ import sk.drabikp.bzscraper.calendar.application.port.out.CalendarFeed;
 import sk.drabikp.bzscraper.calendar.application.port.out.CalendarUnavailableException;
 import sk.drabikp.bzscraper.calendar.domain.BandCalendar;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
+import sk.drabikp.bzscraper.gig.application.PublicAddresses;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -20,16 +22,18 @@ import java.util.List;
 /**
  * A band's calendar from its private iCal address (Google: calendar settings → "Secret address in iCal
  * format"), as the band set it up ({@link BandCalendarStore}). The address grants read access to the whole
- * calendar, so it is never logged or shown.
+ * calendar, so it is never logged or shown. Only a public address is read (not the server's own network:
+ * {@link PublicAddresses}), redirects too.
  */
 @Component
 class IcsCalendarFeed implements CalendarFeed {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
+    private static final int MAX_REDIRECTS = 5;
 
     private final BandCalendarStore calendars;
     private final HttpClient http = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            .followRedirects(HttpClient.Redirect.NEVER)            // followed by hand, each one checked
             .connectTimeout(TIMEOUT)
             .build();
 
@@ -46,25 +50,43 @@ class IcsCalendarFeed implements CalendarFeed {
     public List<CalendarEvent> read(BandId band) throws CalendarUnavailableException {
         BandCalendar calendar = calendars.of(band)
                 .orElseThrow(() -> new CalendarUnavailableException("No calendar connected for this band"));
-        HttpResponse<String> response;
+        HttpResponse<InputStream> response;
+        String body;
         try {
-            response = http.send(HttpRequest.newBuilder(URI.create(calendar.address())).timeout(TIMEOUT).GET().build(),
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            URI address = URI.create(calendar.address());
+            response = http.send(get(address), HttpResponse.BodyHandlers.ofInputStream());
+            for (int hops = 0; hops < MAX_REDIRECTS && isRedirect(response.statusCode()); hops++) {
+                response.body().close();
+                address = address.resolve(response.headers().firstValue("Location").orElseThrow(() ->
+                        new IllegalArgumentException("a redirect without its address")));
+                response = http.send(get(address), HttpResponse.BodyHandlers.ofInputStream());
+            }
+            if (response.statusCode() != 200) {
+                response.body().close();
+                // no status code to the band: it would tell what answers where
+                throw new CalendarUnavailableException("The calendar couldn't be read — is its address still valid?");
+            }
+            body = new String(PublicAddresses.limited(response.body()), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new CalendarUnavailableException("The calendar could not be reached: " + e.getMessage(), e);
+            throw new CalendarUnavailableException("The calendar could not be reached.", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new CalendarUnavailableException("Reading the calendar was interrupted", e);
         } catch (IllegalArgumentException e) {
-            throw new CalendarUnavailableException("The calendar address is not a valid URL", e);
+            throw new CalendarUnavailableException("The calendar address can't be read: " + e.getMessage(), e);
         }
-        if (response.statusCode() != 200) {
-            throw new CalendarUnavailableException("The calendar answered HTTP " + response.statusCode()
-                    + " — is its address still valid?");
-        }
-        if (!response.body().contains("BEGIN:VCALENDAR")) {
+        if (!body.contains("BEGIN:VCALENDAR")) {
             throw new CalendarUnavailableException("The calendar address did not return an iCal calendar");
         }
-        return IcsParser.parse(response.body(), calendar.zone());
+        return IcsParser.parse(body, calendar.zone());
+    }
+
+    /** A request to a public address only ({@link PublicAddresses}) — never the server's own network. */
+    private static HttpRequest get(URI address) {
+        return HttpRequest.newBuilder(PublicAddresses.checked(address)).timeout(TIMEOUT).GET().build();
+    }
+
+    private static boolean isRedirect(int status) {
+        return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
     }
 }

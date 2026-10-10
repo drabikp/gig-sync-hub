@@ -13,21 +13,24 @@ import java.util.Locale;
  * @param firstBandName   gave it ("first", "My band")
  * @param dataKeys        the keys sealing the bands' secrets, {@code id:base64} (32 bytes), the first
  *                        active — a secret (the Docker secret {@code data_keys}); {@link #toString} hides them
+ * @param maxBandsOwned   how many bands one user may own (10)
  */
 @ConfigurationProperties("bzscraper.accounts")
 public record AccountsProperties(String firstOwnerEmail, String firstBandSlug, String firstBandName,
-                                 String dataKeys) {
+                                 String dataKeys, Integer maxBandsOwned) {
 
     public AccountsProperties {
         firstOwnerEmail = firstOwnerEmail == null ? "" : firstOwnerEmail.strip();
         firstBandSlug = firstBandSlug == null ? "" : firstBandSlug.strip().toLowerCase(Locale.ROOT);
         firstBandName = firstBandName == null ? "" : firstBandName.strip();
         dataKeys = dataKeys == null ? "" : dataKeys.strip();
+        maxBandsOwned = maxBandsOwned == null || maxBandsOwned < 1 ? 10 : maxBandsOwned;
     }
 
     @Override
     public String toString() {
         return "AccountsProperties[firstOwnerEmail=" + firstOwnerEmail + ", firstBandSlug=" + firstBandSlug
-                + ", firstBandName=" + firstBandName + ", dataKeys=" + (dataKeys.isEmpty() ? "" : "***") + "]";
+                + ", firstBandName=" + firstBandName + ", dataKeys=" + (dataKeys.isEmpty() ? "" : "***")
+                + ", maxBandsOwned=" + maxBandsOwned + "]";
     }
 }

@@ -87,11 +87,12 @@ class AccountsServiceTest {
         stores.save(new Membership(manager.id(), band.band().id(), Role.MANAGER,
                 "Bee"));
 
-        assertThatThrownBy(() -> service.update(manager.id(), band.band().id(), "Renamed", "renamed"))
+        assertThatThrownBy(() -> service.update(manager.id(), band.band().id(), "Renamed", "renamed", null))
                 .isInstanceOfSatisfying(UserFacingException.class,
                         e -> assertThat(e.code()).isEqualTo(AccountsErrorCode.OWNER_ONLY));
-        assertThat(service.update(owner.id(), band.band().id(), "Renamed", "renamed").band().slug()).isEqualTo("renamed");
-        assertThat(service.members(manager.id(), band.band().id())).extracting(m -> m.role())
+        assertThat(service.update(owner.id(), band.band().id(), "Renamed", "renamed", true).band().slug()).isEqualTo("renamed");
+        assertThat(AccountsFakes.memberships(stores, new AccountsFakes.Invitations(), java.time.Clock.systemUTC())
+                .members(manager.id(), band.band().id())).extracting(m -> m.role())
                 .containsExactly(Role.OWNER, Role.MANAGER);
     }
 

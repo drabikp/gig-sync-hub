@@ -1,10 +1,13 @@
-import { Avatar, Badge, Button, Group, Paper, SegmentedControl, Stack, Switch, Text, Title, useMantineColorScheme } from '@mantine/core';
+import { Avatar, Button, Group, Paper, SegmentedControl, Stack, Switch, Text, Title, useMantineColorScheme } from '@mantine/core';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
-import { useLogout, useMe, useMembers, useSyncAction, useSyncStatus, useUpdateBand } from '../api/hooks';
+import { useDeleteMyAccount, useLogout, useMe, useSyncAction, useSyncStatus, useUpdateBand } from '../api/hooks';
+import { ActionButtons } from '../components/ActionButtons';
 import { bandAddress, useBand } from '../band/band';
+import { AuditLog, BandDataActions } from '../components/BandData';
 import { BandFields, useBandFields } from '../components/BandFields';
+import { Invitations, MembersList } from '../components/BandMembers';
 import { CalendarConnection } from '../components/CalendarSetup';
 import { PageHeader } from '../components/PageHeader';
 import { PlatformAccounts } from '../components/PlatformAccounts';
@@ -52,6 +55,16 @@ function BandSection() {
             <Group justify="flex-end">
               <Button type="submit" disabled={!fields.valid || unchanged} loading={update.isPending}>{t('band.save')}</Button>
             </Group>
+            <Switch
+              label={t('band.publicList')}
+              description={t('band.publicListHint', { address: `${window.location.origin}/gigs/${band.slug}` })}
+              checked={band.publicList}
+              disabled={update.isPending}
+              onChange={(e) => update.mutate(
+                { name: band.name, slug: band.slug, publicList: e.currentTarget.checked },
+                { onSuccess: () => done(t('band.saved')), onError: failed },
+              )}
+            />
           </Stack>
         </form>
       ) : (
@@ -64,27 +77,13 @@ function BandSection() {
   );
 }
 
-/** Who manages the band (adding someone comes with invitations). */
+/** Who manages the band, and bringing people in. */
 function MembersSection() {
   const { t } = useTranslation();
-  const members = useMembers();
   return (
     <Section title={t('settings.members')}>
-      {(members.data ?? []).map((m) => (
-        <Group key={`${m.email}-${m.name}`} justify="space-between" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-            <Avatar color="brand" radius="xl" size={32}>{m.name.substring(0, 2).toUpperCase()}</Avatar>
-            <Stack gap={0} style={{ minWidth: 0 }}>
-              <Text fw={600} truncate>{m.displayName ?? m.name}</Text>
-              {m.email && <Text size="xs" c="dimmed" truncate>{m.email}</Text>}
-            </Stack>
-          </Group>
-          <Badge variant="light" color={m.role === 'OWNER' ? 'brand' : 'gray'} styles={{ label: { textTransform: 'none' } }}>
-            {t(`band.role.${m.role}`)}
-          </Badge>
-        </Group>
-      ))}
-      <Text size="xs" c="dimmed">{t('settings.membersSoon')}</Text>
+      <MembersList />
+      <Invitations />
     </Section>
   );
 }
@@ -94,9 +93,11 @@ export function SettingsPage() {
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const me = useMe();
   const logout = useLogout();
+  const deleteAccount = useDeleteMyAccount();
   const status = useSyncStatus();
   const sync = useSyncAction();
   const paused = status.data?.paused ?? false;
+  const band = useBand();
   const [time, setTime] = useState(timeFormat());
   return (
     <Stack gap="md" maw={720}>
@@ -109,6 +110,13 @@ export function SettingsPage() {
             <Text fw={600}>{t('settings.signedInAs', { name: me.data?.username })}</Text>
           </Group>
           <Button variant="default" loading={logout.isPending} onClick={() => logout.mutate()}>{t('settings.signOut')}</Button>
+        </Group>
+        <Group justify="flex-end">
+          <ActionButtons size="xs" actions={[{
+            label: t('settings.deleteAccount'), danger: true,
+            run: () => deleteAccount.mutate(undefined, { onSuccess: () => logout.mutate(), onError: failed }),
+            confirm: { title: t('settings.deleteAccountTitle'), text: t('settings.deleteAccountText'), yes: t('settings.deleteAccount') },
+          }]} />
         </Group>
       </Section>
       <Section title={t('settings.language')}>
@@ -132,6 +140,12 @@ export function SettingsPage() {
       <Section title={t('settings.calendar')}>
         <CalendarConnection />
       </Section>
+      {band.role === 'OWNER' && (
+        <Section title={t('settings.bandData')}>
+          <AuditLog />
+          <BandDataActions />
+        </Section>
+      )}
       <Section title={t('settings.sync')}>
         <Switch size="md" checked={paused} label={t('activity.pause')} description={t('activity.pauseHelp')}
           onChange={() => sync.mutate({ kind: paused ? 'resume' : 'pause' }, { onError: failed })} />

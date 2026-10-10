@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBandId } from '../band/band';
 import { api, data } from './client';
-import type { BandForm, CalendarKind, CalendarRuleDraft, DriftRef, GigDraft, ImportDecision, PlatformAccountForm } from './types';
+import type { BandForm, CalendarKind, CalendarRuleDraft, DriftRef, GigDraft, ImportDecision, PlatformAccountForm, Role } from './types';
 
 /**
  * One TanStack Query hook per API resource; every call is typed by the OpenAPI specs (paths,
@@ -29,6 +29,11 @@ export function useMe() {
     },
     staleTime: Infinity,
   });
+}
+
+/** Deletes the signed-in user's account here (and bands only they are in); the page then signs out. */
+export function useDeleteMyAccount() {
+  return useMutation({ mutationFn: () => data(api.DELETE('/api/me')) });
 }
 
 /** Ends the app's session, then the browser goes to Rauthy to end that one too (and comes back). */
@@ -72,6 +77,107 @@ export function useMembers() {
     queryKey: bandKey(bandId, 'members'),
     queryFn: () => data(api.GET('/api/bands/{bandId}/members', { params: { path: { bandId } } })),
   });
+}
+
+/** Makes a member an owner or a manager (owners). */
+export function useChangeRole() {
+  const bandId = useBandId();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: Role }) =>
+      data(api.PUT('/api/bands/{bandId}/members/{userId}', { params: { path: { bandId, userId } }, body: { role } })),
+    onSuccess: () => client.invalidateQueries({ queryKey: bandKey(bandId, 'members') }),
+  });
+}
+
+/** Removes a member (owners) — or, oneself, leaves the band. */
+export function useRemoveMember() {
+  const bandId = useBandId();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      data(api.DELETE('/api/bands/{bandId}/members/{userId}', { params: { path: { bandId, userId } } })),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: bandKey(bandId, 'members') });
+      client.invalidateQueries({ queryKey: ['bands'] });
+    },
+  });
+}
+
+/** The band's open invitations. */
+export function useInvitations() {
+  const bandId = useBandId();
+  return useQuery({
+    queryKey: bandKey(bandId, 'invitations'),
+    queryFn: () => data(api.GET('/api/bands/{bandId}/invitations', { params: { path: { bandId } } })),
+  });
+}
+
+/** Invites an e-mail address (owners); the answer's token is the link to pass on — shown once. */
+export function useInvite() {
+  const bandId = useBandId();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (invitation: { email: string; role: Role }) =>
+      data(api.POST('/api/bands/{bandId}/invitations', { params: { path: { bandId } }, body: invitation })),
+    onSuccess: () => client.invalidateQueries({ queryKey: bandKey(bandId, 'invitations') }),
+  });
+}
+
+export function useRevokeInvitation() {
+  const bandId = useBandId();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: string) => data(api.DELETE('/api/bands/{bandId}/invitations/{invitationId}',
+      { params: { path: { bandId, invitationId } } })),
+    onSuccess: () => client.invalidateQueries({ queryKey: bandKey(bandId, 'invitations') }),
+  });
+}
+
+/** What an invitation link offers the signed-in user (no band of theirs yet: not under a band's address). */
+export function useInvitationOffer(token: string) {
+  return useQuery({
+    queryKey: ['invitation', token],
+    queryFn: () => data(api.GET('/api/invitations/{token}', { params: { path: { token } } })),
+    retry: false,
+  });
+}
+
+export function useAcceptInvitation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => data(api.POST('/api/invitations/{token}/accept', { params: { path: { token } } })),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['bands'] }),
+  });
+}
+
+/** Deletes the band and everything it has (owners; its address typed in). */
+export function useDeleteBand() {
+  const bandId = useBandId();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (confirm: string) =>
+      data(api.DELETE('/api/bands/{bandId}', { params: { path: { bandId }, query: { confirm } } })),
+    onSuccess: () => {
+      client.removeQueries({ queryKey: bandKey(bandId) });
+      client.invalidateQueries({ queryKey: ['bands'] });
+    },
+  });
+}
+
+/** Who changed what in the band (owners). */
+export function useAuditLog(enabled: boolean) {
+  const bandId = useBandId();
+  return useQuery({
+    queryKey: bandKey(bandId, 'audit'),
+    queryFn: () => data(api.GET('/api/bands/{bandId}/audit', { params: { path: { bandId }, query: { limit: 100 } } })),
+    enabled,
+  });
+}
+
+/** The address of the band's data as one file (a download). */
+export function useBandExportAddress(): string {
+  return `/api/bands/${useBandId()}/export`;
 }
 
 /** The band's accounts on the platforms (a secret is never sent back — only that it is kept). */

@@ -7,6 +7,7 @@ import sk.drabikp.bzscraper.catalog.application.port.in.GigWrites;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
+import sk.drabikp.bzscraper.gig.application.port.out.RowScope;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
 import sk.drabikp.bzscraper.importing.application.GigImportService;
@@ -29,7 +30,8 @@ class ImportingConfiguration {
 
     /** The one import in progress; the platforms are read on Spring's task executor. */
     @Bean
-    ImportSession importSession(GigImportService gigImportService, TaskExecutor executor, LiveUpdates live) {
-        return new ImportSession(gigImportService, executor, live);
+    ImportSession importSession(GigImportService gigImportService, TaskExecutor executor, LiveUpdates live,
+                                RowScope rows) {
+        return new ImportSession(gigImportService, executor, live, rows);
     }
 }

@@ -86,6 +86,9 @@ export type BandForm = AccountsApi['schemas']['BandRequest'];
 /** A band's account on a platform: its settings, which secrets are kept (never their values), its last test. */
 export type PlatformAccount = AccountsApi['schemas']['PlatformAccountResponse'];
 export type PlatformAccountForm = AccountsApi['schemas']['PlatformAccountRequest'];
+export type Invitation = AccountsApi['schemas']['InvitationResponse'];
+export type InvitationOffer = AccountsApi['schemas']['InvitationOfferResponse'];
+export type AuditEntry = AccountsApi['schemas']['AuditEntryResponse'];
 
 // signing in (auth.yaml) and the live updates (live.yaml)
 export type Me = AuthApi['schemas']['MeResponse'];

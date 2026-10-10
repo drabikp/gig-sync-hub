@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import sk.drabikp.bzscraper.gig.application.port.out.RowScope;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
 import sk.drabikp.bzscraper.sync.application.port.in.DispatchSyncUseCase;
@@ -33,9 +34,11 @@ public class SyncDispatcher implements DispatchSyncUseCase {
     private final PlatformHealth health;
     private final Platforms platforms;
     private final FairTurns turns;
+    private final RowScope rows;
 
     public SyncDispatcher(WorkflowEngine engine, SyncOutbox outbox, SyncNotifier notifier, Clock clock,
-                          PauseSyncUseCase pause, PlatformHealth health, Platforms platforms, FairTurns turns) {
+                          PauseSyncUseCase pause, PlatformHealth health, Platforms platforms, FairTurns turns,
+                          RowScope rows) {
         this.engine = engine;
         this.outbox = outbox;
         this.notifier = notifier;
@@ -44,18 +47,19 @@ public class SyncDispatcher implements DispatchSyncUseCase {
         this.health = health;
         this.platforms = platforms;
         this.turns = turns;
+        this.rows = rows;
     }
 
     @Override
     public boolean runNext() {
-        Set<BandId> paused = pause.pausedBands();
-        Optional<SyncTask> next = turns.claim(outbox.due(clock.instant()),
+        Set<BandId> paused = rows.acrossBands(pause::pausedBands);
+        Optional<SyncTask> next = turns.claim(rows.acrossBands(() -> outbox.due(clock.instant())),
                 task -> !paused.contains(task.band()) && !health.held(Lane.of(task)));
         if (next.isEmpty()) {
             return false;
         }
         try {
-            engine.runFrom(next.get());
+            rows.as(next.get().band(), () -> engine.runFrom(next.get()));    // the lane sees its band's rows only
         } finally {
             turns.release(Lane.of(next.get()));
         }
@@ -64,6 +68,12 @@ public class SyncDispatcher implements DispatchSyncUseCase {
 
     @Override
     public void recoverInterrupted() {
+        try (RowScope.Scope ignored = rows.everyBand()) {        // after a restart: every band's work
+            recover();
+        }
+    }
+
+    private void recover() {
         Instant now = clock.instant();
         for (SyncTask task : outbox.running()) {
             if (task.action().repeatable()) {

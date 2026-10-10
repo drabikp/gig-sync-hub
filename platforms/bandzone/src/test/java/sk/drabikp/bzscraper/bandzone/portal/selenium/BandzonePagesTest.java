@@ -16,6 +16,7 @@ import sk.drabikp.bzscraper.sync.application.port.out.FailureKind;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -61,7 +62,7 @@ class BandzonePagesTest {
 
     @Test
     void the_edit_form_picks_the_town_by_its_district_links_the_club_and_checks_what_was_stored() throws Exception {
-        new BandzoneUpdateForm(bandzone.browser, new PosterDownloader(), "100").save(gig("Zámecký klub", HRANICE_PREROV));
+        new BandzoneUpdateForm(bandzone.browser, new PosterDownloader(Duration.ofSeconds(10), Duration.ofSeconds(30), false), "100").save(gig("Zámecký klub", HRANICE_PREROV));
 
         assertThat(bandzone.concerts.get("100")).containsEntry("cityId", "town-hranice-prerov")
                 .containsEntry("venueId", "club-17")
@@ -73,7 +74,7 @@ class BandzonePagesTest {
 
     @Test
     void a_club_bandzone_doesnt_list_is_kept_as_text() throws Exception {
-        new BandzoneUpdateForm(bandzone.browser, new PosterDownloader(), "100").save(gig("Nový klub", HRANICE_PREROV));
+        new BandzoneUpdateForm(bandzone.browser, new PosterDownloader(Duration.ofSeconds(10), Duration.ofSeconds(30), false), "100").save(gig("Nový klub", HRANICE_PREROV));
 
         assertThat(bandzone.concerts.get("100")).containsEntry("venueId", "")
                 .containsEntry("venueId__container[textInput]", "Nový klub");
@@ -81,7 +82,7 @@ class BandzonePagesTest {
 
     @Test
     void a_town_bandzone_knows_several_times_is_for_the_user_to_pick_nothing_is_saved() {
-        assertThatThrownBy(() -> new BandzoneUpdateForm(bandzone.browser, new PosterDownloader(), "100").save(gig("Zámecký klub", null)))
+        assertThatThrownBy(() -> new BandzoneUpdateForm(bandzone.browser, new PosterDownloader(Duration.ofSeconds(10), Duration.ofSeconds(30), false), "100").save(gig("Zámecký klub", null)))
                 .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
                     assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER);
                     assertThat(e.getMessage()).contains("several towns named Hranice", "okres Cheb");

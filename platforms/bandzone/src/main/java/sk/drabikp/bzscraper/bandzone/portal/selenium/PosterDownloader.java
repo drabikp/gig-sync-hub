@@ -1,8 +1,10 @@
 package sk.drabikp.bzscraper.bandzone.portal.selenium;
 
 import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
+import sk.drabikp.bzscraper.gig.application.PublicAddresses;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -15,24 +17,29 @@ import java.time.Duration;
  * Fetches a gig's poster into a temp file for the edit form's uploader. The download runs
  * while the session holds Bandzone's browser and the sync's one thread, so a poster host that
  * doesn't answer must not hold them: the connection and the whole request have time limits.
- * One HTTP client for the app.
+ * One HTTP client for the app. Only a public address is fetched (redirects too) — a band gives the address.
  */
 final class PosterDownloader {
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
+    private static final int MAX_REDIRECTS = 5;
+
     private final HttpClient http;
     private final Duration requestTimeout;
+    private final boolean publicOnly;
 
     PosterDownloader() {
-        this(CONNECT_TIMEOUT, REQUEST_TIMEOUT);
+        this(CONNECT_TIMEOUT, REQUEST_TIMEOUT, true);
     }
 
-    PosterDownloader(Duration connectTimeout, Duration requestTimeout) {
-        this.http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
+    /** {@code publicOnly} false: also the server's own network (tests, with a poster served on this machine). */
+    PosterDownloader(Duration connectTimeout, Duration requestTimeout, boolean publicOnly) {
+        this.http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)    // followed by hand, checked
                 .connectTimeout(connectTimeout).build();
         this.requestTimeout = requestTimeout;
+        this.publicOnly = publicOnly;
     }
 
     /** The poster in a temp file (the caller deletes it), named with the image's own extension. */
@@ -44,12 +51,18 @@ final class PosterDownloader {
             String ext = path != null && path.matches(".*\\.(?i)(jpe?g|png|gif|webp)$")
                     ? path.substring(path.lastIndexOf('.')) : ".jpg";
             file = Files.createTempFile("bz-poster-", ext);
-            HttpResponse<Path> response = http.send(HttpRequest.newBuilder(uri).timeout(requestTimeout).GET().build(),
-                    HttpResponse.BodyHandlers.ofFile(file));
-            if (response.statusCode() != 200) {
-                throw BandzonePortalException.temporary("Poster download failed (HTTP " + response.statusCode() + "): "
-                        + posterUrl);
+            HttpResponse<InputStream> response = http.send(get(uri), HttpResponse.BodyHandlers.ofInputStream());
+            for (int hops = 0; hops < MAX_REDIRECTS && isRedirect(response.statusCode()); hops++) {
+                response.body().close();
+                uri = uri.resolve(response.headers().firstValue("Location").orElseThrow(() ->
+                        new IllegalArgumentException("a redirect without its address")));
+                response = http.send(get(uri), HttpResponse.BodyHandlers.ofInputStream());
             }
+            if (response.statusCode() != 200) {
+                response.body().close();
+                throw BandzonePortalException.temporary("Poster download failed: " + posterUrl);
+            }
+            Files.write(file, PublicAddresses.limited(response.body()));
             Path downloaded = file;
             file = null;
             return downloaded;
@@ -61,6 +74,16 @@ final class PosterDownloader {
         } finally {
             deleteQuietly(file);
         }
+    }
+
+    /** A request to a public address only ({@link PublicAddresses}) — a band's poster address can't reach the server's network. */
+    private HttpRequest get(URI uri) {
+        return HttpRequest.newBuilder(publicOnly ? PublicAddresses.checked(uri) : uri).timeout(requestTimeout).GET()
+                .build();
+    }
+
+    private static boolean isRedirect(int status) {
+        return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
     }
 
     static void deleteQuietly(Path file) {
