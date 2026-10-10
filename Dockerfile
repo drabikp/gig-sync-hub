@@ -32,7 +32,12 @@ RUN apt-get update \
 # and ./secrets (bind mounts keep the host's owners).
 ARG UID=1000
 ARG GID=1000
-RUN groupadd -g "$GID" bzscraper \
+# The ids are the host's and not negotiable, but the base image may already have someone at them —
+# Ubuntu 26.04, which Temurin now builds on, ships a user "ubuntu" at 1000:1000 — so whoever holds
+# them gives way first. Named by id, not by name: the next base image may call its own user anything.
+RUN taken="$(getent passwd "$UID" | cut -d: -f1)"; [ -z "$taken" ] || userdel -r "$taken" 2>/dev/null || userdel "$taken" \
+ ; taken="$(getent group "$GID" | cut -d: -f1)"; [ -z "$taken" ] || groupdel "$taken" 2>/dev/null || true \
+ ; groupadd -g "$GID" bzscraper \
  && useradd -u "$UID" -g "$GID" -m -d /home/bzscraper -s /usr/sbin/nologin bzscraper \
  && mkdir -p /app/data \
  && chown -R bzscraper:bzscraper /app /home/bzscraper

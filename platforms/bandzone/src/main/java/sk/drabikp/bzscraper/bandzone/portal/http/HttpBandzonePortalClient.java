@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.bandzone.portal.http;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import sk.drabikp.bzscraper.accounts.application.port.in.PlatformAccounts;
 import sk.drabikp.bzscraper.bandzone.BandzoneAccount;
@@ -38,10 +39,13 @@ class HttpBandzonePortalClient implements BandzonePortalClient {
     private final PosterDownloader posters;
     private final Map<String, BandzoneWeb> logins = new ConcurrentHashMap<>();
 
+    /** The one the wiring uses — said so, because the other constructor makes the choice ambiguous. */
+    @Autowired
     HttpBandzonePortalClient(BandzoneProperties properties, PlatformAccounts accounts) {
         this(properties.baseUrl(), accounts, new PosterDownloader());
     }
 
+    /** For a test, which says where Bandzone is and how posters are fetched. */
     HttpBandzonePortalClient(String baseUrl, PlatformAccounts accounts, PosterDownloader posters) {
         this.baseUrl = baseUrl;
         this.accounts = accounts;
