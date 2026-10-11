@@ -28,6 +28,7 @@ export const sk = {
     title: 'Koncerty', new: 'Nový koncert', upcoming: 'Nadchádzajúce', past: 'Minulé', search: 'Hľadať koncert, klub, mesto',
     all: 'Všetky', needsYou: 'Treba vybaviť', unpublished: 'Nezverejnené',
     count_one: '{{count}} koncert', count_few: '{{count}} koncerty', count_many: '{{count}} koncertu', count_other: '{{count}} koncertov',
+    more_one: 'Zobraziť ešte jeden', more_few: 'Zobraziť ďalšie {{count}}', more_many: 'Zobraziť ďalších {{count}}', more_other: 'Zobraziť ďalších {{count}}',
     empty: 'Žiadny koncert nevyhovuje.', emptyHint: 'Skús iné hľadanie alebo filter — alebo pridaj koncert.',
     syncBusy_one: '{{count}} aktualizácia prebieha', syncBusy_few: '{{count}} aktualizácie prebiehajú',
     syncBusy_many: '{{count}} aktualizácie prebieha', syncBusy_other: '{{count}} aktualizácií prebieha',

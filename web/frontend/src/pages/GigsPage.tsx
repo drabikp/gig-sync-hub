@@ -17,61 +17,53 @@ import {
   TextInput,
   UnstyledButton,
 } from '@mantine/core';
+import { useDebouncedValue } from '@mantine/hooks';
 import { IconChevronRight, IconDownload, IconPlus, IconSearch, IconTicket } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
 import { useExportAddress, useGigs, usePlatforms, usePublish, useResync, useSyncStatus } from '../api/hooks';
-import type { Gig } from '../api/types';
+import type { GigPeriod, GigRow, GigShow } from '../api/types';
 import { useBandPath } from '../band/band';
 import { DateBlock } from '../components/DateBlock';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { StatusChip } from '../components/StatusChip';
 import { usePlatformName } from '../lib/attention';
-import { fold, shortDate, timeOfDay } from '../lib/format';
+import { shortDate, timeOfDay } from '../lib/format';
 import { failed, queued } from '../lib/notify';
 import { useIsMobile } from '../lib/useIsMobile';
 
-type Filter = 'all' | 'needs' | 'unpublished';
-
-function place(t: (k: string) => string, gig: Gig): string {
-  return `${gig.gig.venue || t('gig.tba')} · ${gig.gig.city}`;
+function place(t: (k: string) => string, gig: GigRow): string {
+  return `${gig.venue || t('gig.tba')} · ${gig.city}`;
 }
 
-/** The band's gigs: upcoming first (or the past), searchable, each with its state on every platform. */
+/**
+ * The band's gigs: upcoming first (or the past), searchable, each with its state on every platform.
+ *
+ * The period, the words and the chips are what the SERVER is asked for — it filters, orders and pages
+ * the catalog and sends a page of rows. Nothing here filters: a band with a thousand gigs is a page of
+ * rows on the wire, not a thousand, and the count is the server's too.
+ */
 export function GigsPage() {
   const path = useBandPath();
   const exportAddress = useExportAddress();
   const { t } = useTranslation();
   const mobile = useIsMobile();
   const navigate = useNavigate();
-  const gigs = useGigs();
   const platforms = usePlatforms();
   const status = useSyncStatus();
   const name = usePlatformName();
   const publish = usePublish();
   const resync = useResync();
-  const [period, setPeriod] = useState<'upcoming' | 'past'>('upcoming');
+  const [period, setPeriod] = useState<GigPeriod>('upcoming');
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [show, setShow] = useState<GigShow>('all');
   const [selected, setSelected] = useState<string[]>([]);
-
-  const list = useMemo(() => {
-    const q = fold(query.trim());
-    return (gigs.data ?? [])
-      .filter((g) => (period === 'upcoming' ? !g.past : g.past))
-      .filter((g) => !q || fold(`${g.gig.title} ${g.gig.venue ?? ''} ${g.gig.city}`).includes(q))
-      .filter((g) =>
-        filter === 'all' ? true
-          : filter === 'needs' ? g.platforms.some((p) => p.state === 'failed')
-            : !g.gig.cancelled && g.platforms.some((p) => p.state === 'none'))
-      .sort((a, b) => {
-        const order = `${a.gig.date}T${a.gig.time}`.localeCompare(`${b.gig.date}T${b.gig.time}`);
-        return period === 'upcoming' ? order : -order;
-      });
-  }, [gigs.data, period, query, filter]);
-
+  const [searched] = useDebouncedValue(query.trim(), 250);   // one request per pause, not per keystroke
+  const gigs = useGigs({ period, q: searched, show });
+  const list = (gigs.data?.pages ?? []).flatMap((page) => page.gigs);
+  const total = gigs.data?.pages[0]?.total ?? 0;
   const chosen = selected.filter((id) => list.some((g) => g.id === id));
   const counts = status.data?.counts;
   const busy = counts ? counts.queued + counts.running + counts.retrying : 0;
@@ -119,7 +111,7 @@ export function GigsPage() {
       <Group gap="sm" wrap="wrap">
         <SegmentedControl
           value={period}
-          onChange={(v) => setPeriod(v as 'upcoming' | 'past')}
+          onChange={(v) => setPeriod(v as GigPeriod)}
           data={[
             { value: 'upcoming', label: t('gigs.upcoming') },
             { value: 'past', label: t('gigs.past') },
@@ -136,18 +128,18 @@ export function GigsPage() {
         />
       </Group>
       <ScrollArea type="never">
-        <Chip.Group value={filter} onChange={(v) => setFilter(v as Filter)}>
+        <Chip.Group value={show} onChange={(v) => setShow(v as GigShow)}>
           <Group gap="xs" wrap="nowrap">
             <Chip value="all" radius="xl">{t('gigs.all')}</Chip>
             <Chip value="needs" radius="xl" color="red">{t('gigs.needsYou')}</Chip>
-            <Chip value="unpublished" radius="xl">{t('gigs.unpublished')}</Chip>
+            <Chip value="publishable" radius="xl">{t('gigs.unpublished')}</Chip>
           </Group>
         </Chip.Group>
       </ScrollArea>
 
       <Group justify="space-between">
         <Text size="sm" c="dimmed" fw={600}>
-          {t('gigs.count', { count: list.length })}
+          {t('gigs.count', { count: total })}
         </Text>
         {counts && (busy > 0 || counts.failed > 0) && (
           <Anchor component={Link} to={path('/activity')} size="sm" fw={600} c={counts.failed ? 'red' : 'orange.8'}>
@@ -168,17 +160,17 @@ export function GigsPage() {
             <UnstyledButton key={g.id} onClick={() => navigate(path(`/gig/${g.id}`))}>
               <Paper withBorder p="md" radius="lg">
                 <Group wrap="nowrap" gap="md" align="center">
-                  <DateBlock date={g.gig.date!} muted={g.gig.cancelled} />
+                  <DateBlock date={g.date} muted={g.cancelled} />
                   <Stack gap={3} style={{ flex: 1, minWidth: 0 }}>
                     <Group gap={8} wrap="nowrap">
-                      <Text fw={700} fz={16} truncate td={g.gig.cancelled ? 'line-through' : undefined}
-                        c={g.gig.cancelled ? 'dimmed' : undefined}>
-                        {g.gig.title}
+                      <Text fw={700} fz={16} truncate td={g.cancelled ? 'line-through' : undefined}
+                        c={g.cancelled ? 'dimmed' : undefined}>
+                        {g.title}
                       </Text>
-                      {g.gig.cancelled && <Badge color="gray" variant="light" style={{ flexShrink: 0 }}>{t('gig.cancelled')}</Badge>}
+                      {g.cancelled && <Badge color="gray" variant="light" style={{ flexShrink: 0 }}>{t('gig.cancelled')}</Badge>}
                     </Group>
                     <Text size="sm" c="dimmed" truncate>
-                      {timeOfDay(g.gig.time)} · {place(t, g)}
+                      {timeOfDay(g.time)} · {place(t, g)}
                     </Text>
                     <Group gap={6} mt={4}>
                       {g.platforms.map((p) => (
@@ -250,22 +242,22 @@ export function GigsPage() {
                       style={{ cursor: 'pointer' }} onClick={() => navigate(path(`/gig/${g.id}`))}>
                       <Table.Td onClick={(e) => e.stopPropagation()}>
                         <Checkbox
-                          aria-label={t('gigs.select', { title: g.gig.title })}
+                          aria-label={t('gigs.select', { title: g.title })}
                           checked={chosen.includes(g.id)}
                           onChange={() => setSelected(chosen.includes(g.id) ? chosen.filter((x) => x !== g.id) : [...chosen, g.id])}
                         />
                       </Table.Td>
                       <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                        <Text fw={700}>{shortDate(g.gig.date!)}</Text>
-                        <Text size="sm" c="dimmed">{timeOfDay(g.gig.time)}</Text>
+                        <Text fw={700}>{shortDate(g.date)}</Text>
+                        <Text size="sm" c="dimmed">{timeOfDay(g.time)}</Text>
                       </Table.Td>
                       <Table.Td>
                         <Group gap={8} wrap="nowrap">
                           <Anchor component={Link} to={path(`/gig/${g.id}`)} fw={700} c="var(--mantine-color-text)"
-                            td={g.gig.cancelled ? 'line-through' : undefined} onClick={(e) => e.stopPropagation()}>
-                            {g.gig.title}
+                            td={g.cancelled ? 'line-through' : undefined} onClick={(e) => e.stopPropagation()}>
+                            {g.title}
                           </Anchor>
-                          {g.gig.cancelled && <Badge color="gray" variant="light">{t('gig.cancelled')}</Badge>}
+                          {g.cancelled && <Badge color="gray" variant="light">{t('gig.cancelled')}</Badge>}
                         </Group>
                       </Table.Td>
                       <Table.Td c="dimmed">{place(t, g)}</Table.Td>
@@ -282,6 +274,14 @@ export function GigsPage() {
             </Table.ScrollContainer>
           </Paper>
         )
+      )}
+
+      {gigs.hasNextPage && (
+        <Group justify="center">
+          <Button variant="default" loading={gigs.isFetchingNextPage} onClick={() => gigs.fetchNextPage()}>
+            {t('gigs.more', { count: total - list.length })}
+          </Button>
+        </Group>
       )}
 
       {mobile && (

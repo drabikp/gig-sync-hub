@@ -28,6 +28,7 @@ export const en = {
     title: 'Gigs', new: 'New gig', upcoming: 'Upcoming', past: 'Past', search: 'Search gigs, venues, towns',
     all: 'All', needsYou: 'Needs you', unpublished: 'Not published',
     count_one: '{{count}} gig', count_other: '{{count}} gigs',
+    more_one: 'Show one more', more_other: 'Show {{count}} more',
     empty: 'No gig matches.', emptyHint: 'Try another search or filter — or add a gig.',
     syncBusy_one: '{{count}} update on its way', syncBusy_other: '{{count}} updates on their way',
     syncFailed_one: '{{count}} failed', syncFailed_other: '{{count}} failed',

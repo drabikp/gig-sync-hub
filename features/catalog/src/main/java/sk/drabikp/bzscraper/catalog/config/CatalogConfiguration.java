@@ -15,6 +15,7 @@ import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.sync.application.port.in.QueueSyncWork;
 import sk.drabikp.bzscraper.sync.application.port.in.SyncStateUseCase;
 
+import java.time.Clock;
 import java.util.List;
 
 @Configuration
@@ -32,9 +33,9 @@ class CatalogConfiguration {
     @Bean
     GigCatalogService gigCatalogService(GigRepository gigRepository, PublishedGigStore publishedGigStore,
                                         Transactions transactions, QueueSyncWork queueSyncWork,
-                                        CatalogWrites catalogWrites, LiveUpdates live) {
+                                        CatalogWrites catalogWrites, LiveUpdates live, Clock clock) {
         return new GigCatalogService(gigRepository, publishedGigStore, transactions, queueSyncWork, catalogWrites,
-                live);
+                live, clock);
     }
 
     @Bean

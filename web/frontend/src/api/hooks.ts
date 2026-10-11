@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBandId } from '../band/band';
 import { api, data } from './client';
-import type { BandForm, CalendarKind, CalendarRuleDraft, DriftRef, GigDraft, ImportDecision, PlatformAccountForm, Role } from './types';
+import type { BandForm, CalendarKind, CalendarRuleDraft, DriftRef, GigDraft, GigFilter, ImportDecision, PlatformAccountForm, Role } from './types';
 
 /**
  * One TanStack Query hook per API resource; every call is typed by the OpenAPI specs (paths,
@@ -229,11 +229,24 @@ export function usePlatforms() {
   return useQuery({ queryKey: ['platforms'], queryFn: () => data(api.GET('/api/platforms')), staleTime: Infinity });
 }
 
-export function useGigs() {
+/**
+ * The band's list, a page at a time — the SERVER filters, orders and pages it, so this asks with what
+ * the band chose and renders the answer. `fetchNextPage` reads on from the last page's cursor, which
+ * is why a gig added or removed meanwhile cannot make a row repeat or go unseen.
+ */
+export function useGigs(filter: GigFilter) {
   const bandId = useBandId();
-  return useQuery({
-    queryKey: bandKey(bandId, 'gigs'),
-    queryFn: () => data(api.GET('/api/bands/{bandId}/gigs', { params: { path: { bandId } } })),
+  return useInfiniteQuery({
+    queryKey: bandKey(bandId, 'gigs', 'list', filter.period, filter.q, filter.show),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => data(api.GET('/api/bands/{bandId}/gigs', {
+      params: {
+        path: { bandId },
+        query: { period: filter.period, show: filter.show, q: filter.q || undefined, after: pageParam },
+      },
+    })),
+    getNextPageParam: (last) => last.cursor ?? undefined,
+    placeholderData: (previous) => previous,       // typing in the search box keeps the rows in place
   });
 }
 

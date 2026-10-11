@@ -7,7 +7,11 @@ import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigCursor;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.GigQuery;
+import sk.drabikp.bzscraper.gig.domain.GigRow;
+import sk.drabikp.bzscraper.gig.domain.GigSlice;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Publication;
 import sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms;
@@ -49,6 +53,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.time.LocalDate;
+import java.util.Comparator;
 
 /** In-memory stand-ins for the sync ports, behaving like the JPA adapters. */
 public final class SyncFakes {
@@ -282,6 +288,11 @@ public final class SyncFakes {
         }
 
         @Override
+        public synchronized List<Publication> of(BandId band, Set<GigId> gigIds) {
+            return all(band).stream().filter(p -> gigIds.contains(p.gigId())).toList();
+        }
+
+        @Override
         public synchronized List<Publication> all(BandId band) {
             return records.entrySet().stream().filter(e -> band.equals(bands.get(e.getKey())))
                     .map(Map.Entry::getValue).toList();
@@ -313,7 +324,61 @@ public final class SyncFakes {
 
         @Override
         public synchronized List<Gig> findStartingWithin(BandId band, DateRange range) {
-            return findAll(band);
+            return of(band).values().stream()
+                    .filter(g -> !g.schedule().startDate().isBefore(range.start())
+                            && !g.schedule().startDate().isAfter(range.end()))
+                    .toList();
+        }
+
+        /**
+         * The same page the database answers, worked out in memory: the show day against today, the
+         * folded words, the narrowing, the keyset and the order. It is spelled out rather than
+         * shortcut because {@code GigPagingContract} holds this and the real store to one answer — a
+         * fake that filtered less than the store is how a list looks right in the tests and wrong on
+         * the page.
+         */
+        @Override
+        public synchronized GigSlice page(BandId band, GigQuery query, LocalDate today) {
+            if (query.matchesNothing()) {
+                return GigSlice.empty();
+            }
+            boolean upcoming = query.period() == GigQuery.Period.UPCOMING;
+            List<GigRow> matching = of(band).values().stream()
+                    .map(Gigs::row)
+                    .filter(r -> upcoming ? !r.showAt().toLocalDate().isBefore(today)
+                            : r.showAt().toLocalDate().isBefore(today))
+                    .filter(r -> !query.searching() || searchTextOf(of(band).get(r.id())).contains(query.text()))
+                    .filter(r -> query.onlyIds() == null || query.onlyIds().contains(r.id()))
+                    .filter(r -> !query.excludingAny() || !query.exceptIds().contains(r.id()))
+                    .filter(r -> query.cancelled() == null || query.cancelled() == r.cancelled())
+                    .sorted(upcoming ? ROWS : ROWS.reversed())
+                    .toList();
+            long total = matching.size();
+            List<GigRow> after = matching.stream().filter(r -> beyond(r, query, upcoming)).toList();
+            List<GigRow> page = after.stream().limit(query.size()).toList();
+            return new GigSlice(page, after.size() > page.size() ? GigCursor.after(page.getLast()) : null, total);
+        }
+
+        private static final Comparator<GigRow> ROWS =
+                Comparator.comparing(GigRow::showAt).thenComparing(r -> r.id().key());
+
+        private static boolean beyond(GigRow row, GigQuery query, boolean upcoming) {
+            if (query.after() == null) {
+                return true;
+            }
+            int order = ROWS.compare(row, new GigRow(GigId.fromKey(query.after().id()), query.after().showAt(),
+                    row.start(), "", null, "", row.country(), false));
+            return upcoming ? order > 0 : order < 0;
+        }
+
+        private static String searchTextOf(Gig gig) {
+            return gig == null ? "" : gig.searchText();
+        }
+
+        private static GigRow row(Gig gig) {
+            return new GigRow(gig.id(), gig.schedule().showStart().toLocalDateTime(), gig.schedule().start(),
+                    gig.title(), gig.location().venue(), gig.location().city(), gig.location().country(),
+                    gig.cancelled());
         }
 
         @Override

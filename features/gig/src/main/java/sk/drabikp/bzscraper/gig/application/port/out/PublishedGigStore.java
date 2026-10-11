@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Publication;
 
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 
 /**
@@ -33,6 +34,12 @@ public interface PublishedGigStore {
      */
     void move(BandId band, GigId from, GigId to);
 
-    /** Every publication of the band, for showing where each gig is published. */
+    /** Every publication of the band. Only for work that is about all of them — a page asks {@link #of}. */
     List<Publication> all(BandId band);
+
+    /**
+     * The publications of just these gigs — what a PAGE of the list needs, so its cost follows the
+     * page rather than the band's whole catalog. An empty set reads nothing.
+     */
+    List<Publication> of(BandId band, Set<GigId> gigIds);
 }

@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.gig.domain.platform.Publication;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * JPA-backed {@link PublishedGigStore}, in the same database as the gig catalog, so a
@@ -64,6 +65,16 @@ class JpaPublishedGigStore implements PublishedGigStore {
         for (Publication old : mapper.toDomain(records)) {
             record(band, old.platform(), to, old.externalRef());
         }
+    }
+
+    @Override
+    public List<Publication> of(BandId band, Set<GigId> gigIds) {
+        if (gigIds.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository
+                .findByKeyBandIdAndKeyGigIdIn(band.value(), gigIds.stream().map(GigId::key).toList())
+                .stream().map(mapper::toDomain).toList();
     }
 
     @Override

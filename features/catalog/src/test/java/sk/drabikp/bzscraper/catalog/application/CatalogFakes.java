@@ -2,6 +2,10 @@ package sk.drabikp.bzscraper.catalog.application;
 
 import sk.drabikp.bzscraper.catalog.application.port.out.GigMovedListener;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.sync.application.SyncFakes;
@@ -12,6 +16,9 @@ import java.util.List;
 
 /** The catalog's write path and use cases over {@link SyncFakes}, for the tests of the features that write gigs. */
 public final class CatalogFakes {
+
+    /** The day the fakes' catalog lives on, so a list's "upcoming" is the same in every test. */
+    public static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-08T10:00:00Z"), ZoneId.of("Europe/Prague"));
 
     private CatalogFakes() {
     }
@@ -42,6 +49,6 @@ public final class CatalogFakes {
                                             SyncFakes.DirectTransactions transactions, SyncFakes.Outbox outbox,
                                             SyncRequests requests, GigMovedListener... listeners) {
         return new GigCatalogService(gigs, published, transactions, requests,
-                writes(gigs, published, outbox, requests, listeners), LiveUpdates.NONE);
+                writes(gigs, published, outbox, requests, listeners), LiveUpdates.NONE, CLOCK);
     }
 }

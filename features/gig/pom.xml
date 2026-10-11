@@ -97,6 +97,7 @@
 								<include>sk/drabikp/bzscraper/gig/domain/TestBands*</include>
 								<include>sk/drabikp/bzscraper/gig/domain/platform/TestPlatforms*</include>
 								<include>sk/drabikp/bzscraper/gig/application/port/out/TestLiveUpdates*</include>
+								<include>sk/drabikp/bzscraper/gig/application/port/out/GigPagingContract*</include>
 							</includes>
 						</configuration>
 					</execution>

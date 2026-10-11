@@ -15,8 +15,13 @@ public final class TestGigs {
     }
 
     public static Gig gig(String title, String venue, ZonedDateTime start) {
+        return gig(title, venue, "Praha", start);
+    }
+
+    /** A gig in a named town — what the list's search and its order are tried against. */
+    public static Gig gig(String title, String venue, String city, ZonedDateTime start) {
         return Gig.create(title, GigSchedule.startingAt(start),
-                new Location(venue, "Praha", Country.CZECHIA), List.of(), Admission.free(),
+                new Location(venue, city, Country.CZECHIA), List.of(), Admission.free(),
                 null, null, null, null);
     }
 }

@@ -7,7 +7,10 @@ import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.GigQuery;
+import sk.drabikp.bzscraper.gig.domain.GigSlice;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -23,10 +26,12 @@ class JpaGigRepository implements GigRepository {
 
     private final GigJpaRepository jpaRepository;
     private final GigEntityMapper mapper;
+    private final GigPages pages;
 
-    public JpaGigRepository(GigJpaRepository jpaRepository, GigEntityMapper mapper) {
+    public JpaGigRepository(GigJpaRepository jpaRepository, GigEntityMapper mapper, GigPages pages) {
         this.jpaRepository = jpaRepository;
         this.mapper = mapper;
+        this.pages = pages;
     }
 
     @Override
@@ -47,6 +52,11 @@ class JpaGigRepository implements GigRepository {
     @Override
     public List<Gig> findAll(BandId band) {
         return jpaRepository.findByBandId(band.value()).stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public GigSlice page(BandId band, GigQuery query, LocalDate today) {
+        return pages.page(band, query, today);
     }
 
     @Override

@@ -58,6 +58,16 @@ public record Gig(
         return GigId.of(this);
     }
 
+    /**
+     * The words a band would look for this gig by — its title, venue and town — folded the way
+     * everything compared across sources is ({@link TextFold}). The store keeps this with the row and
+     * searches it there, so the one rule lives here rather than in each store that has to agree with it.
+     */
+    public String searchText() {
+        String venue = location.venue() == null ? "" : location.venue();
+        return TextFold.fold(title + " " + venue + " " + location.city());
+    }
+
     /** The band's show day ({@link GigSchedule#showStart}) is before today, in the gig's own time zone. */
     public boolean isPast(Clock clock) {
         ZonedDateTime show = schedule.showStart();

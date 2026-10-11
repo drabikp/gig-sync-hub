@@ -16,14 +16,19 @@ import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.GigQuery;
+import sk.drabikp.bzscraper.gig.domain.GigSlice;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Publication;
 import sk.drabikp.bzscraper.sync.application.port.in.QueueSyncWork;
 import sk.drabikp.bzscraper.sync.domain.QueueResult;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Supplier;
 
@@ -47,15 +52,18 @@ public class GigCatalogService
     private final QueueSyncWork sync;
     private final GigWrites writes;
     private final LiveUpdates live;
+    private final Clock clock;
 
     public GigCatalogService(GigRepository gigRepository, PublishedGigStore publishedGigStore,
-                             Transactions transactions, QueueSyncWork sync, GigWrites writes, LiveUpdates live) {
+                             Transactions transactions, QueueSyncWork sync, GigWrites writes, LiveUpdates live,
+                             Clock clock) {
         this.gigRepository = gigRepository;
         this.publishedGigStore = publishedGigStore;
         this.transactions = transactions;
         this.sync = sync;
         this.writes = writes;
         this.live = live;
+        this.clock = clock;
     }
 
     @Override
@@ -75,14 +83,30 @@ public class GigCatalogService
     }
 
     @Override
+    public GigSlice page(BandId band, GigQuery query) {
+        // today in this server's zone: a gig's times are kept in its own wall clock, and the period
+        // is which side of today the band plays on (Gig.isPast reads it the same way)
+        return gigRepository.page(band, query, LocalDate.now(clock));
+    }
+
+    @Override
     public List<Gig> gigsStartingWithin(BandId band, DateRange range) {
         return gigRepository.findStartingWithin(band, range);
     }
 
     @Override
     public Map<GigId, Map<Platform, Publication>> publicationsByGig(BandId band) {
+        return byGig(publishedGigStore.all(band));
+    }
+
+    @Override
+    public Map<GigId, Map<Platform, Publication>> publicationsOf(BandId band, Set<GigId> gigIds) {
+        return byGig(publishedGigStore.of(band, gigIds));
+    }
+
+    private static Map<GigId, Map<Platform, Publication>> byGig(List<Publication> publications) {
         Map<GigId, Map<Platform, Publication>> byGig = new HashMap<>();
-        for (Publication p : publishedGigStore.all(band)) {
+        for (Publication p : publications) {
             byGig.computeIfAbsent(p.gigId(), id -> new TreeMap<>()).put(p.platform(), p);
         }
         return byGig;

@@ -44,7 +44,17 @@ interface GigEntityMapper {
     @Mapping(target = "longitude", source = "gig.location.address.longitude")
     @Mapping(target = "entryType", source = "gig.admission.type")
     @Mapping(target = "entryFee", source = "gig.admission.amount")
+    @Mapping(target = "searchText", expression = "java(searchTextOf(gig))")
     GigEntity toEntity(BandId band, Gig gig);
+
+    /**
+     * What the list searches on, written with the row: the words a band would type to find this gig,
+     * folded as everything else that is compared across sources is ({@link TextFold}). It is a column
+     * rather than three {@code like}s over title, venue and town, so one trigram index serves it.
+     */
+    default String searchTextOf(Gig gig) {
+        return gig.searchText();
+    }
 
     @Mapping(target = "schedule", source = ".")
     @Mapping(target = "location", source = ".")

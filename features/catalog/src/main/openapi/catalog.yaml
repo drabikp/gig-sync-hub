@@ -21,15 +21,47 @@ paths:
     get:
       tags: [Gigs]
       operationId: listGigs
+      description: |
+        One page of the band's list. The server filters, orders and pages it — the page shows what it
+        is given. `period` and `q` are the gig table's own work; `show` narrows by platform state.
+        Pass the answer's `cursor` back as `after` for the next page; no `cursor` means the end.
+      parameters:
+        - name: period
+          in: query
+          description: Which side of the band's show day. Upcoming runs forwards, past backwards.
+          schema:
+            $ref: '#/components/schemas/GigPeriodValue'
+        - name: q
+          in: query
+          description: Words to find in the title, venue or town — accents and case do not matter.
+          schema:
+            type: string
+            maxLength: 100
+        - name: show
+          in: query
+          description: all — everything; needs — a platform failed and waits for the user; publishable — not cancelled and missing from some platform.
+          schema:
+            $ref: '#/components/schemas/GigShowValue'
+        - name: after
+          in: query
+          description: The `cursor` of the page before this one.
+          schema:
+            type: string
+            maxLength: 200
+        - name: size
+          in: query
+          description: How many rows (1–200, 50 by default).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
       responses:
         "200":
-          description: All gigs, earliest first.
+          description: The page, in the list's order.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/GigResponse'
+                $ref: '#/components/schemas/GigListResponse'
     post:
       tags: [Gigs]
       operationId: addGig
@@ -230,6 +262,61 @@ components:
       schema:
         type: string
   schemas:
+    GigPeriodValue:
+      type: string
+      enum: [upcoming, past]
+    GigShowValue:
+      type: string
+      enum: [all, needs, publishable]
+    GigListResponse:
+      description: |
+        One page of the gig list. `total` is how many gigs match the filter, so the page can say
+        "50 of 213" without reading the other 163; `cursor` reads on from the last row, and is
+        absent at the end of the list.
+      type: object
+      required: [gigs, total]
+      properties:
+        gigs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GigRowResponse'
+        total:
+          type: integer
+          format: int64
+        cursor:
+          type: string
+          nullable: true
+    GigRowResponse:
+      description: |
+        A gig as a LIST row — what a row shows and nothing more (no description, lineup or links:
+        the gig's own page reads those). `date` and `time` are the event's start in its own zone.
+      type: object
+      required: [id, past, date, time, title, city, cancelled, platforms]
+      properties:
+        id:
+          description: The gig's token (its address).
+          type: string
+        past:
+          type: boolean
+        date:
+          type: string
+          format: date
+        time:
+          description: HH:mm in the gig's own time zone.
+          type: string
+        title:
+          type: string
+        venue:
+          type: string
+          nullable: true
+        city:
+          type: string
+        cancelled:
+          type: boolean
+        platforms:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformStateResponse'
     GigResponse:
       description: A gig as the pages get it — its form fields and, per platform, whether it is there and what the sync is doing.
       type: object

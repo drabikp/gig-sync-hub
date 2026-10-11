@@ -55,7 +55,8 @@ class ApiSecurityTest {
         mvc.perform(get("/api/bands").with(owner())).andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].id", hasItem(BandId.FIRST.toString())))
                 .andExpect(jsonPath("$[?(@.id == '" + BandId.FIRST + "')].role", hasItem("OWNER")));
-        mvc.perform(get(BAND + "/gigs").with(owner())).andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
+        mvc.perform(get(BAND + "/gigs").with(owner())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.gigs").isArray()).andExpect(jsonPath("$.total").value(0));
         mvc.perform(get("/api/platforms").with(owner())).andExpect(status().isOk());
         mvc.perform(get(BAND + "/sync/status").with(owner())).andExpect(status().isOk());
         mvc.perform(get(BAND + "/calendar").with(owner())).andExpect(status().isOk());

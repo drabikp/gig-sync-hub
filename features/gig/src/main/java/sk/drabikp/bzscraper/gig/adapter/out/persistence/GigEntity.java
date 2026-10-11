@@ -94,6 +94,19 @@ class GigEntity {
     private String ticketUrl;
     private String posterImageUrl;
     private boolean cancelled;
+    /**
+     * When the band plays — the slot if the event has one, else the start. The DATABASE keeps it
+     * (a generated column), so no writer can forget it and the list's index always agrees with the
+     * rows; here it is read-only, and it is what the list orders and pages by.
+     */
+    @Column(insertable = false, updatable = false)
+    private LocalDateTime showAt;
+    /**
+     * Title, venue and town folded as {@link sk.drabikp.bzscraper.gig.domain.TextFold} folds them, so
+     * the list's search happens in the database and "kosice" finds "Košice". Written with every save.
+     */
+    @Column(length = 800, nullable = false)
+    private String searchText = "";
 
     public GigEntity() {
         // for JPA and GigEntityMapper
@@ -297,5 +310,17 @@ class GigEntity {
 
     public void setCancelled(boolean cancelled) {
         this.cancelled = cancelled;
+    }
+
+    public LocalDateTime getShowAt() {
+        return showAt;
+    }
+
+    public String getSearchText() {
+        return searchText;
+    }
+
+    public void setSearchText(String searchText) {
+        this.searchText = searchText == null ? "" : searchText;
     }
 }
