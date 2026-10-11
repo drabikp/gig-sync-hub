@@ -275,7 +275,12 @@ the band used last remembered on the device); `/` goes to that band, `/new-band`
 ("Create your band" — the user its owner; the address follows the name, `band/slug.ts`). A band
 switcher sits at the top of the desktop menu and on the phone's More.
 - **Places**: Gigs (cards on a phone, a selectable table with bulk actions on a desktop; the
-  state on every platform per gig), a gig's page (a card per platform with Publish / Retry /
+  state on every platform per gig. **Nothing on this page filters, searches, sorts or counts**: the
+  period, the words and the chips are what the SERVER is asked for — `GET …/gigs?period=&q=&show=&
+  after=&size=` answers `{gigs, total, cursor}`, a page of rows in the list's order, and "Show N more"
+  reads on from `cursor` (`useInfiniteQuery`, the search debounced). A band with a thousand gigs
+  therefore costs a page of rows on the wire, not a thousand, and the count in the heading is the
+  store's), a gig's page (a card per platform with Publish / Retry /
   Discard / Open, its sync history, its calendar event; ⋯ → edit, update everywhere, publish on
   more, cancel / reactivate, delete — the confirmations say what happens on each platform, from
   the traits), the gig form (When / Where / About; the town picker; the band's time behind
@@ -782,6 +787,41 @@ is the one place the portal's JSON is read.
 - Setup problems (nothing connected, a sign-in the band must renew) need the user (NEEDS_USER), not a
   retry.
 
+## Reading and writing it efficiently
+
+The rules this schema is held to (the ones from *High-Performance Java Persistence* that apply to a
+mapping with **no associations at all** — every aggregate is flat, so there is no eager fetch, no
+collection and no cascade to get wrong here; the costs are elsewhere):
+
+- **A list is a QUERY, never a filter in the page.** Whatever a page shows, the store decides which
+  rows, in which order, and how many: `GigRepository.page(band, GigQuery, today)` → `GigSlice`.
+  `findAll(band)` exists for work that really is about every gig (an export, a reconciliation, the
+  band's own file) and must not answer a page.
+- **Paged by keyset, not by offset.** `(show_at, id) > (the last row's)` — the hundredth page costs
+  what the first does, and rows arriving or leaving meanwhile cannot make one slide past unseen. The
+  cursor (`GigCursor`) is opaque and one that isn't ours is a `BadRequestException`.
+- **Read the columns a view shows, not the entity.** The list reads `GigRowProjection` →
+  `GigRow`: no description, no lineup, and nothing managed for the session to dirty-check. Entities
+  are for writing, where the dirty checking earns its keep.
+- **Nothing per row.** A page's platform states are read for the page's gigs
+  (`publicationsOf(band, ids)`, `published_gig_band_gig`), never one query per row and never the
+  band's whole catalog. `GigListCostsTest` counts the statements and fails if the cost starts to
+  follow the rows — the cheapest N+1 alarm there is.
+- **A public address is bounded.** `/gigs/{band_slug}` takes no sign-in, so it answers a
+  store-ordered `earliestFirst(band, limit)` (2000) rather than however much a catalog has grown to.
+- **Ids come from sequences** (V9), because an identity column cannot be batched; with
+  `batch_size`, `order_inserts/updates` and `batch_versioned_data` a bulk publish's tasks, a run's
+  log and a band's calendar rules go in a few round trips. `in_clause_parameter_padding` keeps the
+  plan caches small: an `in (…)` of 3 or 7 ids is padded to 4 or 8, so a handful of shapes serve
+  every page. See `app/src/main/resources/application.properties`, mirrored in the test properties.
+- **A query parameter is a string, not a generated enum**: Spring converts one with `Enum.valueOf`,
+  which does not know `upcoming`. MapStruct maps it (`GigMapper.toPeriod/toShow`, as
+  `SyncMapper.toShow` already did).
+- `spring.jpa.open-in-view=false` (a session must not outlive the use case) and persistence adapters
+  are `@Transactional(readOnly = true)` on the class, with only the writing methods saying otherwise.
+- Both gig stores — PostgreSQL's and the in-memory one the service tests use — answer
+  `GigPagingContract`, so a list cannot read one way in a test and another on the page.
+
 ## Database
 
 PostgreSQL 18 (`spring.datasource.*`; in Docker the `db` service, user and database
@@ -805,7 +845,18 @@ check as JSON. `V5__invitations_audit.sql`: `invitation` (the token's hash only)
 `V6__row_level_security.sql`: the role `bzscraper_app`, `band_visible(band_id)` and a policy on every
 band's table (`calendar_rule`'s shipped rows readable by all, written only by '*'; `sync_log` through its
 task); not on `band`, `membership`, `app_user`, `invitation`. `V7__public_list.sql`: `band.public_list`
-(off; band #1's on — it had the list before).
+(off; band #1's on — it had the list before). `V8__gig_search_and_indexes.sql`: what the LIST reads —
+`gig.show_at` (generated: the slot if the event has one, else the start — when the band plays, which is
+what `Gig.isPast` reads), the index `gig_band_show (band_id, show_at, id)` the page and its keyset walk,
+`gig.search_text` (title + venue + town folded by `TextFold`, written with every save) with a **pg_trgm**
+index for the substring search — extension and index both optional, so a database whose user may not
+create extensions still answers, by scanning that one band's rows — and `published_gig_band_gig
+(band_id, gig_id)`, which the primary key cannot serve (the platform sits in the middle of it).
+`V9__sequences_for_batching.sql`: `sync_task`, `sync_log`, `calendar_rule` and `audit_event` take their
+ids from sequences instead of identity columns, because an identity column cannot be batched (the
+driver must fetch each assigned id back) and all four are written in bulk; drawn 50 at a time
+(`pooled-lo`, so a block's ids are above what the database gave), each sequence owned by its column so
+`pg_get_serial_sequence` still answers the H2 import, and started well above the rows already there.
 
 **From H2** (the database until 2026-10): `H2Import` (a Flyway `afterMigrate` callback in the kernel)
 copies an H2 SQL backup (`SCRIPT TO`, `bzscraper.db.import-h2`) into an EMPTY database right after

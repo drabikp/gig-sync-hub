@@ -36,6 +36,12 @@ public interface GigRepository {
      */
     GigSlice page(BandId band, GigQuery query, LocalDate today);
 
+    /**
+     * The band's gigs, earliest first, and at most this many — for a feed that has to stay bounded
+     * however big a catalog grows. Ordered by the store, through the list's own index.
+     */
+    List<Gig> earliestFirst(BandId band, int limit);
+
     List<Gig> findStartingWithin(BandId band, DateRange range);
 
     void deleteById(BandId band, GigId id);

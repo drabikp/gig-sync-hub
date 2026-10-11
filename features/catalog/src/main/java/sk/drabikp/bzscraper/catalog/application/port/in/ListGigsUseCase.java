@@ -22,6 +22,9 @@ public interface ListGigsUseCase {
      */
     GigSlice page(BandId band, GigQuery query);
 
+    /** The band's gigs, earliest first and at most this many — a feed that must stay bounded. */
+    List<Gig> gigsEarliestFirst(BandId band, int limit);
+
     /** The gig; {@link sk.drabikp.bzscraper.gig.application.NotFoundException} when it isn't (any more). */
     Gig gig(BandId band, GigId id);
 

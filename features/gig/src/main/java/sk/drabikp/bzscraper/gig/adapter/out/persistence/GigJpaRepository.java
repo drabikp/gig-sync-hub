@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.gig.adapter.out.persistence;
 
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
@@ -10,6 +11,9 @@ import java.util.UUID;
 interface GigJpaRepository extends JpaRepository<GigEntity, GigEntity.Key> {
 
     List<GigEntity> findByBandId(UUID bandId);
+
+    /** Earliest first and bounded, off gig_band_show — what a public feed reads. */
+    List<GigEntity> findByBandIdOrderByShowAtAscIdAsc(UUID bandId, Limit limit);
 
     List<GigEntity> findByBandIdAndStartDateTimeGreaterThanEqualAndStartDateTimeLessThan(
             UUID bandId, LocalDateTime fromInclusive, LocalDateTime toExclusive);

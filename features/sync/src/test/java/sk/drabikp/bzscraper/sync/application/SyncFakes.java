@@ -323,6 +323,13 @@ public final class SyncFakes {
         }
 
         @Override
+        public synchronized List<Gig> earliestFirst(BandId band, int limit) {
+            return of(band).values().stream()
+                    .sorted(Comparator.comparing((Gig g) -> g.schedule().showStart()).thenComparing(g -> g.id().key()))
+                    .limit(limit).toList();
+        }
+
+        @Override
         public synchronized List<Gig> findStartingWithin(BandId band, DateRange range) {
             return of(band).values().stream()
                     .filter(g -> !g.schedule().startDate().isBefore(range.start())

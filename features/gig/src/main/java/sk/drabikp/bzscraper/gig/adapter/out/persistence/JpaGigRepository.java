@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.gig.adapter.out.persistence;
 
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
@@ -57,6 +58,12 @@ class JpaGigRepository implements GigRepository {
     @Override
     public GigSlice page(BandId band, GigQuery query, LocalDate today) {
         return pages.page(band, query, today);
+    }
+
+    @Override
+    public List<Gig> earliestFirst(BandId band, int limit) {
+        return jpaRepository.findByBandIdOrderByShowAtAscIdAsc(band.value(), Limit.of(limit))
+                .stream().map(mapper::toDomain).toList();
     }
 
     @Override

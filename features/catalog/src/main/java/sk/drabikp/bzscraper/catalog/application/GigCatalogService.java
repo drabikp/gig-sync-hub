@@ -90,6 +90,11 @@ public class GigCatalogService
     }
 
     @Override
+    public List<Gig> gigsEarliestFirst(BandId band, int limit) {
+        return gigRepository.earliestFirst(band, limit);
+    }
+
+    @Override
     public List<Gig> gigsStartingWithin(BandId band, DateRange range) {
         return gigRepository.findStartingWithin(band, range);
     }

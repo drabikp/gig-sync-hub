@@ -11,6 +11,7 @@ import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.BandId;
+import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
@@ -100,8 +101,7 @@ public class PlatformCheckService implements CheckPlatformsUseCase {
                 // the catalog as it is once the platform has been read (that read takes a while):
                 // upcoming gigs and the recent past — older history isn't worth reconciling
                 LocalDate since = LocalDate.now(clock).minusDays(pastDays);
-                List<Gig> catalog = gigRepository.findAll(band).stream()
-                        .filter(g -> !g.schedule().start().toLocalDate().isBefore(since)).toList();
+                List<Gig> catalog = gigRepository.findStartingWithin(band, DateRange.from(since));
                 List<Publication> records = publishedGigStore.all(band);
                 Set<GigId> syncing = sync.gigsWithOpenWork(band);
                 drifts.addAll(Reconciler.drifts(platforms.traits(platform), catalog, records, listed, syncing));
