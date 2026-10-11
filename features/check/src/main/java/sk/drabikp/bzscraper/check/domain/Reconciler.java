@@ -1,9 +1,9 @@
 package sk.drabikp.bzscraper.check.domain;
 
-import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.CityName;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.SamePlace;
 import sk.drabikp.bzscraper.gig.domain.TextFold;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.PlatformTraits;
@@ -18,7 +18,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.function.Function;
@@ -35,8 +34,6 @@ import java.util.stream.Collectors;
  */
 public final class Reconciler {
 
-    /** How far from the gig's town a platform may place it. */
-    static final double NEAR_KM = 25;
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -133,17 +130,14 @@ public final class Reconciler {
     }
 
     /**
-     * How far the platform put the event from the gig's town, when that is more than
-     * {@value #NEAR_KM} km — known when the town was picked from the place search and the
-     * platform shows coordinates (a platform that geocodes text once picked a same-named town).
+     * How far the platform put the event from the gig's town, when that is further than the same
+     * place ({@link SamePlace}) — there is nothing to compare unless the town was picked from the
+     * place search and the platform says where it put the event.
      */
-    private static Optional<Double> farFromTown(Gig gig, ImportedGig listed) {
-        Address town = gig.location().address();
-        if (town == null || !town.resolved()) {
-            return Optional.empty();
-        }
-        OptionalDouble km = listed.coordinates().map(town::kilometresTo).orElse(OptionalDouble.empty());
-        return km.isPresent() && km.getAsDouble() > NEAR_KM ? Optional.of(km.getAsDouble()) : Optional.empty();
+    private static OptionalDouble farFromTown(Gig gig, ImportedGig listed) {
+        return listed.coordinates()
+                .map(placed -> SamePlace.tooFarFrom(gig.location().address(), placed))
+                .orElse(OptionalDouble.empty());
     }
 
     /**

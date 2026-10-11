@@ -3,8 +3,10 @@ package sk.drabikp.bzscraper.bandsintown.portal;
 import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Coordinates;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.SamePlace;
 
 import java.util.Locale;
+import java.util.OptionalDouble;
 
 /**
  * Where Bandsintown put a gig. It works the place out from the text an upload gives it, and has picked the
@@ -12,9 +14,6 @@ import java.util.Locale;
  * the gig's town is — a note for the user when they are far apart.
  */
 public final class BitPlaces {
-
-    /** How far from the gig's town Bandsintown may place it before the user is told to check. */
-    private static final double TOLERANCE_KM = 25;
 
     private BitPlaces() {
     }
@@ -25,14 +24,14 @@ public final class BitPlaces {
      * picked from the place search) — a note when they are far apart, else null.
      */
     public static String check(Gig gig, BitEvent event) {
-        Address address = gig.location().address();
-        if (address == null || !address.resolved() || event.latitude() == null || event.longitude() == null) {
+        Address town = gig.location().address();
+        if (event.latitude() == null || event.longitude() == null) {
             return null;
         }
-        double km = address.kilometresTo(new Coordinates(event.latitude(), event.longitude())).orElse(0);
-        return km <= TOLERANCE_KM ? null : String.format(Locale.ROOT,
-                "Bandsintown placed it %.0f km from %s (%s) — check the place there", km,
-                gig.location().city(), address.district());
+        OptionalDouble km = SamePlace.tooFarFrom(town, new Coordinates(event.latitude(), event.longitude()));
+        return km.isEmpty() ? null : String.format(Locale.ROOT,
+                "Bandsintown placed it %.0f km from %s (%s) — check the place there", km.getAsDouble(),
+                gig.location().city(), town.district());
     }
 
 }
