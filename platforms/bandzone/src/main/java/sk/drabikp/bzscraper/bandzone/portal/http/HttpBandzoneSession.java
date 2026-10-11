@@ -62,11 +62,18 @@ final class HttpBandzoneSession implements BandzoneSession {
             when.setStart(gig.schedule().start());
             when.selectCity(gig.location());
             String next = when.send("continue", "the concert's date and town");
-            if (next.contains("podobne-koncerty")) {
-                NetteForm similar = form(web.get(next).document(), SIMILAR, "the similar-concerts question");
-                next = new ConcertForm(web, similar, SIMILAR).send("new", "\"a new concert\"");
+            // What comes next is whatever the page HOLDS, never what its address suggests: Bandzone
+            // sends us to its "podobne-koncerty" address even when it has nothing similar to ask about,
+            // and serves the info step there (seen live 2026-10-11 — reading the address instead cost a
+            // publish). So: the question when it is on the page, else the info step, wherever we landed.
+            Document page = web.get(next).document();
+            Optional<NetteForm> similar = NetteForm.find(page, SIMILAR);
+            if (similar.isPresent()) {
+                next = new ConcertForm(web, similar.get(), SIMILAR).send("new", "\"a new concert\"");
+                page = web.get(next).document();
             }
-            ConcertForm info = new ConcertForm(web, form(web.get(next).document(), INFO, "the wizard's info step"), INFO);
+            ConcertForm info = new ConcertForm(web, form(page, INFO,
+                    "the wizard's next step (neither the similar-concerts question nor the info step)"), INFO);
             info.fillInfo(gig);
             String created = info.send("send", "the new concert");
             Matcher id = CONCERT_URL.matcher(created);

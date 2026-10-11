@@ -654,7 +654,11 @@ read; Bandzone's sits where only the browser and the server can.
 
 - **Create** — the 2-step wizard: date/time/city → (optional "similar concerts" screen,
   answered "new") → info (name, entry, description, Facebook) → Bandzone sends to
-  `/koncert/{id}-…`; the id is taken from that address. `BandzoneFormCreate` then
+  `/koncert/{id}-…`; the id is taken from that address. **Which step came next is read off the PAGE,
+  never off its address**: Bandzone sends you to `zalozit-podobne-koncerty.html?key=…` even when it
+  has nothing similar to ask about, and serves the info step at that very address — trusting the
+  address cost a publish ("no form for the similar-concerts question", live 2026-10-11). So: answer
+  the question if the page holds it, else fill in the info step, wherever we landed. `BandzoneFormCreate` then
   completes the gig via the edit form (end, venue, poster, lineup); if that fails the
   gig is still PUBLISHED with a note to use Re-sync.
 - **Update** — `/koncert/{id}/update`: poster upload (`PosterDownloader`: 10 s to connect, 30 s
@@ -857,7 +861,10 @@ test run — `./mvnw test` needs Docker; `H2ImportTest`: an H2 backup into its o
 **The platforms are tested against stand-ins that talk as their sites do**, so no browser and no
 network are needed. `BandzoneHttpFixture` (bandzone test sources) answers as the band admin's pages
 do — the login and its cookie, the pickers' `items`, a pick's re-rendered form, a finished form's
-`redirect`, the poster uploader, the wizard (with and without the "similar concerts?" step), the
+`redirect`, the poster uploader, the wizard in each of the three shapes Bandzone has shown after its
+first step (`AfterStepOne`: the question, no question but still at the question's address, straight
+to the info step — the middle one is what the real site does, and modelling it as a redirect to the
+info ADDRESS is what let a publish fail with green tests), the
 performers tab with its remove dialogs (which may answer only "go there" when the concert's address
 changed with its name), the delete tab, the band's gig list and a deleted concert's 404 — and keeps
 what it is sent, so the client's read-backs see what was stored. `HttpBandzonePortalClientTest` runs

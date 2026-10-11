@@ -72,8 +72,15 @@ final class BandzoneHttpFixture implements AutoCloseable {
     final AtomicInteger logins = new AtomicInteger();
     /** Every form sent: path, then its fields. */
     final List<Map.Entry<String, Map<String, List<String>>>> posts = new CopyOnWriteArrayList<>();
-    /** Whether the wizard asks "is it one of these similar concerts?". */
-    volatile boolean similarConcerts = true;
+    /**
+     * What step one leads to — all three shapes Bandzone has been seen to use:
+     * the question, no question but still at the question's address (live 2026-10-11), or
+     * straight to the info step.
+     */
+    enum AfterStepOne { QUESTION, INFO_AT_QUESTION_ADDRESS, INFO }
+
+    /** Which of those this fixture plays. */
+    volatile AfterStepOne afterStepOne = AfterStepOne.QUESTION;
     /** Whether a remove dialog asked through AJAX answers only "go there" (the concert's address changed). */
     volatile boolean dialogsRedirect;
 
@@ -137,9 +144,12 @@ final class BandzoneHttpFixture implements AutoCloseable {
             requireLogin(exchange);
             page(exchange, stepOne(Map.of()));
         } else if (path.equals("/koncert/zalozit-podobne-koncerty.html")) {
-            page(exchange, "<form action=\"/koncert/zalozit-podobne-koncerty.html?key=" + first(query, "key")
+            // Nothing similar to ask about: Bandzone stays at this address and serves the info step.
+            page(exchange, afterStepOne == AfterStepOne.QUESTION
+                    ? "<form action=\"/koncert/zalozit-podobne-koncerty.html?key=" + first(query, "key")
                     + "&amp;do=similarGigsForm-submit\" method=\"post\"><input type=\"submit\" name=\"new\" value=\"Ne, "
-                    + "zakládám jiný koncert\"></form>");
+                    + "zakládám jiný koncert\"></form>"
+                    : infoForm(first(query, "key")));
         } else if (path.equals("/koncert/zalozit-info.html")) {
             page(exchange, infoForm(first(query, "key")));
         } else {
@@ -239,8 +249,9 @@ final class BandzoneHttpFixture implements AutoCloseable {
             }
             String key = "k" + ids.incrementAndGet();
             drafts.put(key, new LinkedHashMap<>(fields));
-            json(exchange, "{\"redirect\":" + quote(similarConcerts ? "/koncert/zalozit-podobne-koncerty.html?key=" + key
-                    : "/koncert/zalozit-info.html?key=" + key) + "}");
+            json(exchange, "{\"redirect\":" + quote(afterStepOne == AfterStepOne.INFO
+                    ? "/koncert/zalozit-info.html?key=" + key
+                    : "/koncert/zalozit-podobne-koncerty.html?key=" + key) + "}");
         } else {
             throw new IllegalStateException("step one without a button");
         }

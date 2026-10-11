@@ -3,6 +3,8 @@ package sk.drabikp.bzscraper.bandzone.portal.http;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import sk.drabikp.bzscraper.accounts.application.AccountsFakes;
 import sk.drabikp.bzscraper.bandzone.BandzonePlatform;
 import sk.drabikp.bzscraper.bandzone.BandzonePortalException;
@@ -140,14 +142,21 @@ class HttpBandzonePortalClientTest {
         }
     }
 
-    @Test
-    void creates_without_the_similar_concerts_question_too() throws Exception {
-        bandzone.similarConcerts = false;
+    /**
+     * The wizard's middle is read from the page, not from its address: Bandzone sends us to its
+     * "similar concerts" address even when it has nothing to ask and serves the info step there.
+     * Taking the address at its word cost a publish (live 2026-10-11), so each shape gets a test.
+     */
+    @ParameterizedTest
+    @EnumSource(BandzoneHttpFixture.AfterStepOne.class)
+    void creates_however_the_wizard_leads_from_its_first_step(BandzoneHttpFixture.AfterStepOne shape) throws Exception {
+        bandzone.afterStepOne = shape;
         Gig gig = new Gig("Club night", GigSchedule.startingAt(at(2026, 12, 1, 21, 0)),
                 new Location(null, "Praha", Country.CZECHIA), List.of(), Admission.free(), null, null, null, null, false);
         try (BandzoneSession session = client.openSession(BandId.FIRST)) {
             String id = session.createGig(gig);
             assertThat(bandzone.concerts.get(id).value("entryType")).isEqualTo("2");
+            assertThat(bandzone.concerts.get(id).value("name")).isEqualTo("Club night");
         }
     }
 
