@@ -12,6 +12,8 @@ import sk.drabikp.bzscraper.sync.domain.SyncCounts;
 import sk.drabikp.bzscraper.sync.domain.SyncStatus;
 import sk.drabikp.bzscraper.sync.domain.SyncTask;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
@@ -90,6 +92,26 @@ class SyncLogServiceTest {
             assertThat(e.code()).isEqualTo(SyncErrorCode.TASK_MOVED_ON);
             assertThat(e.args()).containsEntry("status", "RUNNING").containsEntry("gig", SyncTask.labelOf(gig));
         });
+    }
+
+    /**
+     * The page shows each row's {@code updatedAt} and groups the rows by its day, so every list is
+     * ordered by that — not by the order the work was queued in, which is the queue's business. A
+     * retry is the plain case: the oldest task becomes the newest activity.
+     */
+    @Test
+    void every_list_puts_what_happened_last_first_even_if_it_was_queued_first() {
+        SyncTask first = task();
+        SyncTask second = task();
+        outbox.markRunning(second.id(), clock.instant());
+        outbox.markFailed(second.id(), "refused", clock.instant());
+        clock.advance(Duration.ofHours(2));
+        outbox.markRunning(first.id(), clock.instant());
+        outbox.markFailed(first.id(), "refused later", clock.instant());
+
+        assertThat(service.tasks(BAND, Show.ALL)).extracting(SyncTask::id).containsExactly(first.id(), second.id());
+        assertThat(service.tasks(BAND, Show.OPEN)).extracting(SyncTask::id).containsExactly(first.id(), second.id());
+        assertThat(service.tasks(BAND, Show.FAILED)).extracting(SyncTask::id).containsExactly(first.id(), second.id());
     }
 
     @Test

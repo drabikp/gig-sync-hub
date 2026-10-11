@@ -25,10 +25,10 @@ public interface SyncTaskQueries {
     /** The band's tasks not settled for good: PENDING, RUNNING and FAILED. */
     List<SyncTask> unfinished(BandId band);
 
-    /** The band's newest tasks first. */
+    /** The band's latest activity first ({@link SyncTask#LATEST_FIRST}), and the latest {@code limit} of it. */
     List<SyncTask> recent(BandId band, int limit);
 
-    /** The gig's newest tasks first (whatever else was done meanwhile). */
+    /** The gig's latest activity first ({@link SyncTask#LATEST_FIRST}), whatever else was done meanwhile. */
     List<SyncTask> history(BandId band, GigId gigId, int limit);
 
     List<SyncLogEntry> log(long taskId);

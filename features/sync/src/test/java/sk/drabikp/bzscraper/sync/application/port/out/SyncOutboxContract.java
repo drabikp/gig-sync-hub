@@ -84,6 +84,35 @@ public abstract class SyncOutboxContract {
 
         assertThat(outbox().history(BAND, gig.id(), 10)).extracting(SyncTask::id).containsExactly(second.id(), first.id());
         assertThat(outbox().history(BAND, gig.id(), 1)).extracting(SyncTask::id).containsExactly(second.id());
+
+        outbox().markRunning(first.id(), NOW);
+        outbox().markDone(first.id(), "published", NOW.plus(Duration.ofMinutes(5)));
+
+        assertThat(outbox().history(BAND, gig.id(), 10)).extracting(SyncTask::id)
+                .as("the gig's page shows each entry's time, so the one that moved last comes first")
+                .containsExactly(first.id(), second.id());
+    }
+
+    /**
+     * The Activity page shows each row's {@code updatedAt} and groups the rows by its day, so the list
+     * must be ordered by it — by id, a task retried today sits wherever it was first queued and the
+     * times on the page read backwards.
+     */
+    @Test
+    void the_recent_list_is_a_log_of_activity_whatever_order_the_work_was_asked_in() {
+        SyncTask asked_first = queue(gig, SyncAction.PUBLISH);
+        SyncTask asked_second = queue(other, SyncAction.PUBLISH);
+        outbox().markRunning(asked_second.id(), NOW);
+        outbox().markDone(asked_second.id(), "published", NOW.plus(Duration.ofMinutes(1)));
+        outbox().markRunning(asked_first.id(), NOW);
+        outbox().markDone(asked_first.id(), "published", NOW.plus(Duration.ofMinutes(5)));
+
+        assertThat(outbox().recent(BAND, 10)).extracting(SyncTask::id)
+                .as("what happened last comes first")
+                .containsExactly(asked_first.id(), asked_second.id());
+        assertThat(outbox().recent(BAND, 1)).extracting(SyncTask::id)
+                .as("and a shorter list keeps the latest, not the oldest")
+                .containsExactly(asked_first.id());
     }
 
     @Test

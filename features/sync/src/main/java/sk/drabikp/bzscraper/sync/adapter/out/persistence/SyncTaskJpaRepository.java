@@ -31,7 +31,9 @@ interface SyncTaskJpaRepository extends JpaRepository<SyncTaskEntity, Long> {
     List<SyncTaskEntity> findByBandIdAndPlatformAndActionAndStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(
             UUID bandId, String platform, String action, String status, Instant now);
 
-    List<SyncTaskEntity> findByBandIdOrderByIdDesc(UUID bandId, Limit limit);
+    /** The activity log: what happened last, first — and the latest `limit` of those, not of the oldest. */
+    List<SyncTaskEntity> findByBandIdOrderByUpdatedAtDescIdDesc(UUID bandId, Limit limit);
 
-    List<SyncTaskEntity> findByBandIdAndGigIdOrderByIdDesc(UUID bandId, String gigId, Limit limit);
+    /** A gig's own activity, latest first. */
+    List<SyncTaskEntity> findByBandIdAndGigIdOrderByUpdatedAtDescIdDesc(UUID bandId, String gigId, Limit limit);
 }

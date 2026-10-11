@@ -48,10 +48,14 @@ public class SyncLogService implements SyncLogUseCase {
 
     @Override
     public List<SyncTask> tasks(BandId band, Show show) {
+        // Every list reads the same way: what happened last, first (SyncTask.LATEST_FIRST). The outbox
+        // hands its unfinished work over in the order it was asked for, which is the queue's business,
+        // not the log's.
         return switch (show) {
             case ALL -> outbox.recent(band, LATEST);
-            case OPEN -> outbox.unfinished(band).reversed();
-            case FAILED -> outbox.unfinished(band).stream().filter(t -> t.status() == SyncStatus.FAILED).toList().reversed();
+            case OPEN -> outbox.unfinished(band).stream().sorted(SyncTask.LATEST_FIRST).toList();
+            case FAILED -> outbox.unfinished(band).stream().filter(t -> t.status() == SyncStatus.FAILED)
+                    .sorted(SyncTask.LATEST_FIRST).toList();
         };
     }
 

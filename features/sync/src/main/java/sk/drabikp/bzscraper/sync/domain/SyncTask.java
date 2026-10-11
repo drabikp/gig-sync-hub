@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
 import java.time.Instant;
+import java.util.Comparator;
 
 /**
  * One entry of the sync outbox: bring a band's gig's copy on one platform in line with the
@@ -18,6 +19,15 @@ import java.time.Instant;
 public record SyncTask(long id, BandId band, GigId gigId, String gigLabel, Platform platform, SyncAction action,
                        SyncStatus status, int attempts, Instant createdAt, Instant nextAttemptAt,
                        Instant updatedAt, String message, StepType step) {
+
+    /**
+     * How a log of activity reads: what happened LAST comes first, by {@code updatedAt} — not by id,
+     * which is the order the work was asked for. The two differ as soon as anything is retried or
+     * simply takes longer than what was queued after it, and the page shows each row's
+     * {@code updatedAt}, so by id it shows plainly wrong times. The id settles a tie (same instant).
+     */
+    public static final Comparator<SyncTask> LATEST_FIRST =
+            Comparator.comparing(SyncTask::updatedAt).thenComparingLong(SyncTask::id).reversed();
 
     /** How a gig is named in the sync log: "2026-09-18 · Eufory + Snaefell, Hranice". */
     public static String labelOf(Gig gig) {

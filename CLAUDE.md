@@ -503,7 +503,11 @@ workers at once; none of a paused band or a lane held back) go to the engine.
 - Page: actions return a `QueueResult` (a toast "Publishing on …" / "Left out: …"); every gig
   shows its state per platform (live / queued / running / retrying / failed / not there) and
   follows it live (`SyncChanges` → `LiveUpdates` → server-sent events); actions on a gig whose
-  task is RUNNING are refused by the core (`GigWrites`, 409 `gigBusy`).
+  task is RUNNING are refused by the core (`GigWrites`, 409 `gigBusy`). **Every list of tasks reads as
+  a log: latest activity first** (`SyncTask.LATEST_FIRST` — `updatedAt`, the id only settling a tie), so
+  the Activity page and a gig's history, which both show each row's `updatedAt`, show it in order. By id
+  — the order the work was ASKED for — a retried task sits where it was first queued and the times read
+  backwards; `SyncOutboxContract` holds both outboxes to the log's order.
 - **Optimistic locking**: `UpdateGigUseCase.update(seen, updated)` — `seen` is the gig as the
   user opened it; if the catalog's gig is no longer that (changed in another window, by an
   import or the calendar, or deleted) nothing changes and `ConcurrentChangeException` says

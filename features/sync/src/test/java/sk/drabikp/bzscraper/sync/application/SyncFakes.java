@@ -41,7 +41,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -105,14 +104,14 @@ public final class SyncFakes {
         @Override
         public synchronized List<SyncTask> recent(BandId band, int limit) {
             return tasks.values().stream().filter(t -> t.band().equals(band))
-                    .sorted(Comparator.comparingLong(SyncTask::id).reversed())
+                    .sorted(SyncTask.LATEST_FIRST)
                     .limit(limit).toList();
         }
 
         @Override
         public synchronized List<SyncTask> history(BandId band, GigId gigId, int limit) {
             return tasks.values().stream().filter(t -> t.band().equals(band) && t.gigId().equals(gigId))
-                    .sorted(Comparator.comparingLong(SyncTask::id).reversed()).limit(limit).toList();
+                    .sorted(SyncTask.LATEST_FIRST).limit(limit).toList();
         }
 
         @Override

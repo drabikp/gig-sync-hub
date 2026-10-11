@@ -68,12 +68,12 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     public List<SyncTask> recent(BandId band, int limit) {
-        return mapper.toTasks(tasks.findByBandIdOrderByIdDesc(band.value(), Limit.of(limit)));
+        return mapper.toTasks(tasks.findByBandIdOrderByUpdatedAtDescIdDesc(band.value(), Limit.of(limit)));
     }
 
     @Override
     public List<SyncTask> history(BandId band, GigId gigId, int limit) {
-        return mapper.toTasks(tasks.findByBandIdAndGigIdOrderByIdDesc(band.value(), gigId.key(), Limit.of(limit)));
+        return mapper.toTasks(tasks.findByBandIdAndGigIdOrderByUpdatedAtDescIdDesc(band.value(), gigId.key(), Limit.of(limit)));
     }
 
     @Override
