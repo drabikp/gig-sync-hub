@@ -38,7 +38,13 @@ one-shot service `rauthy-db`, backed up with the app's), its cache in `./auth-da
 `BZ_UID` (it reads the owner-only secrets). **First start**: Rauthy reads `secrets/rauthy-bootstrap`
 (the group and the app's client for `https://$BZ_DOMAIN`, made by `docker/make-secrets.sh`) into its
 EMPTY database, and prints the first admin's (`BZ_ADMIN_EMAIL`) password once in its log. Then, in
-Rauthy's admin (`https://$BZ_DOMAIN/auth/v1/admin` — admins need MFA: register a passkey first),
+Rauthy's admin (`https://$BZ_DOMAIN/auth/v1/admin` — admins need MFA: register a passkey first, at
+`/auth/v1/account`, which asks for no MFA itself; a machine that cannot make a passkey takes the
+password alone with `BZ_ADMIN_MFA=false` in its `.env` — `ADMIN_FORCE_MFA`, which is the whole gate
+(`Principal::validate_admin_session`) and is also written onto the `rauthy` client's own `force_mfa`
+on every start, so the switch needs a `docker compose up -d rauthy`; never false on a public server.
+A passkey is bound to `RP_ID` = `BZ_DOMAIN`, so one made against `localhost` is of no use once the
+server has its real address),
 add yourself and the members to the group `bzscraper`. A later change of `BZ_DOMAIN` = change the
 client's redirect / post-logout addresses there (the bootstrap is never read again).
 
@@ -57,7 +63,8 @@ given to the app as Docker secrets at `/run/secrets/<property name>` and read by
 `spring.config.import=optional:configtree:/run/secrets/` — never environment variables (Rauthy gets its
 secrets file the same way, `SECRETS_FILE`). Whether this server drives the platforms, band #1's
 old band slug and artist name, and this machine's settings (`BZ_DOMAIN`,
-`BZ_APP_BIND`, `BZ_SUBNET`, `BZ_UID`/`BZ_GID`) are in the git-ignored `.env` (`.env.example`) —
+`BZ_APP_BIND`, `BZ_SUBNET`, `BZ_UID`/`BZ_GID`, `BZ_ADMIN_MFA`) are in the git-ignored `.env`
+(`.env.example`; what weakens a thing is a machine's own business, never git's) —
 compose reads it for its own `${…}` and passes it to the app. `./data` is mounted at `/app/data` (the
 band's calendar profile, backups); a platform's sign-in is kept in the database with the band's account,
 not on disk.

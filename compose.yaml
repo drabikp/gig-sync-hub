@@ -135,6 +135,9 @@ services:
       RP_ORIGIN: https://${BZ_DOMAIN:-localhost}:443
       TRUSTED_PROXIES: ${BZ_SUBNET:-10.201.0.0/24}
       BOOTSTRAP_ADMIN_EMAIL: ${BZ_ADMIN_EMAIL:-admin@localhost}
+      # Rauthy's own default: its admin pages need a passkey. A machine that cannot make one yet
+      # (BZ_ADMIN_MFA=false in its .env) gets in with the password alone — never on a public server.
+      ADMIN_FORCE_MFA: ${BZ_ADMIN_MFA:-true}
       SECRETS_FILE: /run/secrets/rauthy_secrets
     secrets:
       - rauthy_secrets
