@@ -10,8 +10,9 @@ import java.util.OptionalDouble;
  * {@value #KILOMETRES} km: further than a town is wide, closer than the next town of that name.
  *
  * <p>One rule, because two places ask it about the same thing — the nightly check, which calls the
- * difference a drift for the user to look at, and the Bandsintown publish, which adds a note to the
- * task. Each had its own copy of the number before, under its own name.
+ * difference a drift for the user to look at, and a publish on a platform that works places out
+ * from text, which adds a note to the task. Each had its own copy of the number before, under its
+ * own name.
  */
 public final class SamePlace {
 

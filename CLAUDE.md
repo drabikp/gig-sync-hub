@@ -137,9 +137,11 @@ features/check      Reconciler, platform check service + nightly schedule, each 
 features/calendar   calendar domain (+ domain.event: the calendar's events; + domain.rules: profile
                     and classifier), review service, stores, iCal feed, profile file; /api/calendar;
                     shipped presets (calendar/*.profile)
-platforms/browser   what every platform shares: PlatformClient (`bzscraper.<platform>.client`: off or
-                    http) + OnPlatformClient (a client bean exists only for its own setting), and the
-                    human pacing both clients keep to
+platforms/portal    what every platform shares: PlatformClient (`bzscraper.<platform>.client`: off or
+                    http) + OnPlatformClient (a client bean exists only for its own setting). That is
+                    all it is — the human pacing (HumanPacer) sits in the platform that paces, and
+                    Bandzone's own waits are in its web client (this module was `platforms/browser`
+                    while a browser was driven here; nothing drives one any more)
 platforms/bandzone      bandzone (traits, properties, exception) · scrape · portal (client API, stub,
                         BandzoneTowns, PosterDownloader) · portal.http (NetteForm, Answer, BandzoneWeb,
                         ConcertForm, LineupTab, session, client, sign-in) · step · rest
@@ -407,6 +409,12 @@ no thread-local "current band": the worker and the nightly check work for every 
   the band by its slug.
 
 ## Architecture
+
+**The context map is `docs/context-map.md`**: which module models what, how the seams stand to one
+another (shared kernel, anticorruption layer, dependency inversion, conformist), why the same gig is
+a different type in seven contexts on purpose, and where the boundaries deliberately do NOT follow
+the invariants (`GigId` as a natural key; a band as a tenant rather than an aggregate root). What
+`ArchitectureTest` and `PlatformNamesTest` enforce is that page, in executable form.
 
 Hexagonal inside every feature module (ports & adapters), see **Structure** above. **The core is
 platform-agnostic**: no feature names a platform or branches on one. A `Platform` is a value (an
