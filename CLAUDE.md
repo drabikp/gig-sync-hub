@@ -363,8 +363,14 @@ no thread-local "current band": the worker and the nightly check work for every 
   (`calendar_rule.band_id` null); each band's own rules are edited on the page.
 - **Going public** (phase 4): **invitations** — an owner invites an e-mail address as a role and passes
   the link on (`/invite/<token>`; no e-mail is sent yet), whoever is signed in with that address joins
-  (once, 7 days); owners change roles and remove members, anyone leaves, a band keeps an owner
-  (`lastOwner`); owners delete the band (its address typed in; the database's cascades take everything)
+  (once, 7 days); owners change roles and remove members, anyone leaves, **a band keeps an owner**
+  (`lastOwner`) — the rule of the band's whole roster, so it is asked of the roster
+  (`BandMembers`: `without(user)` / `as(user, role)`, then `hasOwner()`) rather than written out again
+  at each of the four places that can break it, and whoever is about to change the roster **holds** it
+  first (`MembershipStore.hold`: a lock on the band's row for the rest of the transaction). Without
+  that hold, two owners leaving at the same moment each see the other and the band is left with none,
+  which nothing on the pages can undo (`BandKeepsAnOwnerTest` fails exactly so when the hold is
+  taken away); owners delete the band (its address typed in; the database's cascades take everything)
   and **export** it (`GET …/export`, one JSON file — never a secret); one's own account is deleted
   (`DELETE /api/me`; a band one is alone in goes too; the Rauthy login stays). The **audit log**
   (`audit_event`): every change a member makes through a band's API (`AuditInterceptor`: the operation,

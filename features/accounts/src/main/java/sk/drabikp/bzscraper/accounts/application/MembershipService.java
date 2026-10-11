@@ -9,6 +9,7 @@ import sk.drabikp.bzscraper.accounts.application.port.out.InvitationStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.MembershipStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.UserStore;
 import sk.drabikp.bzscraper.accounts.domain.Band;
+import sk.drabikp.bzscraper.accounts.domain.BandMembers;
 import sk.drabikp.bzscraper.accounts.domain.Invitation;
 import sk.drabikp.bzscraper.accounts.domain.Membership;
 import sk.drabikp.bzscraper.accounts.domain.Role;
@@ -61,7 +62,7 @@ public class MembershipService implements MembersUseCase, InvitationsUseCase {
     @Override
     public List<Member> members(UserId asker, BandId band) {
         member(asker, band);
-        return memberships.ofBand(band).stream()
+        return memberships.ofBand(band).members().stream()
                 .flatMap(m -> users.byId(m.user()).map(u -> new Member(u, m.role(), m.displayName())).stream())
                 .sorted(Comparator.comparing((Member m) -> m.role() != Role.OWNER)
                         .thenComparing(m -> String.valueOf(m.user().shownAs())))
@@ -72,10 +73,9 @@ public class MembershipService implements MembersUseCase, InvitationsUseCase {
     public Member changeRole(UserId owner, BandId band, UserId member, Role role) {
         return transactions.computeInTransaction(() -> {
             owner(owner, band);
-            Membership theirs = memberships.of(member, band).orElseThrow(() -> new NotFoundException("No such member."));
-            if (theirs.role() == Role.OWNER && role != Role.OWNER) {
-                requireAnotherOwner(band, member);
-            }
+            BandMembers roster = heldRoster(band);
+            Membership theirs = roster.of(member).orElseThrow(() -> new NotFoundException("No such member."));
+            requireAnOwnerIn(roster.as(member, role));
             Membership changed = new Membership(member, band, role, theirs.displayName());
             memberships.save(changed);
             User user = users.byId(member).orElseThrow(() -> new NotFoundException("No such member."));
@@ -89,10 +89,9 @@ public class MembershipService implements MembersUseCase, InvitationsUseCase {
             if (!asker.equals(member)) {
                 owner(asker, band);
             }
-            Membership theirs = memberships.of(member, band).orElseThrow(() -> new NotFoundException("No such member."));
-            if (theirs.role() == Role.OWNER) {
-                requireAnotherOwner(band, member);
-            }
+            BandMembers roster = heldRoster(band);
+            roster.of(member).orElseThrow(() -> new NotFoundException("No such member."));
+            requireAnOwnerIn(roster.without(member));
             memberships.delete(member, band);
         });
     }
@@ -106,7 +105,7 @@ public class MembershipService implements MembersUseCase, InvitationsUseCase {
                         "That isn't an e-mail address.");
             }
             String address = Invitation.normalized(email);
-            boolean member = memberships.ofBand(band).stream()
+            boolean member = memberships.ofBand(band).members().stream()
                     .flatMap(m -> users.byId(m.user()).stream())
                     .anyMatch(u -> u.email() != null && Invitation.normalized(u.email()).equals(address));
             if (member) {
@@ -180,10 +179,18 @@ public class MembershipService implements MembersUseCase, InvitationsUseCase {
         return invitations.byTokenHash(hash(token)).orElseThrow(() -> new NotFoundException("No such invitation."));
     }
 
-    private void requireAnotherOwner(BandId band, UserId leaving) {
-        boolean another = memberships.ofBand(band).stream()
-                .anyMatch(m -> m.role() == Role.OWNER && !m.user().equals(leaving));
-        if (!another) {
+    /**
+     * The band's roster, held for the rest of the transaction first: whoever is about to change it
+     * decides on the roster nobody else is changing meanwhile.
+     */
+    private BandMembers heldRoster(BandId band) {
+        memberships.hold(band);
+        return memberships.ofBand(band);
+    }
+
+    /** The one rule, asked of the roster the change would leave behind. */
+    private static void requireAnOwnerIn(BandMembers afterwards) {
+        if (!afterwards.hasOwner()) {
             throw new UserFacingException(AccountsErrorCode.LAST_OWNER, Map.of(),
                     "A band needs an owner — make another member an owner first.");
         }

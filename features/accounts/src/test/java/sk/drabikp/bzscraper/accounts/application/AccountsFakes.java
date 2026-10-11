@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.accounts.application.port.out.PlatformAccountStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.UserStore;
 import sk.drabikp.bzscraper.accounts.domain.AuditEvent;
 import sk.drabikp.bzscraper.accounts.domain.Band;
+import sk.drabikp.bzscraper.accounts.domain.BandMembers;
 import sk.drabikp.bzscraper.accounts.domain.Invitation;
 import sk.drabikp.bzscraper.accounts.domain.Membership;
 import sk.drabikp.bzscraper.accounts.domain.PlatformAccount;
@@ -121,8 +122,13 @@ public final class AccountsFakes {
         }
 
         @Override
-        public List<Membership> ofBand(BandId band) {
-            return memberships.stream().filter(m -> m.band().equals(band)).toList();
+        public BandMembers ofBand(BandId band) {
+            return new BandMembers(band, memberships.stream().filter(m -> m.band().equals(band)).toList());
+        }
+
+        /** Nothing to hold: one list, one thread. The database's store does the real holding. */
+        @Override
+        public void hold(BandId band) {
         }
 
         @Override

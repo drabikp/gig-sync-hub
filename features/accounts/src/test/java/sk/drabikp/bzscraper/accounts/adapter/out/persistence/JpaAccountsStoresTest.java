@@ -45,7 +45,7 @@ class JpaAccountsStoresTest {
             assertThat(m.role()).isEqualTo(Role.OWNER);
             assertThat(m.displayName()).isEqualTo("Ann B.");
         });
-        assertThat(stores.ofBand(band.id())).hasSize(1);
+        assertThat(stores.ofBand(band.id()).members()).hasSize(1);
         assertThat(stores.of(user.id(), BandId.FIRST)).isEmpty();
     }
 

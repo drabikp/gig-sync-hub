@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.accounts.application.port.out.MembershipStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.UserStore;
 import sk.drabikp.bzscraper.accounts.domain.AuditEvent;
 import sk.drabikp.bzscraper.accounts.domain.Band;
+import sk.drabikp.bzscraper.accounts.domain.BandMembers;
 import sk.drabikp.bzscraper.accounts.domain.Invitation;
 import sk.drabikp.bzscraper.accounts.domain.Membership;
 import sk.drabikp.bzscraper.accounts.domain.User;
@@ -117,8 +118,19 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
     }
 
     @Override
-    public List<Membership> ofBand(BandId band) {
-        return memberships.findByBandId(band.value()).stream().map(mapper::toMembership).toList();
+    public BandMembers ofBand(BandId band) {
+        return new BandMembers(band,
+                memberships.findByBandId(band.value()).stream().map(mapper::toMembership).toList());
+    }
+
+    /**
+     * A write lock on the band's own row until the transaction ends — the roster has no row of its
+     * own to hold, and the band is what its members are the members OF.
+     */
+    @Override
+    @Transactional
+    public void hold(BandId band) {
+        bands.hold(band.value());
     }
 
     @Override

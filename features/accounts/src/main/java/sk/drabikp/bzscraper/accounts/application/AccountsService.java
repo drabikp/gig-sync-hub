@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.accounts.application.port.out.CurrentLogin;
 import sk.drabikp.bzscraper.accounts.application.port.out.MembershipStore;
 import sk.drabikp.bzscraper.accounts.application.port.out.UserStore;
 import sk.drabikp.bzscraper.accounts.domain.Band;
+import sk.drabikp.bzscraper.accounts.domain.BandMembers;
 import sk.drabikp.bzscraper.accounts.domain.Membership;
 import sk.drabikp.bzscraper.accounts.domain.Role;
 import sk.drabikp.bzscraper.accounts.domain.User;
@@ -79,8 +80,7 @@ public class AccountsService implements UsersUseCase, BandsUseCase, BandAccess, 
 
     /** The first band without an owner goes to its owner-to-be (or, with none named, to whoever is first). */
     private void claimFirstBand(User user) {
-        boolean ownerless = bands.byId(BandId.FIRST).isPresent() && memberships.ofBand(BandId.FIRST).stream()
-                .noneMatch(m -> m.role() == Role.OWNER);
+        boolean ownerless = bands.byId(BandId.FIRST).isPresent() && !memberships.ofBand(BandId.FIRST).hasOwner();
         boolean meant = firstOwnerEmail.isEmpty() || firstOwnerEmail.equalsIgnoreCase(user.email());
         if (ownerless && meant) {
             memberships.save(new Membership(user.id(), BandId.FIRST, Role.OWNER, null));
@@ -152,11 +152,11 @@ public class AccountsService implements UsersUseCase, BandsUseCase, BandAccess, 
         transactions.inTransaction(() -> {
             List<BandId> alone = new ArrayList<>();
             for (Membership mine : memberships.ofUser(user)) {
-                List<Membership> all = memberships.ofBand(mine.band());
-                if (all.size() == 1) {
+                memberships.hold(mine.band());                  // decide on a roster nobody else is changing
+                BandMembers roster = memberships.ofBand(mine.band());
+                if (roster.onlyMember(user)) {
                     alone.add(mine.band());
-                } else if (mine.role() == Role.OWNER
-                        && all.stream().noneMatch(m -> m.role() == Role.OWNER && !m.user().equals(user))) {
+                } else if (!roster.without(user).hasOwner()) {
                     String name = bands.byId(mine.band()).map(Band::name).orElse("");
                     throw new UserFacingException(AccountsErrorCode.LAST_OWNER, Map.of("band", name),
                             "You're the only owner of " + name + " — make another member an owner first.");
