@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Objects;
@@ -19,6 +21,7 @@ import java.util.Objects;
  * the store holds that ({@code unique (band_id, match_key)}), which is why a gig moved onto
  * another's day and venue is refused rather than merged.
  */
+@ValueObject
 public record GigMatch(LocalDate date, String venue) {
 
     public GigMatch {

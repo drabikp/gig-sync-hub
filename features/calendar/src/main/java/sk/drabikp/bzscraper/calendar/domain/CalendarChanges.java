@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.calendar.domain.CalendarChange.Field;
 import sk.drabikp.bzscraper.calendar.domain.CalendarChange.Type;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
@@ -21,6 +22,7 @@ import java.util.Set;
  * and one that came back RETURNED. Changes the user hasn't seen add up. The very first read
  * is the starting point: nothing on it is "new".
  */
+@ValueObject
 public final class CalendarChanges {
 
     private CalendarChanges() {

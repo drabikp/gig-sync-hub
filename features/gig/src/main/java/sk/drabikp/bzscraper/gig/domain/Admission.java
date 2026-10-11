@@ -1,10 +1,13 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 /**
  * Value object: how admission is priced. Invariant — PAID requires a non-blank
  * amount; FREE and VOLUNTARY carry no amount. Constructed only via the factories,
  * so an inconsistent admission (e.g. PAID with no price) cannot exist.
  */
+@ValueObject
 public record Admission(EntryType type, String amount) {
 
     public Admission {

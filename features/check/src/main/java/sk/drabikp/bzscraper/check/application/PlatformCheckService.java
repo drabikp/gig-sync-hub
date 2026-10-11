@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.check.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.catalog.application.port.in.GigWrites;
 import sk.drabikp.bzscraper.check.application.port.in.CheckPlatformsUseCase;
 import sk.drabikp.bzscraper.check.application.port.out.CheckResultStore;
@@ -40,6 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * is not read; one that can't be read is reported as such. One check at a time per band; each band's
  * latest result is kept ({@link CheckResultStore} — a restart doesn't forget it).
  */
+@Application
 public class PlatformCheckService implements CheckPlatformsUseCase {
 
     private final List<GigImporter> importers;

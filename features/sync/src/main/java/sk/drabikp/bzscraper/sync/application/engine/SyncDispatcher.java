@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.port.out.RowScope;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
@@ -24,6 +25,7 @@ import java.util.Set;
  * it RUNS, so whatever changed since it was queued is what reaches the platform. Failures
  * are retried or left for the user by {@link SyncRetryPolicy}.
  */
+@Application
 public class SyncDispatcher implements DispatchSyncUseCase {
 
     private final WorkflowEngine engine;

@@ -10,6 +10,10 @@ import java.util.Optional;
  * A gig as it exists on a platform, read for import: the platform's version of the gig
  * and the platform's id for it ({@code externalRef}), so importing can link the catalog
  * gig to that existing event instead of publishing a duplicate.
+ *
+ * <p>No jMolecules stereotype on purpose: A gig as a platform hands it over — it HOLDS an aggregate rather than being a value
+ * of one, which is what a read model does and what {@code valueObjectsMustNotReferToIdentifiables}
+ * rightly refuses to call a value object.
  */
 public record ImportedGig(Platform platform, Gig gig, String externalRef, Double latitude, Double longitude) {
 

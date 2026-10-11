@@ -1,10 +1,13 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
 
 /** What a sync task does to a gig's copy on one platform. */
+@ValueObject
 public enum SyncAction {
     PUBLISH,
     UPDATE,

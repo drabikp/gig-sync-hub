@@ -9,6 +9,10 @@ import java.util.List;
  * linked to {@code gig}, and {@code differences} lists what the calendar now says
  * differently about an upcoming gig. {@link State#SAME_DAY}: not linked, but the catalog
  * has {@code sameDay} gigs on the show's day. {@link State#MISSING}: nothing in the catalog.
+ *
+ * <p>No jMolecules stereotype on purpose: A calendar event held against the catalog — it HOLDS an aggregate rather than being a value
+ * of one, which is what a read model does and what {@code valueObjectsMustNotReferToIdentifiables}
+ * rightly refuses to call a value object.
  */
 public record CatalogMatch(State state, Gig gig, List<Gig> sameDay, List<Difference> differences) {
 

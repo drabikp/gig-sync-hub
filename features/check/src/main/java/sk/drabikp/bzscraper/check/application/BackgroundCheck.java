@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.check.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.check.application.port.in.CheckPlatformsUseCase;
 import sk.drabikp.bzscraper.check.application.port.in.StartPlatformCheckUseCase;
 import sk.drabikp.bzscraper.gig.application.port.out.RowScope;
@@ -11,6 +12,7 @@ import java.util.concurrent.Executor;
  * A check the user started: runs on the {@code executor} so the request doesn't wait for the
  * platforms; the check itself announces its start and end on the live updates.
  */
+@Application
 public class BackgroundCheck implements StartPlatformCheckUseCase {
 
     private static final System.Logger log = System.getLogger(BackgroundCheck.class.getName());

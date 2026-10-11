@@ -1,9 +1,12 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.Service;
+
 import java.text.Normalizer;
 import java.util.Locale;
 
 /** How names and texts from different sources are compared: lower case, no accents, single spaces. */
+@Service
 public final class TextFold {
 
     private TextFold() {

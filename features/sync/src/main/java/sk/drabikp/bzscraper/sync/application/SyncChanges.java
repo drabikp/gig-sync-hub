@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
@@ -8,6 +9,7 @@ import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
  * Passes "the sync changed" from the engine and the use cases on to the open pages. A gig's
  * platform state is part of the catalog's gigs too, so they are read again as well.
  */
+@Application
 public class SyncChanges implements SyncNotifier {
 
     private final LiveUpdates live;

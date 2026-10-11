@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -17,6 +18,7 @@ import java.util.Optional;
  * then the gig is created again; the new id is recorded when this is settled. The copy is
  * removed the first of the platform's ways that takes the gig.
  */
+@Application
 public final class RecreateStep implements SyncStep {
 
     private final List<SyncStep> removes;

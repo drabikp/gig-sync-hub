@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
@@ -13,6 +14,7 @@ import sk.drabikp.bzscraper.sync.domain.SyncTask;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Application
 public class SyncState implements SyncStateUseCase {
 
     private final SyncTaskQueries outbox;

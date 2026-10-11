@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.net.URI;
@@ -13,7 +15,8 @@ import java.util.Objects;
  * times without one are in. {@code webcal://} addresses (as calendars hand them out) are read over
  * {@code https://}.
  */
-public record BandCalendar(BandId band, String address, ZoneId zone) {
+@AggregateRoot
+public record BandCalendar(@Identity BandId band, String address, ZoneId zone) {
 
     public BandCalendar {
         Objects.requireNonNull(band, "the band");

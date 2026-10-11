@@ -1,10 +1,13 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 /**
  * A kind of work a sync workflow is made of — one way of doing (part of) an action on a
  * platform. Platforms contribute implementations of the step types they support; the
  * engine runs a run's steps in the workflow's order and skips the ones its platform lacks.
  */
+@ValueObject
 public enum StepType {
 
     /** Create many events in one go (e.g. one file upload, then publish). */

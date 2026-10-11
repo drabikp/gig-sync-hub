@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.importing.domain;
 
+import org.jmolecules.ddd.annotation.Service;
 import sk.drabikp.bzscraper.gig.domain.CityName;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
@@ -33,6 +34,7 @@ import java.util.Set;
  * A platform gig whose day and venue belong to a catalog gig already linked on that platform
  * is skipped (a duplicate there), as importing it would overwrite that gig.
  */
+@Service
 public final class ImportPlanner {
 
     private ImportPlanner() {

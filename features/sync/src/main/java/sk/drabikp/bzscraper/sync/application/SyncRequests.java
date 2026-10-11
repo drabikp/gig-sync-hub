@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -37,6 +38,7 @@ import java.util.function.Function;
  *       the platform copy.</li>
  * </ul>
  */
+@Application
 public class SyncRequests implements QueueSyncWork {
 
     private final SyncOutbox outbox;

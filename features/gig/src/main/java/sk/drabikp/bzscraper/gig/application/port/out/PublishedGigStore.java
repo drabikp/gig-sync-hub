@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.gig.application.port.out;
 
+import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
@@ -16,6 +17,7 @@ import java.util.Optional;
  * band, the {@link Platform} and the {@link GigId} — which the gig keeps however it is edited, so a
  * record never has to follow it anywhere.
  */
+@Repository
 public interface PublishedGigStore {
 
     boolean isPublished(BandId band, Platform platform, GigId gigId);

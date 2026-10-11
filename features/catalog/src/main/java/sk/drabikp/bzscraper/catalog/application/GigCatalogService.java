@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.catalog.application.port.in.CancelGigUseCase;
 import sk.drabikp.bzscraper.catalog.application.port.in.DeleteGigUseCase;
 import sk.drabikp.bzscraper.catalog.application.port.in.GigWrites;
@@ -42,6 +43,7 @@ import java.util.function.Supplier;
  * identity also re-keys its published records, its pending tasks and its calendar links.
  * Every change is announced on the live updates ({@link LiveUpdates.Topic#GIGS}).
  */
+@Application
 public class GigCatalogService
         implements SaveGigUseCase, ListGigsUseCase, DeleteGigUseCase, UpdateGigUseCase, CancelGigUseCase,
         ListPublicationsUseCase {

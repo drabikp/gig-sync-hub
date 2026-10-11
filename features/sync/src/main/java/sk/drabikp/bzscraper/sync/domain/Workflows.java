@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.Service;
+
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +12,7 @@ import java.util.Optional;
  * cheapest and sturdiest first (one bulk upload for many gigs before a form per gig). What
  * no step can do is left to the user.
  */
+@Service
 public final class Workflows {
 
     private static final Map<SyncAction, List<StepType>> STEPS = new EnumMap<>(Map.of(

@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.accounts.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.accounts.application.port.in.AccountsErrorCode;
 import sk.drabikp.bzscraper.accounts.application.port.in.BandAccess;
 import sk.drabikp.bzscraper.accounts.application.port.in.BandDirectory;
@@ -35,6 +36,7 @@ import java.util.UUID;
  * gets its first owner then: the user with {@code firstOwnerEmail}, or — when that isn't set —
  * the first one to sign in.
  */
+@Application
 public class AccountsService implements UsersUseCase, BandsUseCase, BandAccess, BandDirectory {
 
     /** The name and address migration V2 gave the first band, until it is named. */

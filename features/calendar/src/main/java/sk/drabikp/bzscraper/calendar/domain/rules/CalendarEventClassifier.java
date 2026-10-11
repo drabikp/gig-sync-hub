@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain.rules;
 
+import org.jmolecules.ddd.annotation.Service;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventStatus;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
  * The status (confirmed / tentative / cancelled) is decided separately, from the
  * calendar's own status and the profile's status rules.
  */
+@Service
 public final class CalendarEventClassifier {
 
     private static final Duration TRAVEL_ARRIVAL = Duration.ofHours(1);

@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -20,6 +21,7 @@ import java.util.Set;
  * batch — and records each platform's id for the gig. Idempotent: gigs already
  * published or being published there are left out.
  */
+@Application
 public class GigPublishingService implements PublishGigsUseCase {
 
     private final SyncRequests sync;

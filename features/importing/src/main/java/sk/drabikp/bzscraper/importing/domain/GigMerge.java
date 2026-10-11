@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.importing.domain;
 
+import org.jmolecules.ddd.annotation.Service;
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
@@ -20,6 +21,7 @@ import java.util.function.Function;
  * entry ({@code carriesAdmission}) when there is one. A gig cancelled in any version stays
  * cancelled.
  */
+@Service
 public final class GigMerge {
 
     private GigMerge() {

@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.places.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Coordinates;
 import sk.drabikp.bzscraper.gig.domain.Country;
@@ -11,6 +12,7 @@ import sk.drabikp.bzscraper.gig.domain.Location;
  * ("okres Přerov") and region tell them apart. {@code postalCode} may be null;
  * {@code coordinates} (the town's centre) is null for a town only typed.
  */
+@ValueObject
 public record Town(String name, String district, String region, String postalCode, Country country,
                    Coordinates coordinates) {
 

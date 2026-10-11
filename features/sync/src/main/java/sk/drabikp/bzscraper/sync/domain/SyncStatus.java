@@ -1,6 +1,9 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 /** Where a sync task is. */
+@ValueObject
 public enum SyncStatus {
     /** Waiting to run (first time, or for its next retry). */
     PENDING,

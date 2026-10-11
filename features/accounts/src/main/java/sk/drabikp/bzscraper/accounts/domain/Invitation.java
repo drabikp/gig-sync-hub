@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.accounts.domain;
 
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Instant;
@@ -12,7 +14,8 @@ import java.util.regex.Pattern;
  * An owner's invitation into a band: for one e-mail address, as a {@link Role}, until {@code expiresAt}.
  * Whoever signs in with that address and opens the link becomes a member — once ({@code acceptedAt}).
  */
-public record Invitation(UUID id, BandId band, String email, Role role, UserId invitedBy, Instant createdAt,
+@AggregateRoot
+public record Invitation(@Identity UUID id, BandId band, String email, Role role, UserId invitedBy, Instant createdAt,
                          Instant expiresAt, Instant acceptedAt) {
 
     private static final Pattern EMAIL = Pattern.compile("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");

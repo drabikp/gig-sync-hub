@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.places.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.places.application.port.in.FindPlacesUseCase;
 import sk.drabikp.bzscraper.places.application.port.out.PlaceSearch;
@@ -14,6 +15,7 @@ import java.util.Optional;
  * Only towns the search knows fully (district and coordinates: {@link Town#resolved()}) — what
  * tells same-named towns apart for the platforms.
  */
+@Application
 public class PlaceService implements FindPlacesUseCase {
 
     private final PlaceSearch placeSearch;

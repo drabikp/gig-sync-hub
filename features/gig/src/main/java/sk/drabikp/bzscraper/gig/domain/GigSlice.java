@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.List;
 
 /**
@@ -8,6 +10,7 @@ import java.util.List;
  *
  * <p>{@code next} is null when the rows ran out — the band has reached the end of what it asked for.
  */
+@ValueObject
 public record GigSlice(List<GigRow> rows, GigCursor next, long total) {
 
     public GigSlice {

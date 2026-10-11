@@ -420,6 +420,27 @@ a different type in seven contexts on purpose, and where the boundaries delibera
 the invariants (a band as a tenant rather than an aggregate root). What
 `ArchitectureTest` and `PlatformNamesTest` enforce is that page, in executable form.
 
+**The model says what it is (jMolecules).** Every domain type carries the concept it stands for —
+`@AggregateRoot` with its `@Identity` (`Gig`, `Band`, `BandMembers`, `User`, `Invitation`,
+`PlatformAccount`, `Publication`, `SyncTask`, `BandCalendar`, `KnownCalendarEvent`), `@Entity`
+(`Membership`, the roster's), `@ValueObject` (the rest of the model), `@Service` (the pure policies:
+`Reconciler`, `ImportPlanner`, `GigMerge`, `SamePlace`, `CalendarEventClassifier`, …) — and the ports
+that keep an aggregate say `@Repository`. The layers say it too: `@PrimaryPort` on each
+`application.port.in`, `@SecondaryPort` on each `.port.out`, `@PrimaryAdapter` / `@SecondaryAdapter`
+on the `adapter.in.*` / `adapter.out.*` packages (`package-info.java`), `@Application` on the
+services themselves — on the classes and not on the package, because a feature's ports live INSIDE
+its application package and are not application code. These are annotation-only jars (no runtime),
+which is why `ArchitectureTest`'s "the domain knows only the JDK and domain code" admits
+`org.jmolecules.ddd.annotation..` and nothing else new. `JMoleculesModelTest` (app) runs jMolecules'
+own ArchUnit rules over all of it: an entity belongs to one aggregate, aggregates name each other by
+identity, everything with a lifecycle declares what identifies it, and a value object holds values.
+Three types carry no stereotype on purpose and say so in their javadoc — `CatalogMatch`,
+`ImportProposal`, `ImportedGig` are read models: they HOLD an aggregate so a person can decide about
+it, which is not what a value object is. `ensureHexagonal()` is named in that test but not run, with
+its one finding written down: `SecretBox` would be a secondary port in a strict hexagon (the
+persistence needs it to keep a secret; nobody asks the app to seal anything), and it sits among the
+use cases here because another feature CALLS it.
+
 Hexagonal inside every feature module (ports & adapters), see **Structure** above. **The core is
 platform-agnostic**: no feature names a platform or branches on one. A `Platform` is a value (an
 id string); what a platform IS comes from its module — a `PlatformTraits` bean (display name,
@@ -902,6 +923,8 @@ start; skipped when the database has data; every row becomes band #1's. H2 stays
 - Docker: the Temurin 21 JRE (nothing else — no browser is installed); Testcontainers 2 for the tests
 - OpenAPI: openapi-generator 7.26 (`spring`, Spring Boot 4 + Jackson 3); openapi-typescript 7 + openapi-fetch
 - MapStruct 1.6.3 (every mapper: API ↔ domain and JPA entity ↔ domain)
+- jMolecules (BOM 2025.0.2: `jmolecules-ddd` + `jmolecules-hexagonal-architecture` in every module,
+  `jmolecules-archunit` in the app's tests) — annotations with no runtime that say what each type is
 - The page: React 19 + TypeScript, Vite 6, Mantine 8, TanStack Query 5, React Router 7, i18next,
   vite-plugin-pwa, Mantine dates (+ dayjs); built by Maven (frontend-maven-plugin, Node 22 fetched into web/frontend/node)
 - JSoup 1.22.1 (HTML scraping)
@@ -910,7 +933,8 @@ start; skipped when the database has data; every row becomes band #1's. H2 stays
 
 ## Testing
 
-`ApiSecurityTest` (app, MockMvc, signed in with Spring Security's `oidcLogin()` — `SignedIn`; the
+`JMoleculesModelTest` (app): jMolecules' own ArchUnit rules over the annotated model — see
+**Architecture**. `ApiSecurityTest` (app, MockMvc, signed in with Spring Security's `oidcLogin()` — `SignedIn`; the
 test properties' `first-owner-email` makes `owner@band.test` band #1's owner): the API is 401 until
 signed in, band #1 is its owner's and 404 for anyone else, signing in goes to Rauthy with PKCE,
 signing out names Rauthy's end-session address, changes need the CSRF token, a refusal is a 409 with

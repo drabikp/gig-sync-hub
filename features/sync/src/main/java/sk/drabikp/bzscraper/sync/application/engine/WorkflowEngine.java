@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.application.port.in.PauseSyncUseCase;
@@ -34,6 +35,7 @@ import java.util.Optional;
  *       paused or held back, no further batch starts.</li>
  * </ul>
  */
+@Application
 public class WorkflowEngine {
 
     static final int SINGLE_PER_PASS = 10;

@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.Set;
 
 /**
@@ -15,6 +17,7 @@ import java.util.Set;
  * what it asked for). Which way round depends on which side is ENUMERABLE: the gigs a platform failed
  * on are few and name themselves; the gigs missing from a platform are "all but these".
  */
+@ValueObject
 public record GigQuery(Period period, String text, Set<GigId> onlyIds, Set<GigId> exceptIds, Boolean cancelled,
                        GigCursor after, int size) {
 

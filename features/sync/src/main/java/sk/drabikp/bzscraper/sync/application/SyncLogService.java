@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.NotFoundException;
 import sk.drabikp.bzscraper.gig.application.UserFacingException;
 import sk.drabikp.bzscraper.gig.domain.BandId;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /** The sync log for the user: reading it, and retrying or discarding what the worker gave up on. */
+@Application
 public class SyncLogService implements SyncLogUseCase {
 
     /** How many of the latest tasks "all" shows. */

@@ -1,10 +1,12 @@
 package sk.drabikp.bzscraper.accounts.application.port.out;
 
+import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.bzscraper.accounts.domain.User;
 import sk.drabikp.bzscraper.accounts.domain.UserId;
 
 import java.util.Optional;
 
+@Repository
 public interface UserStore {
 
     Optional<User> bySubject(String subject);

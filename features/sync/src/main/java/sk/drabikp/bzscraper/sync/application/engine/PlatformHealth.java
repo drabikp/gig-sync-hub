@@ -1,11 +1,13 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.sync.domain.Lane;
 
 /**
  * How each band's account on each platform has been answering lately — the engine reports, and skips
  * the lanes held back (a band's account, or a whole platform that seems down for everyone).
  */
+@Application
 public interface PlatformHealth {
 
     /** The lane's work is held back right now (its own breaker, or its platform's). */

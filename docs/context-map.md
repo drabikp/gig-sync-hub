@@ -89,6 +89,26 @@ Honest notes, so they are decisions and not surprises:
 - **A band's roster IS an aggregate** (`BandMembers`), because its rule — a band keeps an owner —
   spans all of it; the store holds the band's row while a change decides.
 
+## The same page, in the code itself
+
+Since 2026-10 the types carry their own concept (jMolecules): `@AggregateRoot` + `@Identity`,
+`@Entity`, `@ValueObject`, `@Service`, `@Repository` on the model, and `@PrimaryPort` /
+`@SecondaryPort` / `@PrimaryAdapter` / `@SecondaryAdapter` / `@Application` on the layers. So this
+map is no longer only prose: `JMoleculesModelTest` holds the model to what it claims. Two things it
+made explicit, both worth keeping in view:
+
+- **Read models are not value objects.** `CatalogMatch`, `ImportProposal` and `ImportedGig` hold an
+  aggregate (a `Gig`) so that a person can decide about it. jMolecules refuses to call that a value
+  object and is right to, so those three carry no stereotype and say why in their javadoc. The same
+  is true of the ones that hold aggregates in collections (`OpenWork`, `QueueResult`,
+  `PlatformState`, `CalendarRow`): a view assembled for a decision is its own kind of thing.
+- **`SecretBox` is a port in two minds.** jMolecules' hexagonal rules report it at every depth: two
+  secondary adapters (the platform-account and band-calendar stores) use a port that lives among the
+  use cases. In a strict hexagon a secret box is a secondary port — the persistence needs it to keep
+  a secret, nobody asks the app to seal anything. It is in `port.in` because this repo's rule is
+  "`port.in` to call, `port.out` to implement" and another feature calls it. The rule is named in
+  the test with this finding rather than switched off quietly.
+
 ## What the tests already enforce
 
 `ArchitectureTest` (ArchUnit) is the executable half of this page: the domain depends only on the

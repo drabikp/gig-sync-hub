@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
 
 import java.time.Instant;
@@ -12,6 +13,7 @@ import java.util.Set;
  * what the rules said before the change, when the change made them say something else
  * ("was not sure, now a gig"), else null.
  */
+@ValueObject
 public record CalendarChange(Type type, Set<Field> fields, CalendarEventKind suggestedBefore, Instant at) {
 
     public enum Type { NEW, CHANGED, REMOVED, RETURNED }

@@ -17,6 +17,10 @@ import java.util.Locale;
  * <p>Copies are grouped automatically when their identity matches (same date and venue).
  * A {@code suggested} proposal was grouped only on date and city because the venue is
  * written differently — the user confirms it, otherwise each copy is imported on its own.
+ *
+ * <p>No jMolecules stereotype on purpose: One gig an import would bring in or link — it HOLDS an aggregate rather than being a value
+ * of one, which is what a read model does and what {@code valueObjectsMustNotReferToIdentifiables}
+ * rightly refuses to call a value object.
  */
 public record ImportProposal(Gig local, List<ImportedGig> copies, boolean suggested) {
 

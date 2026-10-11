@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.accounts.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.accounts.application.port.in.AccountsErrorCode;
 import sk.drabikp.bzscraper.accounts.application.port.in.BandAccess;
 import sk.drabikp.bzscraper.accounts.application.port.in.PlatformAccountsUseCase;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
  * anything else is refused ({@link AccountForm}). Owners connect and disconnect; any member may test the
  * sign-in.
  */
+@Application
 public class PlatformAccountService implements PlatformAccountsUseCase {
 
     private final PlatformAccountStore store;

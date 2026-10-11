@@ -1,6 +1,9 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 /** Value object: a point on the map (degrees). */
+@ValueObject
 public record Coordinates(double latitude, double longitude) {
 
     private static final double EARTH_RADIUS_KM = 6371.0;

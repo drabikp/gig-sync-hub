@@ -1,11 +1,14 @@
 package sk.drabikp.bzscraper.accounts.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.Instant;
 import java.util.Objects;
 
 /**
  * What the last test of a band's platform account said: it signed in ({@code ok}) or why not, and when.
  */
+@ValueObject
 public record AccountCheck(boolean ok, String message, Instant at) {
 
     public AccountCheck {

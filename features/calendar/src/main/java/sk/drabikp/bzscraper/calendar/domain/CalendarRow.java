@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
 import sk.drabikp.bzscraper.calendar.domain.rules.CalendarClassification;
@@ -9,6 +10,7 @@ import sk.drabikp.bzscraper.calendar.domain.rules.CalendarClassification;
  * gig, where it stands against the catalog, and what changed since the user last looked
  * ({@code change}, null when nothing). {@code removed}: gone from the calendar.
  */
+@ValueObject
 public record CalendarRow(CalendarClassification classification, CalendarGigDraft draft, CatalogMatch match,
                           CalendarChange change, boolean removed) {
 

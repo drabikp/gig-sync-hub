@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.importing.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
 import java.util.Collections;
@@ -15,6 +16,7 @@ import java.util.TreeMap;
  * @param skipped       platform gigs left out, each with the reason
  * @param failures      platforms that could not be read, with the reason
  */
+@ValueObject
 public record ImportPlan(List<ImportProposal> proposals, int alreadyLinked, List<String> skipped,
                          Map<Platform, String> failures) {
 

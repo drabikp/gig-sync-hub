@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.Objects;
 import java.util.UUID;
 
@@ -8,6 +10,7 @@ import java.util.UUID;
  * setting is one band's, and everything that reads or writes them names the band. A UUID: it never
  * changes (the band's slug, for addresses, may).
  */
+@ValueObject
 public record BandId(UUID value) {
 
     /**

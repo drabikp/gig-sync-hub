@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.accounts.domain;
 
+import org.jmolecules.ddd.annotation.Entity;
+import org.jmolecules.ddd.annotation.Identity;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.util.Objects;
@@ -8,7 +10,8 @@ import java.util.Objects;
  * Someone managing a band, as what — the "persona": one per user and band. {@code displayName}
  * (optional) is how they appear in that band.
  */
-public record Membership(UserId user, BandId band, Role role, String displayName) {
+@Entity
+public record Membership(@Identity UserId user, @Identity BandId band, Role role, String displayName) {
 
     public Membership {
         Objects.requireNonNull(user, "the member");

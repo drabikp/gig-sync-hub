@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.Service;
+
 import java.util.OptionalDouble;
 
 /**
@@ -14,6 +16,7 @@ import java.util.OptionalDouble;
  * from text, which adds a note to the task. Each had its own copy of the number before, under its
  * own name.
  */
+@Service
 public final class SamePlace {
 
     /** How far from its town a gig may be placed and still be in it. */

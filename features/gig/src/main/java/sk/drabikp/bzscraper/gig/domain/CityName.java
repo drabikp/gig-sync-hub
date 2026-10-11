@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.Service;
+
 import java.util.Map;
 
 /**
@@ -8,6 +10,7 @@ import java.util.Map;
  * Accents, case, spacing and a trailing district number are ignored, and the English names
  * of Czech and Slovak cities count as the local ones.
  */
+@Service
 public final class CityName {
 
     private static final Map<String, String> ENGLISH_NAMES = Map.of(

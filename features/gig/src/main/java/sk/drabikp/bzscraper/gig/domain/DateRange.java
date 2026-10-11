@@ -1,7 +1,10 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.LocalDate;
 
+@ValueObject
 public record DateRange(LocalDate start, LocalDate end) {
     public DateRange {
         if (start == null || end == null) {

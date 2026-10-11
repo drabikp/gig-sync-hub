@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -13,6 +15,7 @@ import java.util.List;
  * {@link Gig}. {@link #problems()} names what is missing or doesn't fit; {@link #toGig()} builds
  * the gig.
  */
+@ValueObject
 public record GigDraft(String title, When when, Where where, About about, boolean cancelled) {
 
     /**

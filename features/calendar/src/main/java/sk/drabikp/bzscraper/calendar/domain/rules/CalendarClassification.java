@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain.rules;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventStatus;
@@ -12,6 +13,7 @@ import java.util.List;
  * ({@code decidedByUser}), otherwise the suggestion. {@code reasons} are the rules that
  * matched, with the weight each added to {@code score}.
  */
+@ValueObject
 public record CalendarClassification(CalendarEvent event, CalendarEventKind kind, CalendarEventKind suggested,
                                      boolean decidedByUser, CalendarEventStatus status, int score,
                                      List<Reason> reasons) {

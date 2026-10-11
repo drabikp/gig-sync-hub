@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.Objects;
 import java.util.UUID;
 
@@ -17,6 +19,7 @@ import java.util.UUID;
  * <p>Nothing reads a part of it: {@link #key()} is how stored rows name a gig, {@link #token()}
  * how addresses do, and both are the plain text of the id.
  */
+@ValueObject
 public record GigId(UUID value) {
 
     public GigId {

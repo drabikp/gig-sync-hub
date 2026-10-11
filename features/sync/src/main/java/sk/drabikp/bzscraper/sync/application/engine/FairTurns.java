@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.sync.domain.Lane;
 import sk.drabikp.bzscraper.sync.domain.SyncTask;
@@ -16,6 +17,7 @@ import java.util.function.Predicate;
  * tasks doesn't keep the others waiting; within a band its oldest due task goes first. A lane (a band's
  * work on a platform) is run by one worker at a time — its runs are claimed until released.
  */
+@Application
 public final class FairTurns {
 
     private final Set<Lane> running = new HashSet<>();

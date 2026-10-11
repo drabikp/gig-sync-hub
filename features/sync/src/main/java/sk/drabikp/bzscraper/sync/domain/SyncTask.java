@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
@@ -16,7 +18,8 @@ import java.util.Comparator;
  * {@code message} is the latest outcome or error. {@code step} is where a workflow run
  * stands (null: not started — it waits at its workflow's first step).
  */
-public record SyncTask(long id, BandId band, GigId gigId, String gigLabel, Platform platform, SyncAction action,
+@AggregateRoot
+public record SyncTask(@Identity long id, BandId band, GigId gigId, String gigLabel, Platform platform, SyncAction action,
                        SyncStatus status, int attempts, Instant createdAt, Instant nextAttemptAt,
                        Instant updatedAt, String message, StepType step) {
 

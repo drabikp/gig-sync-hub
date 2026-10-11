@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.importing.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.catalog.application.port.in.GigWrites;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
@@ -35,6 +36,7 @@ import java.util.TreeMap;
  * gig ({@link GigMerge}) and recording each platform copy's id against it — in one
  * transaction. A new importable platform is one more {@code GigImporter} bean.
  */
+@Application
 public class GigImportService implements ImportGigsUseCase {
 
     private final Map<Platform, GigImporter> importers = new TreeMap<>();

@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.accounts.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.accounts.application.port.in.AccountsErrorCode;
 import sk.drabikp.bzscraper.accounts.application.port.in.BandsUseCase.MyBand;
 import sk.drabikp.bzscraper.accounts.application.port.in.InvitationsUseCase;
@@ -39,6 +40,7 @@ import java.util.UUID;
  * may leave; a band always keeps an owner. An invitation's link carries a random token (256 bits) — only its
  * SHA-256 is kept, so the database alone can't be used to join a band.
  */
+@Application
 public class MembershipService implements MembersUseCase, InvitationsUseCase {
 
     private final UserStore users;

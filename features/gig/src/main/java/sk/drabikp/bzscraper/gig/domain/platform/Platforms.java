@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.gig.domain.platform;
 
+import org.jmolecules.ddd.annotation.Service;
 import sk.drabikp.bzscraper.gig.domain.UnknownReferenceException;
 
 import java.util.Collection;
@@ -14,6 +15,7 @@ import java.util.Optional;
  * import-precedence order. A platform the database mentions but no adapter provides anymore
  * still has a name (its id) and plain traits.
  */
+@Service
 public final class Platforms {
 
     private final Map<Platform, PlatformTraits> traits = new LinkedHashMap<>();

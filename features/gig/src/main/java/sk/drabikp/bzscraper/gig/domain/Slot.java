@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.ZonedDateTime;
 
 /**
@@ -7,6 +9,7 @@ import java.time.ZonedDateTime;
  * days, a club night with several bands). {@code end} is optional and, when present, not
  * before {@code start}.
  */
+@ValueObject
 public record Slot(ZonedDateTime start, ZonedDateTime end) {
 
     public Slot {

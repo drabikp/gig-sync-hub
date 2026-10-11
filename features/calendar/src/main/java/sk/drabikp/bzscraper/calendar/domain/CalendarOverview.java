@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
  * its events latest first, the summary's counts, the events link-same-day takes
  * ({@code linkable}, by event id) and the views ({@link CalendarFilter}) each event is in.
  */
+@ValueObject
 public record CalendarOverview(Instant lastRead, List<CalendarRow> rows, CalendarFilter.Counts counts,
                                Set<String> linkable, Map<String, List<CalendarFilter>> filters) {
 

@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
@@ -25,6 +26,7 @@ import java.util.stream.Stream;
  * "remove and create again" gets one built from its remove and create steps ({@link Recreator},
  * {@link RecreateStep}).
  */
+@Application
 public class StepRegistry implements SyncAdmission {
 
     /** Builds a platform's "remove and create again" from its remove steps (in order) and its create step. */

@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain.platform;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.regex.Pattern;
 
 /**
@@ -7,6 +9,7 @@ import java.util.regex.Pattern;
  * platform by name: what one is and can do comes from its adapter ({@link PlatformTraits}
  * in {@link Platforms}, and the sync steps it provides). The id is what the database keeps.
  */
+@ValueObject
 public record Platform(String id) implements Comparable<Platform> {
 
     private static final Pattern ID = Pattern.compile("[A-Z][A-Z0-9_]*");

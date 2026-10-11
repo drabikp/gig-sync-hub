@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.Service;
 import sk.drabikp.bzscraper.calendar.domain.CatalogMatch.Difference;
 import sk.drabikp.bzscraper.calendar.domain.CatalogMatch.Kind;
 import sk.drabikp.bzscraper.calendar.domain.CatalogMatch.State;
@@ -27,6 +28,7 @@ import java.util.Map;
  * time as its slot. An unlinked event is matched to the catalog's gigs on the show's day
  * (any day of a multi-day event), for the user to link.
  */
+@Service
 public final class CalendarCatalogMatcher {
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.ENGLISH);

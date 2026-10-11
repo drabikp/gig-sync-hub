@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.Service;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventStatus;
 
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
  * upcoming gigs not in the catalog (unless cancelled), and upcoming events the rules couldn't
  * sort. "Recent" is the last {@value #RECENT_DAYS} days.
  */
+@Service
 public enum CalendarFilter {
 
     NEEDS_A_LOOK, MISSING, NOT_SURE, GIGS, NOT_GIGS, DECIDED, ALL;

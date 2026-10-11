@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -12,6 +14,7 @@ import java.util.Base64;
  *
  * <p>It travels as one opaque string, because what it holds is the store's business.
  */
+@ValueObject
 public record GigCursor(LocalDateTime showAt, GigId id) {
 
     public GigCursor {

@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.accounts.application.port.out;
 
+import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.bzscraper.accounts.domain.BandMembers;
 import sk.drabikp.bzscraper.accounts.domain.Membership;
 import sk.drabikp.bzscraper.accounts.domain.UserId;
@@ -8,6 +9,7 @@ import sk.drabikp.bzscraper.gig.domain.BandId;
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface MembershipStore {
 
     Optional<Membership> of(UserId user, BandId band);

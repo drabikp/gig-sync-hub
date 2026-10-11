@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.accounts.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.accounts.application.port.in.PlatformAccounts;
 import sk.drabikp.bzscraper.accounts.application.port.in.SecretBox;
 import sk.drabikp.bzscraper.accounts.application.port.out.PlatformAccountStore;
@@ -16,6 +17,7 @@ import java.util.Optional;
  * (band #1's, from before each band connected its own) saved once ({@link #adopt}). Keys rotate here too:
  * {@link #reseal} seals again what an older key sealed.
  */
+@Application
 public class PlatformAccountDirectory implements PlatformAccounts {
 
     private final PlatformAccountStore store;

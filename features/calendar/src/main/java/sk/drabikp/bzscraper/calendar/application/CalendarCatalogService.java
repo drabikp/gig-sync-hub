@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.calendar.application.port.in.CalendarCatalogUseCase;
 import sk.drabikp.bzscraper.calendar.application.port.in.ReviewCalendarUseCase;
 import sk.drabikp.bzscraper.calendar.application.port.out.CalendarLinkStore;
@@ -19,6 +20,7 @@ import java.util.List;
  * an event goes through the catalog's write path ({@link GigWrites}, so its rules hold), and the
  * event is linked to it; or an event is linked to the gig already there. Never writes the calendar.
  */
+@Application
 public class CalendarCatalogService implements CalendarCatalogUseCase {
 
     private final ReviewCalendarUseCase review;

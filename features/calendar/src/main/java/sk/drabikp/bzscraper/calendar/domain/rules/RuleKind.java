@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.calendar.domain.rules;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 /**
  * The kinds of rule a band profile is made of. The code knows only these kinds; which
  * words, labels and weights a band uses is data ({@link ProfileRule}). Text values may
@@ -8,6 +10,7 @@ package sk.drabikp.bzscraper.calendar.domain.rules;
  * <p>Weighted kinds add their weight to an event's score when they match. Role kinds have
  * no weight: they mark travel events or decide a gig's status.
  */
+@ValueObject
 public enum RuleKind {
 
     /** The title (ignoring leading punctuation) starts with one of the words. */

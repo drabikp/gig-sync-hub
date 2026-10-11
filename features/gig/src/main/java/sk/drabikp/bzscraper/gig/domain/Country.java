@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.Map;
 import java.util.Optional;
 
@@ -8,6 +10,7 @@ import java.util.Optional;
  * name and an IANA timezone, both required by the BIT CSV import. Scoped to the
  * band's actual markets; extend as needed.
  */
+@ValueObject
 public enum Country {
     CZECHIA("Czechia", "Europe/Prague"),
     SLOVAKIA("Slovakia", "Europe/Bratislava");

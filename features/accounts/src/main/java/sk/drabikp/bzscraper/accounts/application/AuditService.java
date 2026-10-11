@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.accounts.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.accounts.application.port.in.AccountsErrorCode;
 import sk.drabikp.bzscraper.accounts.application.port.in.AuditUseCase;
 import sk.drabikp.bzscraper.accounts.application.port.out.AuditStore;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /** The bands' audit logs: every change made through the API, read by the band's owners. */
+@Application
 public class AuditService implements AuditUseCase {
 
     private final AuditStore store;

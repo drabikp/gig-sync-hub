@@ -1,12 +1,16 @@
 package sk.drabikp.bzscraper.accounts.domain;
 
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
+
 import java.util.Objects;
 
 /**
  * Someone who signed in: who Rauthy says they are ({@code subject}, Rauthy's id for the login), with
  * the e-mail and name it gave. Made at the first sign-in.
  */
-public record User(UserId id, String subject, String email, String displayName) {
+@AggregateRoot
+public record User(@Identity UserId id, String subject, String email, String displayName) {
 
     public User {
         Objects.requireNonNull(id, "a user's id");

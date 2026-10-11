@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.catalog.application.port.in.ExportGigsUseCase;
 import sk.drabikp.bzscraper.catalog.application.port.out.GigExporter;
 import sk.drabikp.bzscraper.gig.application.BadRequestException;
@@ -12,6 +13,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /** Exports the whole catalog through the platform's {@link GigExporter}. */
+@Application
 public class GigExportService implements ExportGigsUseCase {
 
     private final GigRepository gigRepository;

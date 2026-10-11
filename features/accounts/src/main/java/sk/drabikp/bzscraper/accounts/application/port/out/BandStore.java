@@ -1,11 +1,13 @@
 package sk.drabikp.bzscraper.accounts.application.port.out;
 
+import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.bzscraper.accounts.domain.Band;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface BandStore {
 
     Optional<Band> byId(BandId id);

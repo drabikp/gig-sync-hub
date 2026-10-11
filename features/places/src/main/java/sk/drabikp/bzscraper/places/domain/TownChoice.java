@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.places.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.TextFold;
 
@@ -13,6 +14,7 @@ import java.util.Optional;
  * cities have many codes). Exactly one fit or nothing: guessing put gigs in the wrong town
  * before (Hranice near Cheb instead of Hranice na Moravě).
  */
+@ValueObject
 public final class TownChoice {
 
     private TownChoice() {

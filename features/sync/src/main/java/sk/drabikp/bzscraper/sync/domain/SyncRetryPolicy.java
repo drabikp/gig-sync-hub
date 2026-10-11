@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.Service;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -12,6 +14,7 @@ import java.util.Optional;
  * failure may have created the event anyway, and a retry would duplicate it. A failure
  * that can't go away by waiting ({@code permanent}, e.g. "not supported") isn't retried.
  */
+@Service
 public final class SyncRetryPolicy {
 
     private static final List<Duration> BACKOFF = List.of(

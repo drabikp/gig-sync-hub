@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.port.out;
 
+import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
@@ -17,6 +18,7 @@ import java.util.Set;
  * it needs commit (or roll back) together. Every state change is logged. Who only reads it
  * uses {@link SyncTaskQueries}.
  */
+@Repository
 public interface SyncOutbox extends SyncTaskQueries {
 
     /** Adds a PENDING task, due now. */

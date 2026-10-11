@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.importing.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.BadRequestException;
 import sk.drabikp.bzscraper.gig.application.UserFacingException;
 import sk.drabikp.bzscraper.gig.application.port.out.LiveUpdates;
@@ -29,6 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * read runs on the {@code executor}, its start and end are announced ({@link LiveUpdates.Topic#IMPORT}),
  * and so is the import itself (and the catalog it changed).
  */
+@Application
 public class ImportSession implements ImportSessionUseCase {
 
     private static final System.Logger log = System.getLogger(ImportSession.class.getName());

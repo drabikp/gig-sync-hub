@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.sync.application.port.in.PauseSyncUseCase;
 import sk.drabikp.bzscraper.sync.application.port.out.SettingsStore;
@@ -13,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Each band's pause switch: read by the dispatcher and the engine before each piece of work. It
  * survives a restart — paused stays paused until the band's user resumes.
  */
+@Application
 public class SyncPause implements PauseSyncUseCase {
 
     static final String SETTING = "sync.paused";

@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 
 import java.util.Optional;
@@ -9,6 +10,7 @@ import java.util.Optional;
  * gig as it is then: a publish of a gig deleted, cancelled or already published meanwhile,
  * an update of a gig that is gone or not on the platform, … ends done with the reason.
  */
+@ValueObject
 public final class MootWork {
 
     private MootWork() {

@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.BandId;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 /** Queues an update of every platform copy of the gigs, to their current catalog details. */
+@Application
 public class GigResyncService implements ResyncGigUseCase {
 
     private final GigRepository gigRepository;

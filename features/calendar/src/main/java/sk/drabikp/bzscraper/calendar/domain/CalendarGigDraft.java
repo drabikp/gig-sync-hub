@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.Country;
 
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import java.time.LocalTime;
  * apart). {@code eventStart} is the event's own start time (usually the arrival), null
  * for all-day events.
  */
+@ValueObject
 public record CalendarGigDraft(String eventId, String title, LocalDate date, LocalTime showTime,
                                String venue, String city, Country country, String street, String postalCode,
                                LocalTime eventStart) {

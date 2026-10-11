@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.Service;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
 import sk.drabikp.bzscraper.calendar.domain.rules.BandProfile;
 import sk.drabikp.bzscraper.calendar.domain.rules.NotesLabels;
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
  *       {@code City}. Coordinates, plus codes and map links say nothing.</li>
  * </ul>
  */
+@Service
 public final class CalendarGigDrafter {
 
     private static final LocalTime EARLY_MORNING = LocalTime.of(6, 0);

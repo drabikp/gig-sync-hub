@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.accounts.domain;
 
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.util.ArrayList;
@@ -20,7 +22,8 @@ import java.util.Optional;
  * first ({@code MembershipStore.hold}) — otherwise two owners leaving at the same moment each see
  * the other.
  */
-public record BandMembers(BandId band, List<Membership> members) {
+@AggregateRoot
+public record BandMembers(@Identity BandId band, List<Membership> members) {
 
     public BandMembers {
         Objects.requireNonNull(band, "the band");

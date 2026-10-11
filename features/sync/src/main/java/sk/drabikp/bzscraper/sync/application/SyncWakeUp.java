@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.sync.application.port.in.SyncWorkSignal;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncTrigger;
 
@@ -11,6 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * the work (the sync worker) listens. Being its own object keeps the worker out of the
  * services' wiring (no cycle).
  */
+@Application
 public class SyncWakeUp implements SyncTrigger, SyncWorkSignal {
 
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();

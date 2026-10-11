@@ -1,5 +1,8 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
+
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
@@ -19,8 +22,9 @@ import java.util.stream.Stream;
  * new instance, with the same identity. Descriptive attributes (description, links, poster) are
  * optional and nullable.
  */
+@AggregateRoot
 public record Gig(
-        GigId id,
+        @Identity GigId id,
         String title,
         GigSchedule schedule,
         Location location,

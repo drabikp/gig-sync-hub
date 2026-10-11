@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.accounts.domain;
 
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.util.Objects;
@@ -11,7 +13,8 @@ import java.util.regex.Pattern;
  * dashes, 2–64 of them; {@code publicList}: its gigs are listed at the public address (off unless the
  * band says so).
  */
-public record Band(BandId id, String slug, String name, boolean publicList) {
+@AggregateRoot
+public record Band(@Identity BandId id, String slug, String name, boolean publicList) {
 
     private static final Pattern SLUG = Pattern.compile("[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])");
 

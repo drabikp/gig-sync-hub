@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.calendar.application.port.in.ReviewCalendarUseCase;
 import sk.drabikp.bzscraper.calendar.application.port.out.BandProfileStore;
 import sk.drabikp.bzscraper.calendar.application.port.out.CalendarDecisionStore;
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
  * ({@link CalendarCatalogMatcher}) and pre-fills a gig form from it ({@link CalendarGigDrafter});
  * bringing gigs into the catalog is {@link CalendarCatalogService}'s. Never writes the calendar.
  */
+@Application
 public class CalendarReviewService implements ReviewCalendarUseCase {
 
     private final CalendarFeed feed;

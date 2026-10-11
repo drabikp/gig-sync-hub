@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.check.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
@@ -12,6 +13,7 @@ import java.util.List;
  *
  * @param differences what differs; empty for MISSING
  */
+@ValueObject
 public record Drift(Platform platform, GigId gigId, String gigLabel, String externalRef, Kind kind,
                     List<Difference> differences) {
 

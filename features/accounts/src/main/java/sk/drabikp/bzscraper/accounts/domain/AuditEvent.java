@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.accounts.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
 import java.time.Instant;
@@ -10,6 +11,7 @@ import java.util.Objects;
  * ({@code action}, the API's operation id, e.g. {@code updateGig}), what it named ({@code target}: the
  * address's own part, e.g. a gig's token), how it ended (the HTTP status), when.
  */
+@ValueObject
 public record AuditEvent(BandId band, UserId user, String action, String target, int status, Instant at) {
 
     public AuditEvent {

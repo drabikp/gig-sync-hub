@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.port.out.GigRepository;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -23,6 +24,7 @@ import java.util.Optional;
  * gig as it is now — moot work ends done, {@link MootWork}), whether the platform's copy is known,
  * and whether this step still takes the gig — otherwise the run moves on or ends here.
  */
+@Application
 public class RunPreparation {
 
     private final StepRegistry steps;

@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.bzscraper.gig.application.port.out.Transactions;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -28,6 +29,7 @@ import java.util.Optional;
  * happened anyway); failed for good → the user; postponed (the platform's browser was busy) →
  * this step again in a minute.
  */
+@Application
 public class OutcomeSettlement {
 
     private final StepRegistry steps;

@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.calendar.domain;
 
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEvent;
 import sk.drabikp.bzscraper.calendar.domain.event.CalendarEventKind;
 
@@ -11,7 +13,8 @@ import java.time.Instant;
  * once the event is gone from the calendar; {@code change} is what the user hasn't seen
  * yet (null when nothing).
  */
-public record KnownCalendarEvent(CalendarEvent event, CalendarEventKind suggested, Instant firstSeen,
+@AggregateRoot
+public record KnownCalendarEvent(@Identity CalendarEvent event, CalendarEventKind suggested, Instant firstSeen,
                                  Instant removedAt, CalendarChange change) {
 
     public KnownCalendarEvent {

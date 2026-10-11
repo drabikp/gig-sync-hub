@@ -50,10 +50,16 @@ class ArchitectureTest {
         return all;
     }
 
+    /**
+     * The one third-party thing the domain may name is jMolecules: annotations with no runtime and
+     * no dependencies, which say what each type IS rather than giving it anything to do. Everything
+     * else a domain type could reach for would be a technology, and that is what this rule is about.
+     */
     @ArchTest
     static final ArchRule domain_knows_only_the_jdk_and_other_domain_code = classes()
             .that().resideInAPackage(BASE + "..domain..")
-            .should().onlyDependOnClassesThat().resideInAnyPackage("java..", BASE + "..domain..");
+            .should().onlyDependOnClassesThat().resideInAnyPackage("java..", BASE + "..domain..",
+                    "org.jmolecules.ddd.annotation..");
 
     @ArchTest
     static final ArchRule application_code_uses_no_framework_and_no_adapter = noClasses()

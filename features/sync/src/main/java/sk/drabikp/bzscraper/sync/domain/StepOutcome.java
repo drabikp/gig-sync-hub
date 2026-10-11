@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 /**
  * What one step did with one gig.
  * <ul>
@@ -15,6 +17,7 @@ package sk.drabikp.bzscraper.sync.domain;
  *       read): again a little later, no attempt used, not a sign of the platform's health.</li>
  * </ul>
  */
+@ValueObject
 public record StepOutcome(Kind kind, String note, String ref) {
 
     public enum Kind { DONE, REFUSED, FAILED, FAILED_FOR_GOOD, POSTPONED }

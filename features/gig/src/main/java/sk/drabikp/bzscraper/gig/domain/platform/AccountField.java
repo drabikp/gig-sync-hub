@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain.platform;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.regex.Pattern;
 
 /**
@@ -14,6 +16,7 @@ import java.util.regex.Pattern;
  * @param help     a hint under the field, or null
  * @param readAt   where the value is read instead of typed, or null — see {@link ReadAt}
  */
+@ValueObject
 public record AccountField(String name, Kind kind, boolean required, String label, String help, ReadAt readAt) {
 
     private static final Pattern NAME = Pattern.compile("[a-z][a-zA-Z0-9]*");

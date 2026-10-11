@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain.platform;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +20,7 @@ import java.util.Optional;
  * @param eventUrlTemplate     the public page of an event, {@code {id}} standing for its id
  * @param accountFields        what a band's account there is made of (empty: the platform needs none)
  */
+@ValueObject
 public record PlatformTraits(Platform platform, String displayName, boolean keepsCancelledEvents,
                              boolean listsBandSlot, boolean carriesAdmission, int importPrecedence,
                              String eventUrlTemplate, List<AccountField> accountFields) {

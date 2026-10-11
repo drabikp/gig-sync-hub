@@ -41,6 +41,10 @@
 		     PostgreSQL (bzscraper.db.import-h2); pinned to the version that wrote it. -->
 		<h2.version>2.4.240</h2.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
+		<!-- jMolecules: the DDD and hexagonal concepts as annotations. Marker jars (jmolecules-ddd
+		     brings only jstereotype, itself markers) with nothing at runtime, so the domain stays a
+		     plain Java model that happens to say what each type IS. -->
+		<jmolecules.bom.version>2025.0.2</jmolecules.bom.version>
 		<!-- only the app module runs (spring-boot:run) -->
 		<spring-boot.run.skip>true</spring-boot.run.skip>
 	</properties>
@@ -153,6 +157,13 @@
 				<version>1.4.2</version>
 			</dependency>
 			<dependency>
+				<groupId>org.jmolecules</groupId>
+				<artifactId>jmolecules-bom</artifactId>
+				<version>${jmolecules.bom.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
 				<groupId>org.jsoup</groupId>
 				<artifactId>jsoup</artifactId>
 				<version>1.22.1</version>
@@ -164,6 +175,21 @@
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
+
+	<!-- Every module: what a type IS (aggregate, value object, repository, port, adapter) is said
+	     on the type itself. Annotations only - no runtime, no transitive dependencies - and
+	     ArchitectureTest's "the domain depends on the JDK and domain code" admits exactly these. -->
+	<dependencies>
+		<dependency>
+			<groupId>org.jmolecules</groupId>
+			<artifactId>jmolecules-ddd</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.jmolecules</groupId>
+			<artifactId>jmolecules-hexagonal-architecture</artifactId>
+		</dependency>
+	</dependencies>
+
 	<build>
 		<pluginManagement>
 			<plugins>

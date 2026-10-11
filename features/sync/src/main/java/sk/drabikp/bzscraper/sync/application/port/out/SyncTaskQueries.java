@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.port.out;
 
+import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
@@ -15,6 +16,7 @@ import java.util.Optional;
  * Reading the sync outbox ({@link SyncOutbox}): its tasks and their history, without changing them — a
  * band's, but for the worker's questions across bands (what is due, what was running).
  */
+@Repository
 public interface SyncTaskQueries {
 
     Optional<SyncTask> find(long id);

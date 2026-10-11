@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.check.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
@@ -14,6 +15,7 @@ import java.util.Map;
  * @param unreadable platforms that couldn't be read this time, with why
  * @param unlinked   per platform, how many of its events no catalog gig is published as (see Import)
  */
+@ValueObject
 public record PlatformCheck(Instant checkedAt, List<Drift> drifts, Map<Platform, String> unreadable,
                             Map<Platform, Integer> unlinked) {
 

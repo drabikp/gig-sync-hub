@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.function.Predicate;
  * <p>Read once for the whole request, because what gets queued on one platform doesn't change what
  * is open on another.
  */
+@ValueObject
 public record OpenWork(List<SyncTask> tasks) {
 
     public OpenWork {

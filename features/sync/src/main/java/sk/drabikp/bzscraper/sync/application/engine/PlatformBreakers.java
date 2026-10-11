@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.sync.application.engine;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.sync.application.port.in.PlatformBreakerUseCase;
@@ -26,6 +27,7 @@ import java.util.Optional;
  * When {@code platformThreshold} bands are held back on one platform at once, the platform seems down: it
  * is held back for every band until fewer are. In memory — a restart starts closed.
  */
+@Application
 public class PlatformBreakers implements PlatformBreakerUseCase, PlatformHealth {
 
     private final int threshold;

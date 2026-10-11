@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.calendar.domain.event;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -12,6 +14,7 @@ import java.time.LocalDateTime;
  * exclusive). {@code calendarStatus} is the calendar's own status field — most calendars
  * leave every event "confirmed" and say cancelled/tentative in the title instead.
  */
+@ValueObject
 public record CalendarEvent(String id, String title, String location, String notes,
                             LocalDateTime start, LocalDateTime end, boolean allDay,
                             boolean repeating, boolean shownAsFree,

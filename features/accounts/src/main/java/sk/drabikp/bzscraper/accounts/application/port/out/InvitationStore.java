@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.accounts.application.port.out;
 
+import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.bzscraper.accounts.domain.Invitation;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
@@ -9,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /** The bands' invitations; a link's token is kept only as its hash. */
+@Repository
 public interface InvitationStore {
 
     void save(Invitation invitation, String tokenHash);

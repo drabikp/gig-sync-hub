@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.Optional;
 import java.util.OptionalDouble;
 
@@ -8,6 +10,7 @@ import java.util.OptionalDouble;
  * which of several same-named towns is meant. Every part is optional; a town picked from
  * the place search gives district, region and coordinates (the town's centre).
  */
+@ValueObject
 public record Address(String street, String postalCode, String district, String region,
                       Double latitude, Double longitude) {
 

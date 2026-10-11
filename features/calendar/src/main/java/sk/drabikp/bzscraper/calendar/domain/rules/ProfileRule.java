@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.domain.rules;
 
+import org.jmolecules.ddd.annotation.ValueObject;
 import sk.drabikp.bzscraper.gig.domain.TextFold;
 
 import java.util.Arrays;
@@ -10,6 +11,7 @@ import java.util.List;
  * {@code label=prefix} field, depending on the kind), the weight it adds to an event's
  * score when it matches (0 for role kinds) and where it came from.
  */
+@ValueObject
 public record ProfileRule(RuleKind kind, String value, int weight, RuleOrigin origin, boolean enabled) {
 
     public ProfileRule {

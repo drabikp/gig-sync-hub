@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.accounts.domain;
 
+import org.jmolecules.ddd.annotation.AggregateRoot;
+import org.jmolecules.ddd.annotation.Identity;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
@@ -14,7 +16,8 @@ import java.util.TreeMap;
  * logged: {@link #toString} names only which are set), by the names the platform's
  * {@link sk.drabikp.bzscraper.gig.domain.platform.AccountField}s give them; and what its last test said.
  */
-public record PlatformAccount(BandId band, Platform platform, Map<String, String> settings,
+@AggregateRoot
+public record PlatformAccount(@Identity BandId band, @Identity Platform platform, Map<String, String> settings,
                               Map<String, String> secrets, AccountCheck lastCheck) {
 
     public PlatformAccount {

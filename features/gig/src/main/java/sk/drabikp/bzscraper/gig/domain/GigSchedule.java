@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
@@ -12,6 +14,7 @@ import java.util.List;
  * lies within the event. A start is required; an end is optional but, when present, must
  * not be before the start. Immutable and self-validating — an invalid schedule cannot exist.
  */
+@ValueObject
 public record GigSchedule(ZonedDateTime start, ZonedDateTime end, Slot slot) {
 
     /** How many days of a long event count as "the gig's days" when matching by day. */

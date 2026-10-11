@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.gig.application.port.out;
 
+import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
@@ -20,6 +21,7 @@ import java.util.Optional;
  * the {@link GigId}, which a gig keeps for life — an edit that moves a gig to another day saves
  * the same gig, and nothing has to be re-keyed.
  */
+@Repository
 public interface GigRepository {
 
     void save(BandId band, Gig gig);

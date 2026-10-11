@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 
@@ -11,6 +13,7 @@ import java.time.ZonedDateTime;
  * <p>{@code showAt} is when the band plays in its own wall clock — what the list is ordered and
  * paged by, and what the cursor carries. {@code start} is the event's start, as the row shows it.
  */
+@ValueObject
 public record GigRow(GigId id, LocalDateTime showAt, ZonedDateTime start, String title, String venue,
                      String city, Country country, boolean cancelled) {
 

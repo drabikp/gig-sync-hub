@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.calendar.application.port.in.CalendarErrorCode;
 import sk.drabikp.bzscraper.calendar.application.port.in.CalendarSetupUseCase;
 import sk.drabikp.bzscraper.calendar.application.port.out.BandCalendarStore;
@@ -25,6 +26,7 @@ import java.util.Map;
  * (the live updates: calendar). A band's first calendar and rules may also come from the server's
  * configuration — band #1's, from before each band set up its own ({@link #adopt}).
  */
+@Application
 public class CalendarSetupService implements CalendarSetupUseCase {
 
     private final BandCalendarStore calendars;

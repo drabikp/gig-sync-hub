@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.calendar.domain.rules;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -11,6 +13,7 @@ import java.util.stream.Collectors;
  * a word, the spaces inside the label optional ("Čas predbežne" / "Časpredbežne"). The patterns are
  * built once per label — a band has a handful, the calendar many events.
  */
+@ValueObject
 public final class NotesLabels {
 
     private static final String WORD_START = "(?<![\\p{L}\\p{N}])";

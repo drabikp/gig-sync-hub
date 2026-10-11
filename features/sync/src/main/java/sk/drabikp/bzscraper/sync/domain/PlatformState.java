@@ -1,9 +1,12 @@
 package sk.drabikp.bzscraper.sync.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 /**
  * Where a gig stands on one platform, as the pages show it: the latest unfinished sync task
  * there decides; without one, whether the gig is published there.
  */
+@ValueObject
 public enum PlatformState {
     /** Published, nothing to do. */
     LIVE,

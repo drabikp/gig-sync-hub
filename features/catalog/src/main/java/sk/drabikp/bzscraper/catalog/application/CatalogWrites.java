@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.catalog.application;
 
+import org.jmolecules.architecture.hexagonal.Application;
 import sk.drabikp.bzscraper.catalog.application.port.in.GigBusyException;
 import sk.drabikp.bzscraper.catalog.application.port.in.GigIdentityTakenException;
 import sk.drabikp.bzscraper.catalog.application.port.in.GigWrites;
@@ -21,6 +22,7 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /** The catalog's write path ({@link GigWrites}) over the repository and the sync outbox. */
+@Application
 public class CatalogWrites implements GigWrites {
 
     private final GigRepository gigRepository;

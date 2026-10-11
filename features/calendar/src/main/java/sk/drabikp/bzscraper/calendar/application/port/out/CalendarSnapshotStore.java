@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.calendar.application.port.out;
 
+import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.bzscraper.calendar.domain.KnownCalendarEvent;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 
@@ -13,6 +14,7 @@ import java.util.Optional;
  * next read is compared with, and what the calendar page shows without reading again.
  * Holds the band's private notes — never published.
  */
+@Repository
 public interface CalendarSnapshotStore {
 
     Map<String, KnownCalendarEvent> all(BandId band);

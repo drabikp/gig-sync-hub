@@ -1,5 +1,6 @@
 package sk.drabikp.bzscraper.check.domain;
 
+import org.jmolecules.ddd.annotation.Service;
 import sk.drabikp.bzscraper.gig.domain.CityName;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
  * town may carry a district ("Košice I") and a venue the platform's longer name. Gigs with platform work still queued are skipped — they
  * are about to change.
  */
+@Service
 public final class Reconciler {
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);

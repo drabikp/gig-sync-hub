@@ -1,5 +1,7 @@
 package sk.drabikp.bzscraper.gig.domain;
 
+import org.jmolecules.ddd.annotation.ValueObject;
+
 import java.time.ZoneId;
 
 /**
@@ -9,6 +11,7 @@ import java.time.ZoneId;
  * same-named towns apart — district, region, postal code, coordinates — when the town
  * was picked from the place search.
  */
+@ValueObject
 public record Location(String venue, String city, Country country, Address address) {
 
     /** Where the times of a gig whose country is unknown are read: the band's home, not the server's zone. */
