@@ -629,6 +629,22 @@ session (`BandzoneAccountCheck`); when Bandzone has ended it, the band connects 
 login lives in the git-ignored `.bz-creds` (line 1 login, line 2 password, `chmod 600`);
 `.bz-test-creds` is the test band.
 
+**And why this is not Bandsintown's way in** (checked live 2026-10-11, so don't reach for the
+bookmarklet here): **Bandzone has no federated sign-in** — its login form carries `login`, `password`,
+`permanent`, `doLogin` and nothing else, `/registrace.html` offers no sign-up with anyone else's
+account, and the site's own scripts (`js.base`, `js.guest`, `js.js2-common`, ~470 KB) never call
+`FB.login` or `getLoginStatus`; the Facebook SDK on every page is there for social plugins
+(`FB.init({xfbml:true})`) and a tracking pixel, which is what makes the pages LOOK as though Facebook
+could sign you in. Every account therefore has a password: the profile's own settings
+(`/fan/<id>/upravit.html`) offer **Změna hesla** and **Trvalá přihlášení** — where a band can clear the
+permanent logins, which is how it revokes what we keep — and no "connected account" anywhere. An
+account that somehow has no password (one made in some older Facebook era) gets one from
+`/zapomenute-udaje.html`, which asks only for the e-mail. **And a bookmarklet could not help even if
+Bandzone did offer Facebook**: the way in is cookies, and all three (`SID`, the ten-year `permaLogin`,
+`nette-browser`) are **HttpOnly**, so `document.cookie` sees none of them. That is the whole difference
+between the two platforms — Bandsintown's token sits in `localStorage`, which the page's own code can
+read; Bandzone's sits where only the browser and the server can.
+
 - **Create** — the 2-step wizard: date/time/city → (optional "similar concerts" screen,
   answered "new") → info (name, entry, description, Facebook) → Bandzone sends to
   `/koncert/{id}-…`; the id is taken from that address. `BandzoneFormCreate` then
