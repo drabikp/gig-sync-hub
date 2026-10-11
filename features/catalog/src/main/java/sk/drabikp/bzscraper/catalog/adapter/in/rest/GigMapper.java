@@ -10,9 +10,7 @@ import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigDetailResponse;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigEditedResponse;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigHistoryResponse;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigListResponse;
-import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigPeriodValue;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigRowResponse;
-import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigShowValue;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigResponse;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.PlatformResponse;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.PlatformStateResponse;
@@ -63,7 +61,7 @@ interface GigMapper {
      * What the band asked of the list, as the store takes it: the period, the words, where to read on
      * from and how many rows. A cursor that is not one of ours is a bad request, not "from the top".
      */
-    default GigQuery toQuery(GigPeriodValue period, String words, String after, Integer size) {
+    default GigQuery toQuery(String period, String words, String after, Integer size) {
         GigQuery query = GigQuery.upcoming().of(toPeriod(period)).matching(words);
         if (size != null) {
             query = query.sized(size);
@@ -80,13 +78,18 @@ interface GigMapper {
     @EnumMapping(unexpectedValueMappingException = BadRequestException.class)
     @ValueMapping(source = MappingConstants.ANY_REMAINING, target = MappingConstants.THROW_EXCEPTION)
     @ValueMapping(source = MappingConstants.NULL, target = "ALL")
-    GigViews.Show toShow(GigShowValue show);
+    @ValueMapping(source = "all", target = "ALL")
+    @ValueMapping(source = "needs", target = "NEEDS")
+    @ValueMapping(source = "publishable", target = "PUBLISHABLE")
+    GigViews.Show toShow(String show);
 
     /** Which side of today; nothing asked means what is to come. */
     @EnumMapping(unexpectedValueMappingException = BadRequestException.class)
     @ValueMapping(source = MappingConstants.ANY_REMAINING, target = MappingConstants.THROW_EXCEPTION)
     @ValueMapping(source = MappingConstants.NULL, target = "UPCOMING")
-    GigQuery.Period toPeriod(GigPeriodValue period);
+    @ValueMapping(source = "upcoming", target = "UPCOMING")
+    @ValueMapping(source = "past", target = "PAST")
+    GigQuery.Period toPeriod(String period);
 
     @Mapping(target = "taskId", source = "task.id")
     @Mapping(target = "action", source = "task.action")

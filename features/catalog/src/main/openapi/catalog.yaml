@@ -28,9 +28,9 @@ paths:
       parameters:
         - name: period
           in: query
-          description: Which side of the band's show day. Upcoming runs forwards, past backwards.
+          description: upcoming (the default) or past — which side of the band's show day. Upcoming runs forwards, past backwards.
           schema:
-            $ref: '#/components/schemas/GigPeriodValue'
+            type: string
         - name: q
           in: query
           description: Words to find in the title, venue or town — accents and case do not matter.
@@ -39,9 +39,9 @@ paths:
             maxLength: 100
         - name: show
           in: query
-          description: all — everything; needs — a platform failed and waits for the user; publishable — not cancelled and missing from some platform.
+          description: all (the default) — everything; needs — a platform failed and waits for the user; publishable — not cancelled and missing from some platform.
           schema:
-            $ref: '#/components/schemas/GigShowValue'
+            type: string
         - name: after
           in: query
           description: The `cursor` of the page before this one.
@@ -262,12 +262,6 @@ components:
       schema:
         type: string
   schemas:
-    GigPeriodValue:
-      type: string
-      enum: [upcoming, past]
-    GigShowValue:
-      type: string
-      enum: [all, needs, publishable]
     GigListResponse:
       description: |
         One page of the gig list. `total` is how many gigs match the filter, so the page can say

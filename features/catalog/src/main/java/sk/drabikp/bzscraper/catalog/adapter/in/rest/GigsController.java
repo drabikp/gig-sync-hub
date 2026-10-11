@@ -7,8 +7,6 @@ import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigDetailResponse;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigEditRequest;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigEditedResponse;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigListResponse;
-import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigPeriodValue;
-import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigShowValue;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigResponse;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigSelectionRequest;
 import sk.drabikp.bzscraper.catalog.adapter.in.rest.api.GigsApi;
@@ -69,7 +67,7 @@ class GigsController implements GigsApi {
     }
 
     @Override
-    public ResponseEntity<GigListResponse> listGigs(UUID bandId, GigPeriodValue period, String q, GigShowValue show,
+    public ResponseEntity<GigListResponse> listGigs(UUID bandId, String period, String q, String show,
                                                     String after, Integer size) {
         return ResponseEntity.ok(views.list(refs.toBandId(bandId), mapper.toQuery(period, q, after, size),
                 mapper.toShow(show)));

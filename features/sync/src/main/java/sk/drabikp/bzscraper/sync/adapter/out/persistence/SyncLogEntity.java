@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import sk.drabikp.bzscraper.sync.domain.SyncLogEntry;
 
@@ -15,7 +16,10 @@ import java.time.Instant;
 class SyncLogEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    // from a sequence, drawn 50 at a time, so these inserts can be BATCHED — an identity column
+    // makes the driver fetch each row's id back and costs a round trip per row
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "syncLogSeq")
+    @SequenceGenerator(name = "syncLogSeq", sequenceName = "sync_log_seq", allocationSize = 50)
     private Long id;
     private Long taskId;
     private Instant loggedAt;

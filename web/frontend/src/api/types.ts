@@ -35,8 +35,9 @@ export type Gig = Catalog['GigResponse'];
 /** A LIST row — what a row shows; the gig's own page reads the rest. */
 export type GigRow = Catalog['GigRowResponse'];
 export type GigList = Catalog['GigListResponse'];
-export type GigPeriod = Catalog['GigPeriodValue'];
-export type GigShow = Catalog['GigShowValue'];
+/** What the list can be asked for (catalog.yaml describes them on the query parameters). */
+export type GigPeriod = 'upcoming' | 'past';
+export type GigShow = 'all' | 'needs' | 'publishable';
 /** What the band asked the list for. The server does the filtering — the page never does. */
 export type GigFilter = { period: GigPeriod; q: string; show: GigShow };
 export type GigDetail = Catalog['GigDetailResponse'];
