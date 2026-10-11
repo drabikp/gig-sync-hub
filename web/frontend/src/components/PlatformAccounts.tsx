@@ -25,6 +25,9 @@ function useFieldText() {
  * password ever reaches this page. The link's address is set on the element itself: React drops a
  * `javascript:` href. Pasting the line into the browser's console does the same thing, for anyone whose
  * browser has no bookmarks bar.
+ *
+ * The line is escaped whole (`encodeURIComponent`, not `encodeURI`): what a platform sends is code, and
+ * a per cent sign or an ampersand in it would otherwise leave an address the browser can't decode.
  */
 function ReadAtSite({ readAt, platform }: { readAt: NonNullable<AccountField['readAt']>; platform: string }) {
   const { t } = useTranslation();
@@ -36,7 +39,7 @@ function ReadAtSite({ readAt, platform }: { readAt: NonNullable<AccountField['re
       <Text size="xs" c="dimmed">{t('account.readAt.step2')}</Text>
       <Group gap="xs" wrap="wrap">
         <Anchor
-          ref={(a) => { if (a) a.setAttribute('href', `javascript:${encodeURI(readAt.script)}`); }}
+          ref={(a) => { if (a) a.setAttribute('href', `javascript:${encodeURIComponent(readAt.script)}`); }}
           draggable
           onClick={(e) => e.preventDefault()}
           size="sm"

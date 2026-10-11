@@ -59,7 +59,14 @@ class DrivingThePlatformsTest {
         assertThat(readAt).allSatisfy(where -> {
             assertThat(where.site()).startsWith("https://");
             assertThat(where.script()).as("the line must hand the value over, not merely show it")
-                    .contains("copy(");
+                    .containsAnyOf("navigator.clipboard", "execCommand('copy')");
+            assertThat(where.script())
+                    .as("the band clicks a bookmark, where the console's own helpers do not exist")
+                    .doesNotContain("copy(")
+                    .doesNotContain("console.");
+            assertThat(where.script()).as("the page turns the line into a javascript: address")
+                    .doesNotContain("%")
+                    .doesNotContain("\n");
         });
     }
 

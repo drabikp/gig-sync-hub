@@ -669,16 +669,23 @@ bzscraper.bandsintown.pacing.min-ms / .max-ms   # human pauses between requests 
 sign-in form of our own in its place: bands sign in to Bandsintown **with Facebook** as well as with a
 password, and a federated sign-in cannot be reimplemented. So the band signs in **once in its own
 browser, on Bandsintown's own form, however it normally does** (Facebook, two-factor, plain password —
-all the same to us), runs the one-line snippet Settings shows, and pastes **the refresh token, and
-nothing else** (`BitConnection`; an older paste carrying the ids is still read). Framing that form is
-impossible and always will be: `artists.bandsintown.com` sends `x-frame-options: SAMEORIGIN`, and a
-cross-origin frame is opaque anyway — only code running in THAT origin can read the token, which is
-what the snippet (or a bookmarklet) is for.
+all the same to us), clicks the **bookmarklet** Settings gives it to drag to its bookmarks bar
+(`AccountField.readAt`; the same line pasted into the browser's console does as much), and pastes **the
+refresh token, and nothing else** (`BitConnection`; an older paste carrying the ids is still read).
+Framing that form is impossible and always will be: `artists.bandsintown.com` sends
+`x-frame-options: SAMEORIGIN`, and a cross-origin frame is opaque anyway — only code running in THAT
+origin can read the token, which is what the bookmarklet is for.
 
-The snippet reads the token at the key its own identity library documents —
+The line reads the token at the key its own identity library documents —
 `CognitoIdentityServiceProvider.<clientId>.<user>.refreshToken`, reached through that library's
-`LastAuthUser` key rather than guessed at with a regex. The server keeps **no password and no
-authenticator secret**, and what it holds the band can revoke by signing out there.
+`LastAuthUser` key rather than guessed at with a regex — and then copies it the way **a page** copies:
+a selected textarea and `document.execCommand('copy')`, with `navigator.clipboard` tried as well and
+the token left selected in a box when the browser allows neither (Ctrl+C). It uses nothing but what a
+plain page has, because a bookmarklet IS the page's code: the browser console's own helpers are not
+defined there, and `copy(…)` — the obvious way to write this — threw `copy is not defined` on the first
+real click (2026-10-11). Nor may the line hold a per cent sign or a newline: the page also turns it into
+a `javascript:` address (`DrivingThePlatformsTest` keeps all of this). The server keeps **no password
+and no authenticator secret**, and what it holds the band can revoke by signing out there.
 
 **The two numbers are the server's to find, never the band's.** `POST /api/login` answers the manager;
 `GET /api/managers/{m}/managed-actors?type=artists` (`BitSignIn.artists()`) answers the artists it looks
@@ -848,7 +855,7 @@ that gets notified), optional `BZ_KEEP=true`. Run it only against a test band.
 reads it back, edits it both ways and removes it — the removal runs even when a step fails, and every
 step is tried and reported, so one made-up event tells us about all of them. Skipped unless
 `BIT_LIVE=true`; reads `BIT_ARTIST_NAME` and `BIT_CONNECTION_FILE` (the connection a band's browser
-sign-in leaves, as the snippet in Settings prints it — no browser and no password are involved).
+sign-in leaves, as the bookmarklet in Settings copies it — no browser and no password are involved).
 There is no Bandsintown test artist — the event is public for ~1 minute.
 
 `CalendarClassificationLiveTest` prints how the shipped + band rules sort the REAL
