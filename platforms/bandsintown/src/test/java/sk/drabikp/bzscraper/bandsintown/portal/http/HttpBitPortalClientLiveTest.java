@@ -11,6 +11,7 @@ import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.importing.domain.ImportedGig;
@@ -56,26 +57,26 @@ class HttpBitPortalClientLiveTest {
         BitApi api = new BitWeb(baseUrl, new BitSignIn(baseUrl, connection, Clock.systemUTC()));
         BitSession session = new HttpBitSession(api, artistName, Clock.systemDefaultZone());
 
-        Gig gig = new Gig("BZSCRAPER TEST - please ignore",
+        Gig gig = new Gig(GigId.fresh(), "BZSCRAPER TEST - please ignore",
                 GigSchedule.startingAt(ZonedDateTime.of(2027, 10, 7, 20, 0, 0, 0, BRATISLAVA)),
                 new Location("BZSCRAPER TEST VENUE", "Bratislava", Country.SLOVAKIA), List.of(),
                 Admission.free(), "Automated test event - will be deleted.", null, null, null, false);
-        Gig byUpload = new Gig("BZSCRAPER TEST - please ignore (edited)",
+        Gig byUpload = new Gig(GigId.fresh(), "BZSCRAPER TEST - please ignore (edited)",
                 GigSchedule.startingAt(ZonedDateTime.of(2027, 10, 7, 21, 30, 0, 0, BRATISLAVA)),
                 new Location("BZSCRAPER TEST VENUE", "Bratislava", Country.SLOVAKIA), List.of(),
                 Admission.free(), "Automated test event - edited by upload.", null, null, null, false);
-        Gig byForm = new Gig("BZSCRAPER TEST - please ignore (form)",
+        Gig byForm = new Gig(GigId.fresh(), "BZSCRAPER TEST - please ignore (form)",
                 GigSchedule.startingAt(ZonedDateTime.of(2027, 10, 8, 19, 15, 0, 0, BRATISLAVA)),
                 new Location("Majestic Music Club", "Bratislava", Country.SLOVAKIA,
                         new Address(null, "811 01", null, "Bratislavský kraj", 48.1486, 17.1077)), List.of(),
                 Admission.free(), "Automated test event - edited in the form.", null, null, null, false);
 
-        Gig typedElsewhere = new Gig("BZSCRAPER TEST - please ignore (typed town)",
+        Gig typedElsewhere = new Gig(GigId.fresh(), "BZSCRAPER TEST - please ignore (typed town)",
                 GigSchedule.startingAt(ZonedDateTime.of(2027, 10, 8, 19, 15, 0, 0, BRATISLAVA)),
                 new Location("Somewhere Else", "Košice", Country.SLOVAKIA), List.of(),
                 Admission.free(), "Automated test event - a town nobody looked up.", null, null, null, false);
 
-        Gig samePlace = new Gig("BZSCRAPER TEST - please ignore (same place)",
+        Gig samePlace = new Gig(GigId.fresh(), "BZSCRAPER TEST - please ignore (same place)",
                 GigSchedule.startingAt(ZonedDateTime.of(2027, 10, 8, 19, 15, 0, 0, BRATISLAVA)),
                 gig.location(), List.of(), Admission.free(), "Automated test event - time changed.",
                 null, null, null, false);

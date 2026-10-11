@@ -36,7 +36,7 @@ interface SyncEntityMapper {
         return id == null ? null : new BandId(id);
     }
 
-    default GigId toGigId(String key) {
-        return GigId.fromKey(key);
+    default GigId toGigId(UUID id) {
+        return new GigId(id);
     }
 }

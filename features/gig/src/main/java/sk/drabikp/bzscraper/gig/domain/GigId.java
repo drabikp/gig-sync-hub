@@ -1,66 +1,59 @@
 package sk.drabikp.bzscraper.gig.domain;
 
-import java.nio.charset.StandardCharsets;
-import java.time.DateTimeException;
-import java.time.LocalDate;
-import java.util.Base64;
-import java.util.Locale;
+import java.util.Objects;
+import java.util.UUID;
 
 /**
- * Identity of a {@link Gig} — its natural business key: start date + normalized
- * venue. Single-band tool, so no band component is needed. Venue is lowercased,
- * trimmed, and internal whitespace collapsed, so scraped/typed variants of the same
- * venue resolve to the same identity. Same date + clearly different venue = two
- * gigs (a double-header), not one. A gig whose venue is not known yet ("TBA") is
- * identified by its city instead ({@code "@" + city}), so two such gigs on one day in
- * different cities stay two gigs.
+ * Identity of a {@link Gig}: the gig's own, independent of anything it says about itself. A gig
+ * that moves to another day or another venue is still that gig — so its publications, its queued
+ * platform work and the calendar's link to it need not follow it anywhere.
+ *
+ * <p>It was the gig's natural key (day + venue) until 2026-10, which is why so much of this app
+ * speaks of a gig "moving": an edit to the day changed WHO the gig was, and every record that
+ * named it had to be re-keyed in the same transaction. That is what a surrogate identity is for.
+ * The natural key is still kept, as {@link GigMatch} — not as identity, but as the question
+ * "which concert is this copy about", which is what Import and the nightly check need it for.
+ *
+ * <p>Nothing reads a part of it: {@link #key()} is how stored rows name a gig, {@link #token()}
+ * how addresses do, and both are the plain text of the id.
  */
-public record GigId(LocalDate date, String venue) {
+public record GigId(UUID value) {
 
-    public static GigId of(Gig gig) {
-        String venue = gig.location().venue();
-        return new GigId(gig.schedule().startDate(),
-                venue != null ? normalizeVenue(venue) : "@" + normalizeVenue(gig.location().city()));
+    public GigId {
+        Objects.requireNonNull(value, "a gig's id");
     }
 
-    /** The identity as one text — how stored records refer to a gig: {@code "2026-10-01|klub 007"}. */
+    /** An identity no gig has yet — a gig gets one when it is created, and keeps it. */
+    public static GigId fresh() {
+        return new GigId(UUID.randomUUID());
+    }
+
+    /** The identity as one text — how stored records refer to a gig. */
     public String key() {
-        return date + "|" + venue;
+        return value.toString();
     }
 
-    /** The identity a {@link #key()} stands for. */
+    /** The identity a {@link #key()} stands for; a stored text that isn't one is a broken row. */
     public static GigId fromKey(String key) {
-        int separator = key.indexOf('|');
-        return new GigId(LocalDate.parse(key.substring(0, separator)), key.substring(separator + 1));
+        return new GigId(UUID.fromString(key));
     }
 
-    /** The identity as a URL-safe token, for addresses that name a gig ({@code /api/gigs/<token>}). */
+    /** The identity as it travels in addresses that name a gig ({@code /api/gigs/<token>}). */
     public String token() {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(key().getBytes(StandardCharsets.UTF_8));
+        return value.toString();
     }
 
     /** The identity a {@link #token()} stands for; {@link UnknownReferenceException} when it stands for none. */
     public static GigId fromToken(String token) {
-        String key;
         try {
-            key = new String(Base64.getUrlDecoder().decode(token), StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
-            throw new UnknownReferenceException("not a gig: " + token, e);
-        }
-        if (key.indexOf('|') < 0) {
-            throw new UnknownReferenceException("not a gig: " + token);
-        }
-        try {
-            return fromKey(key);
-        } catch (DateTimeException e) {
+            return new GigId(UUID.fromString(token));
+        } catch (RuntimeException e) {
             throw new UnknownReferenceException("not a gig: " + token, e);
         }
     }
 
-    static String normalizeVenue(String venue) {
-        if (venue == null) {
-            return "";
-        }
-        return venue.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    @Override
+    public String toString() {
+        return value.toString();
     }
 }

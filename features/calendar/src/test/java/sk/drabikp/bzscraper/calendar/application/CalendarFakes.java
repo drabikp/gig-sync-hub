@@ -103,11 +103,6 @@ final class CalendarFakes {
         public void unlink(BandId band, String eventId) {
             of(band).remove(eventId);
         }
-
-        @Override
-        public void move(BandId band, GigId from, GigId to) {
-            of(band).replaceAll((event, gig) -> gig.equals(from) ? to : gig);
-        }
     }
 
     static final class Snapshots implements CalendarSnapshotStore {

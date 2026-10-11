@@ -13,7 +13,8 @@ import java.util.Optional;
  * Local record of what each band has published to each platform. Keeps idempotency (a gig already
  * published is not re-published) and, when the platform gives one back, the platform's external id
  * ({@code externalRef}) so the gig can later be updated, cancelled or deleted there. Keyed by the
- * band, the {@link Platform} and the {@link GigId}.
+ * band, the {@link Platform} and the {@link GigId} — which the gig keeps however it is edited, so a
+ * record never has to follow it anywhere.
  */
 public interface PublishedGigStore {
 
@@ -27,12 +28,6 @@ public interface PublishedGigStore {
 
     /** Forgets a gig on a platform (after it has been removed there). */
     void remove(BandId band, Platform platform, GigId gigId);
-
-    /**
-     * Re-keys every platform's record of a gig whose identity changed (an edit moved its date or
-     * venue), keeping the external ids. No-op if nothing was recorded under {@code from}.
-     */
-    void move(BandId band, GigId from, GigId to);
 
     /** Every publication of the band. Only for work that is about all of them — a page asks {@link #of}. */
     List<Publication> all(BandId band);

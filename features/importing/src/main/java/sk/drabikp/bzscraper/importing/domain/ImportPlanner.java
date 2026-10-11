@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.importing.domain;
 import sk.drabikp.bzscraper.gig.domain.CityName;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.GigMatch;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
 import sk.drabikp.bzscraper.gig.domain.platform.Publication;
@@ -23,14 +24,14 @@ import java.util.Set;
  * <ol>
  *   <li>Platform gigs already linked to the catalog (their platform id is recorded) are
  *       left alone.</li>
- *   <li>The rest are grouped by gig identity (date + venue): with the catalog gig of the
- *       same identity, and with the same gig from the other platform.</li>
+ *   <li>The rest are grouped by what concert they are ({@link GigMatch}: date + venue) — with
+ *       the catalog gig of that day and venue, and with the same gig from the other platform.</li>
  *   <li>A gig still on its own is <em>suggested</em> as the same concert as a catalog gig,
  *       or as a gig from the other platform, on the same date in the same city — but
  *       only when exactly one such candidate exists. The user confirms suggestions.</li>
  * </ol>
- * A platform gig whose identity is taken by another gig already linked on that platform
- * is skipped (a duplicate there), as importing it would overwrite the catalog gig.
+ * A platform gig whose day and venue belong to a catalog gig already linked on that platform
+ * is skipped (a duplicate there), as importing it would overwrite that gig.
  */
 public final class ImportPlanner {
 
@@ -40,12 +41,12 @@ public final class ImportPlanner {
     public static ImportPlan plan(Collection<Gig> catalog, Collection<Publication> publications,
                                   Collection<ImportedGig> imported, Map<Platform, String> failures,
                                   Platforms platforms) {
-        Map<GigId, Gig> localById = new LinkedHashMap<>();
-        catalog.forEach(g -> localById.putIfAbsent(g.id(), g));
+        Map<GigMatch, Gig> localByMatch = new LinkedHashMap<>();
+        catalog.forEach(g -> localByMatch.putIfAbsent(g.match(), g));
         Links links = Links.of(publications);
-        Grouping grouping = new Grouping(localById, links, platforms);
+        Grouping grouping = new Grouping(localByMatch, links, platforms);
         imported.stream().sorted(byPrecedence(platforms)).forEach(grouping::add);
-        suggestMatches(localById.values(), links.platformsByGig(), grouping.withLocal, grouping.withoutLocal);
+        suggestMatches(localByMatch.values(), links.platformsByGig(), grouping.withLocal, grouping.withoutLocal);
         return new ImportPlan(grouping.proposals(), grouping.alreadyLinked, grouping.skipped, failures);
     }
 
@@ -53,7 +54,10 @@ public final class ImportPlanner {
     private record PlatformRef(Platform platform, String ref) {
     }
 
-    /** What the catalog already links: the platform events, and per gig the platforms it is on. */
+    /**
+     * What the catalog already links: the platform events, and per catalog gig (by its identity)
+     * the platforms it is on.
+     */
     private record Links(Set<PlatformRef> refs, Map<GigId, Set<Platform>> platformsByGig) {
 
         static Links of(Collection<Publication> publications) {
@@ -78,22 +82,26 @@ public final class ImportPlanner {
     }
 
     /**
-     * The platform gigs grouped by identity — with the catalog gig of that identity, or on their own —
-     * counting those already linked and leaving out (with the reason) those that would overwrite a
-     * gig already linked there.
+     * The platform gigs grouped by what concert they are — with the catalog gig of that day and
+     * venue, or on their own — counting those already linked and leaving out (with the reason) those
+     * that would overwrite a gig already linked there.
+     *
+     * <p>Grouped by {@link GigMatch} and not by identity: a copy read from a platform is a gig this
+     * app has never seen, so its identity is one nothing else shares. The day and the venue are all
+     * two sources have in common.
      */
     private static final class Grouping {
 
-        private final Map<GigId, Gig> localById;
+        private final Map<GigMatch, Gig> localByMatch;
         private final Links links;
         private final Platforms platforms;
-        private final Map<GigId, Group> withLocal = new LinkedHashMap<>();
-        private final Map<GigId, Group> withoutLocal = new LinkedHashMap<>();
+        private final Map<GigMatch, Group> withLocal = new LinkedHashMap<>();
+        private final Map<GigMatch, Group> withoutLocal = new LinkedHashMap<>();
         private final List<String> skipped = new ArrayList<>();
         private int alreadyLinked;
 
-        Grouping(Map<GigId, Gig> localById, Links links, Platforms platforms) {
-            this.localById = localById;
+        Grouping(Map<GigMatch, Gig> localByMatch, Links links, Platforms platforms) {
+            this.localByMatch = localByMatch;
             this.links = links;
             this.platforms = platforms;
         }
@@ -103,17 +111,17 @@ public final class ImportPlanner {
                 alreadyLinked++;
                 return;
             }
-            GigId id = copy.gig().id();
-            Gig local = localById.get(id);
-            Map<GigId, Group> groups = local != null ? withLocal : withoutLocal;
-            boolean takenOnPlatform = local != null && links.on(id, copy.platform());
-            Group existing = groups.get(id);
+            GigMatch match = copy.gig().match();
+            Gig local = localByMatch.get(match);
+            Map<GigMatch, Group> groups = local != null ? withLocal : withoutLocal;
+            boolean takenOnPlatform = local != null && links.on(local.id(), copy.platform());
+            Group existing = groups.get(match);
             if (takenOnPlatform || (existing != null && existing.copies.containsKey(copy.platform()))) {
                 skipped.add(describe(copy, platforms) + " — another " + platforms.name(copy.platform())
                         + " event already has this date and venue");
                 return;
             }
-            groups.computeIfAbsent(id, k -> new Group(local)).copies.put(copy.platform(), copy);
+            groups.computeIfAbsent(match, k -> new Group(local)).copies.put(copy.platform(), copy);
         }
 
         /** Newest first. */
@@ -133,9 +141,9 @@ public final class ImportPlanner {
     }
 
     private static void suggestMatches(Collection<Gig> catalog, Map<GigId, Set<Platform>> linkedPlatforms,
-                                       Map<GigId, Group> withLocal, Map<GigId, Group> withoutLocal) {
-        for (GigId id : new ArrayList<>(withoutLocal.keySet())) {
-            Group lonely = withoutLocal.get(id);
+                                       Map<GigMatch, Group> withLocal, Map<GigMatch, Group> withoutLocal) {
+        for (GigMatch match : new ArrayList<>(withoutLocal.keySet())) {
+            Group lonely = withoutLocal.get(match);
             if (lonely == null || lonely.copies.size() != 1) {
                 continue;
             }
@@ -145,22 +153,23 @@ public final class ImportPlanner {
             List<Gig> localCandidates = catalog.stream()
                     .filter(g -> sameDayAndCity(g, copy.gig()))
                     .filter(g -> !linkedPlatforms.getOrDefault(g.id(), Set.of()).contains(platform))
-                    .filter(g -> !withLocal.containsKey(g.id()) || !withLocal.get(g.id()).copies.containsKey(platform))
+                    .filter(g -> !withLocal.containsKey(g.match())
+                            || !withLocal.get(g.match()).copies.containsKey(platform))
                     .toList();
             if (localCandidates.size() == 1) {
                 Gig local = localCandidates.getFirst();
-                Group target = withLocal.computeIfAbsent(local.id(), k -> new Group(local));
+                Group target = withLocal.computeIfAbsent(local.match(), k -> new Group(local));
                 target.copies.put(platform, copy);
                 target.suggested = true;
-                withoutLocal.remove(id);
+                withoutLocal.remove(match);
                 continue;
             }
             if (!localCandidates.isEmpty()) {
                 continue;                   // ambiguous: let the user sort it out by hand
             }
 
-            List<Map.Entry<GigId, Group>> otherPlatform = withoutLocal.entrySet().stream()
-                    .filter(e -> !e.getKey().equals(id))
+            List<Map.Entry<GigMatch, Group>> otherPlatform = withoutLocal.entrySet().stream()
+                    .filter(e -> !e.getKey().equals(match))
                     .filter(e -> !e.getValue().copies.containsKey(platform))
                     .filter(e -> e.getValue().copies.values().stream().allMatch(c -> sameDayAndCity(c.gig(), copy.gig())))
                     .toList();
@@ -168,7 +177,7 @@ public final class ImportPlanner {
                 Group target = otherPlatform.getFirst().getValue();
                 target.copies.put(platform, copy);
                 target.suggested = true;
-                withoutLocal.remove(id);
+                withoutLocal.remove(match);
             }
         }
     }

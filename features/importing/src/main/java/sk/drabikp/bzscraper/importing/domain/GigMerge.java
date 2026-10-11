@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.importing.domain;
 
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
 import sk.drabikp.bzscraper.importing.domain.ImportProposal.Version;
@@ -24,12 +25,16 @@ public final class GigMerge {
     private GigMerge() {
     }
 
-    /** {@code platforms}: which of them show the entry (the others' "free" means nothing). */
-    public static Gig merge(Version chosen, List<Version> versions, Platforms platforms) {
+    /**
+     * {@code keeping}: the catalog gig this import is an edit of, or null when the gig is new to the
+     * catalog. {@code platforms}: which of them show the entry (the others' "free" means nothing).
+     */
+    public static Gig merge(Gig keeping, Version chosen, List<Version> versions, Platforms platforms) {
         List<Version> order = new ArrayList<>();
         order.add(chosen);
         versions.stream().filter(v -> !v.equals(chosen)).forEach(order::add);
         Gig base = chosen.gig();
+        GigId id = keeping != null ? keeping.id() : base.id();
 
         List<String> lineup = base.lineup().isEmpty()
                 ? order.stream().map(v -> v.gig().lineup()).filter(l -> !l.isEmpty()).findFirst().orElse(List.of())
@@ -47,7 +52,7 @@ public final class GigMerge {
                         .filter(end -> end != null && end.isAfter(base.schedule().start()))
                         .findFirst().orElse(null), base.schedule().slot());
 
-        return new Gig(base.title(), schedule, base.location(), lineup, admission,
+        return new Gig(id, base.title(), schedule, base.location(), lineup, admission,
                 firstText(order, Gig::description), firstText(order, Gig::facebookUrl),
                 firstText(order, Gig::ticketUrl), firstText(order, Gig::posterImageUrl), cancelled);
     }

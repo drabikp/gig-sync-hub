@@ -58,7 +58,7 @@ class CalendarReviewServiceTest {
             links, gigs, new SyncFakes.DirectTransactions(), clock, new BandProfile.Thresholds(4, -1, -4),
             LiveUpdates.NONE);
     private final CalendarCatalogService catalog = new CalendarCatalogService(service,
-            CatalogFakes.writes(gigs, published, outbox, requests, new CalendarLinksFollowGigs(links)),
+            CatalogFakes.writes(gigs, published, outbox, requests),
             CatalogFakes.catalog(gigs, published, outbox, requests), links, new SyncFakes.DirectTransactions(),
             LiveUpdates.NONE);
 

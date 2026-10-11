@@ -41,7 +41,7 @@ class H2ImportTest {
     @Test
     void every_table_comes_over_with_its_values() {
         assertThat(jdbc.queryForMap("select title, country, entry_type, start_date_time, latitude, version, cancelled"
-                + " from gig where id = '2026-08-22|@lukova'"))
+                + " from gig where match_key = '2026-08-22|@lukova'"))
                 .containsEntry("title", "Moto fest")
                 .containsEntry("country", "CZECHIA")
                 .containsEntry("entry_type", "FREE")
@@ -66,7 +66,7 @@ class H2ImportTest {
     @Test
     void new_rows_get_ids_after_the_copied_ones() {
         Long task = jdbc.queryForObject("insert into sync_task (band_id, gig_id, gig_label, platform, action, status,"
-                + " attempts, created_at, updated_at) values ('00000000-0000-0000-0000-000000000001', 'g', 'g', 'X',"
+                + " attempts, created_at, updated_at) values ('00000000-0000-0000-0000-000000000001', gen_random_uuid(), 'g', 'X',"
                 + " 'UPDATE', 'PENDING', 0, now(), now()) returning id", Long.class);
         Long rule = jdbc.queryForObject("insert into calendar_rule (kind, weight, origin, enabled)"
                 + " values ('TITLE', 1, 'USER', true) returning id", Long.class);

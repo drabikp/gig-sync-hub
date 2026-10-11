@@ -22,8 +22,11 @@ public interface QueueSyncWork {
     /** {@code gig} is the deleted catalog gig (null if it wasn't there). */
     QueueResult delete(BandId band, GigId id, Gig gig);
 
-    /** The gig's identity moved: its queued work goes along. */
-    void move(BandId band, GigId from, Gig to);
+    /**
+     * The gig reads differently now (an edit moved or renamed it): its waiting work says so too.
+     * Nothing follows the gig — its identity did not change — only how it is named in the log.
+     */
+    void relabel(BandId band, Gig gig);
 
     /** Tells the worker and the pages; after the transaction committed. */
     void signal(BandId band, QueueResult result);

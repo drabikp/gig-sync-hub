@@ -15,10 +15,10 @@ import sk.drabikp.bzscraper.calendar.domain.rules.ProfileRule;
 import sk.drabikp.bzscraper.calendar.domain.rules.RuleKind;
 import sk.drabikp.bzscraper.calendar.domain.rules.RuleOrigin;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.TestGigs;
 import sk.drabikp.bzscraper.gig.domain.TestBands;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -133,18 +133,21 @@ class JpaCalendarStoresTest {
         assertThat(snapshots.lastRead(OTHER)).contains(firstRead);
     }
 
+    /**
+     * A link names the gig's identity, which an edit never changes — so where links used to be
+     * re-keyed behind a moved gig, there is nothing to follow. What is left to keep right is whose
+     * link it is: one band's link to a gig is not another's.
+     */
     @Test
-    void links_follow_a_gig_whose_identity_changed() {
-        GigId gig = new GigId(LocalDate.of(2026, 11, 20), "klub");
-        GigId moved = new GigId(LocalDate.of(2026, 11, 21), "klub");
+    void a_link_is_its_bands_and_names_a_gig_that_does_not_move() {
+        GigId gig = TestGigs.id("klub");
         links.link(BAND, "uid-1", gig);
-        links.link(BAND, "uid-2", new GigId(LocalDate.of(2026, 12, 1), "@brno"));
-        links.link(OTHER, "uid-9", gig);                                  // another band's gig that day
+        links.link(BAND, "uid-2", TestGigs.id("brno"));
+        links.link(OTHER, "uid-9", gig);                                  // another band linked the same gig
 
-        links.move(BAND, gig, moved);
         links.unlink(BAND, "uid-2");
 
-        assertThat(links.all(BAND)).containsExactly(Map.entry("uid-1", moved));
+        assertThat(links.all(BAND)).containsExactly(Map.entry("uid-1", gig));
         assertThat(links.all(OTHER)).containsExactly(Map.entry("uid-9", gig));
     }
 }

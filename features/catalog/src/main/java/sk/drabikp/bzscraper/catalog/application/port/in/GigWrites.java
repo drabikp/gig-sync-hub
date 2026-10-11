@@ -11,14 +11,15 @@ import sk.drabikp.bzscraper.sync.domain.QueueResult;
  * the calendar, Import and the platform check all go through here, so the catalog's rules hold
  * for every writer:
  * <ul>
- *   <li>a gig never overwrites another: a new gig, or an edit that moves a gig's identity (its
- *       day or venue), onto an identity another gig has is refused ({@link GigIdentityTakenException});</li>
+ *   <li>a gig never overwrites another: a new gig, or an edit that moves a gig onto the day and
+ *       venue of another of the band's gigs — the same concert — is refused
+ *       ({@link GigIdentityTakenException});</li>
  *   <li>an edit applies only to the gig as the writer saw it (changed or deleted meanwhile →
  *       {@code ConcurrentChangeException});</li>
  *   <li>a gig whose platform work is running is not changed, deleted or unlinked ({@link GigBusyException});</li>
- *   <li>an identity move takes the gig's platform records and queued work along and tells
- *       the {@code GigMovedListener}s (e.g. the calendar's links); every change queues the
- *       platform work it needs where the gig is published.</li>
+ *   <li>a gig keeps its identity through every edit, so its publications, its queued work and the
+ *       calendar's link to it need no following; every change queues the platform work it needs
+ *       where the gig is published.</li>
  * </ul>
  * Call inside the caller's transaction; the queued work is the caller's to signal once it committed.
  */

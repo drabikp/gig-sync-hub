@@ -14,9 +14,6 @@ import sk.drabikp.bzscraper.sync.domain.SyncTask;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
@@ -132,18 +129,6 @@ class JpaSyncOutboxTest {
         assertThat(outbox.find(pending.id()).orElseThrow().status()).isEqualTo(SyncStatus.DISCARDED);
         assertThat(outbox.find(running.id()).orElseThrow().status()).isEqualTo(SyncStatus.RUNNING);
         assertThat(outbox.find(elsewhere.id()).orElseThrow().status()).isEqualTo(SyncStatus.PENDING);
-    }
-
-    @Test
-    void tasks_follow_a_gig_whose_identity_changed() {
-        SyncTask task = queue(gig, BANDZONE, SyncAction.UPDATE);
-        Gig moved = TestGigs.gig("Fest", "Klub 007",
-                ZonedDateTime.of(2026, 10, 1, 20, 0, 0, 0, ZoneId.of("Europe/Prague")));
-
-        outbox.move(BAND, gig.id(), moved.id(), SyncTask.labelOf(moved));
-
-        assertThat(outbox.openFor(BAND, moved.id())).extracting(SyncTask::id).containsExactly(task.id());
-        assertThat(outbox.openFor(BAND, gig.id())).isEmpty();
     }
 
     @Test

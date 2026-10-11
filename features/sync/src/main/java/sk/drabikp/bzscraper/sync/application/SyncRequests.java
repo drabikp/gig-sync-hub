@@ -104,7 +104,7 @@ public class SyncRequests implements QueueSyncWork {
      */
     @Override
     public QueueResult delete(BandId band, GigId id, Gig gig) {
-        String label = gig != null ? SyncTask.labelOf(gig) : SyncTask.labelOf(id);
+        String label = gig != null ? SyncTask.labelOf(gig) : lastKnownLabel(band, id);
         List<SyncTask> queued = new ArrayList<>();
         List<String> leftOut = new ArrayList<>();
         for (Platform platform : platforms.all()) {
@@ -122,6 +122,16 @@ public class SyncRequests implements QueueSyncWork {
             queued.add(task);
         }
         return new QueueResult(queued, leftOut);
+    }
+
+    /**
+     * How to name a gig the catalog no longer has: as its own last piece of work named it. An
+     * identity says nothing about a gig on purpose, and this is the only place that has to describe
+     * one that is already gone.
+     */
+    private String lastKnownLabel(BandId band, GigId id) {
+        return outbox.history(band, id, 1).stream().map(SyncTask::gigLabel)
+                .findFirst().orElse("a gig no longer in the catalog");
     }
 
     QueueResult publish(BandId band, Platform platform, Gig gig) {
@@ -144,10 +154,8 @@ public class SyncRequests implements QueueSyncWork {
     }
 
     @Override
-    public void move(BandId band, GigId from, Gig to) {
-        if (!from.equals(to.id())) {
-            outbox.move(band, from, to.id(), SyncTask.labelOf(to));
-        }
+    public void relabel(BandId band, Gig gig) {
+        outbox.relabel(band, gig.id(), SyncTask.labelOf(gig));
     }
 
     /**

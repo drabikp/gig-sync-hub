@@ -41,7 +41,7 @@ its site's language behind its own `portal.http`.
 |---|---|---|
 | `features/gig` ← everyone | **Shared kernel** | Deliberately small (a gig, its value objects, the ports, the schema) and jointly owned. It knows no feature and no platform; its persistence and wiring are its own. A shared kernel is only legitimate while it stays small — growing it is the thing to resist. |
 | feature ← feature | **Customer–supplier, through ports** | A module uses another only through its `domain` and its `application.port.in` / `.out` — never its services, adapters or wiring. The calendar, Import and the check all write gigs through `GigWrites`; the check asks the sync through `SyncStateUseCase`. |
-| lower feature ← higher feature | **Dependency inversion** | Where a module lower in the order needs something from a higher one, the lower one owns the port and the higher implements it: `GigMovedListener` (the calendar's links follow a gig's identity move), `PlatformAccountCheck`, `PlatformSignIn`. That is how the calendar stays downstream of the catalog without a cycle. |
+| lower feature ← higher feature | **Dependency inversion** | Where a module lower in the order needs something from a higher one, the lower one owns the port and the higher implements it: `PlatformAccountCheck` and `PlatformSignIn` (the accounts hold a band's platform account; only the platform can say whether it still works). The seam that used to be the clearest example of this, `GigMovedListener`, is gone — see below. |
 | platform ↔ its site | **Anticorruption layer** | Bandzone's Nette forms and Bandsintown's portal JSON never travel inward: `NetteForm`/`Answer`/`ConcertForm`, `PortalReply`/`BitEventMapper`, `GigSummaryToGigMapper` translate at the boundary, and `portal.http` is package-private. `PlatformNamesTest` makes the ACL provable — no feature source may even *name* a platform. |
 | app ↔ the page | **Published language** | The OpenAPI specs are the contract, both sides generated from them; refusals travel as `ProblemCodeValue` and `ErrorCodesTest` keeps the enums and the spec the same. |
 | app ↔ Rauthy | **Conformist** | Identity is Rauthy's model, taken as it comes (`subject`, e-mail, name). The app translates it once at `OidcCurrentLogin` → `CurrentLogin` and models only what is its own: users, memberships, roles. |
@@ -53,7 +53,7 @@ This is the part that looks like duplication and is not. A gig is:
 
 | Context | Its model | Why it differs |
 |---|---|---|
-| `gig` (kernel) | `Gig` — always valid, immutable, identified by `GigId` | the source of truth |
+| `gig` (kernel) | `Gig` — always valid, immutable, identified by `GigId` (its own) and matched by `GigMatch` (its day and place) | the source of truth |
 | the gig list (`catalog`, over the kernel's types) | `GigRow` / `GigSlice` | a page shows columns, not aggregates, and reads no description or lineup |
 | the gig form | `GigDraft` + its `Problems` | half-filled and invalid is the normal state while typing |
 | `importing` | `ImportedGig` | what a platform *says*, before anyone decides it is ours |
@@ -68,12 +68,16 @@ every context pay for every other context's fields — which is the usual reason
 
 Honest notes, so they are decisions and not surprises:
 
-- **`GigId` is a natural key** (date + normalised venue), so editing a gig's day or venue *changes
-  who it is*: `CatalogWrites.replace` re-keys the publications and the queued work and tells the
-  `GigMovedListener`s. It is a deliberate trade — the natural key is what lets Import and the check
-  match a platform's events, which carry no stable id of ours — and it is the one place where DDD's
-  "identity is independent of state" is given up. A surrogate id with the natural key kept as a
-  separate dedup key would remove that machinery; it is a migration, not a refactor.
+- **`GigId` was a natural key** (date + normalised venue) until 2026-10, so editing a gig's day or
+  venue *changed who it was*: `CatalogWrites.replace` re-keyed the publications and the queued work
+  and told the `GigMovedListener`s. That was the one place where DDD's "identity is independent of
+  state" was given up, and V10 ends it: the id is the gig's own, and the natural key lives on as
+  `GigMatch` — kept in the row as `match_key` and unique per band, because it is still what Import
+  and the nightly check recognise a platform's copy by (a platform's event carries no id of ours).
+  What went with the move: `GigMovedListener` and its one implementation, `PublishedGigStore.move`,
+  `CalendarLinkStore.move`, `SyncOutbox.move` and the entities' `moveTo`. What is left of it is
+  `SyncOutbox.relabel` — the waiting work says how the gig reads now, which is a label, not
+  identity.
 - **`BandId` is a tenant, not an aggregate root.** Every port that touches a band's data takes it
   explicitly; no thread-local "current band". A band does not *own* its gigs in the model — it would
   be an unbounded collection — and the boundary is held by the database instead (row-level security,

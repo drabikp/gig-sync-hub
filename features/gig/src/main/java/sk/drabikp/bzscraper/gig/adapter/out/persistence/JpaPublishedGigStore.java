@@ -54,26 +54,12 @@ class JpaPublishedGigStore implements PublishedGigStore {
     }
 
     @Override
-    @Transactional
-    public void move(BandId band, GigId from, GigId to) {
-        if (from.equals(to)) {
-            return;
-        }
-        List<PublishedGigEntity> records = jpaRepository.findByKeyBandIdAndKeyGigId(band.value(), from.key());
-        jpaRepository.deleteAll(records);
-        jpaRepository.flush(); // delete before insert, in case the keys collide
-        for (Publication old : mapper.toDomain(records)) {
-            record(band, old.platform(), to, old.externalRef());
-        }
-    }
-
-    @Override
     public List<Publication> of(BandId band, Set<GigId> gigIds) {
         if (gigIds.isEmpty()) {
             return List.of();
         }
         return jpaRepository
-                .findByKeyBandIdAndKeyGigIdIn(band.value(), gigIds.stream().map(GigId::key).toList())
+                .findByKeyBandIdAndKeyGigIdIn(band.value(), gigIds.stream().map(GigId::value).toList())
                 .stream().map(mapper::toDomain).toList();
     }
 
@@ -83,6 +69,6 @@ class JpaPublishedGigStore implements PublishedGigStore {
     }
 
     private static PublishedGigEntity.Key key(BandId band, Platform platform, GigId gigId) {
-        return new PublishedGigEntity.Key(band.value(), platform.id(), gigId.key());
+        return new PublishedGigEntity.Key(band.value(), platform.id(), gigId.value());
     }
 }

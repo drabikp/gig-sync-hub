@@ -12,22 +12,22 @@ import java.util.Base64;
  *
  * <p>It travels as one opaque string, because what it holds is the store's business.
  */
-public record GigCursor(LocalDateTime showAt, String id) {
+public record GigCursor(LocalDateTime showAt, GigId id) {
 
     public GigCursor {
-        if (showAt == null || id == null || id.isBlank()) {
+        if (showAt == null || id == null) {
             throw new IllegalArgumentException("a cursor is a row's show time and id");
         }
     }
 
     /** The cursor that reads on after this row. */
     public static GigCursor after(GigRow row) {
-        return new GigCursor(row.showAt(), row.id().key());
+        return new GigCursor(row.showAt(), row.id());
     }
 
     public String encoded() {
         return Base64.getUrlEncoder().withoutPadding()
-                .encodeToString((showAt + "\u001f" + id).getBytes(StandardCharsets.UTF_8));
+                .encodeToString((showAt + "\u001f" + id.key()).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -43,7 +43,7 @@ public record GigCursor(LocalDateTime showAt, String id) {
             throw new IllegalArgumentException("not a cursor from this list");
         }
         try {
-            return new GigCursor(LocalDateTime.parse(parts[0]), parts[1]);
+            return new GigCursor(LocalDateTime.parse(parts[0]), GigId.fromKey(parts[1]));
         } catch (RuntimeException e) {
             throw new IllegalArgumentException("not a cursor from this list", e);
         }

@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.bandsintown.BandsintownPlatform;
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.importing.domain.ImportedGig;
@@ -45,7 +46,7 @@ public final class BitEventMapper {
             if (end != null && !end.isAfter(start)) {
                 end = null;
             }
-            Gig gig = new Gig(title(event),
+            Gig gig = new Gig(GigId.fresh(), title(event),
                     new GigSchedule(start, end),
                     new Location(venue(event.venueName()), event.venueCity(), country),
                     lineup(event),

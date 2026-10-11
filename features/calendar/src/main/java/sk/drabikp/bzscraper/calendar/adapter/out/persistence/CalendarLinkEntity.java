@@ -8,7 +8,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** JPA persistence model for a calendar event's link to a catalog gig (serialized GigId, as in {@link GigEntity}). */
+/** JPA persistence model for a calendar event's link to a catalog gig (its {@code GigId}). */
 @Entity
 @Table(name = "calendar_link")
 @IdClass(BandEventKey.class)
@@ -18,14 +18,14 @@ class CalendarLinkEntity {
     private UUID bandId;
     @Id
     private String eventUid;
-    private String gigId;
+    private UUID gigId;
     private Instant linkedAt;
 
     protected CalendarLinkEntity() {
         // for JPA
     }
 
-    CalendarLinkEntity(UUID bandId, String eventUid, String gigId, Instant linkedAt) {
+    CalendarLinkEntity(UUID bandId, String eventUid, UUID gigId, Instant linkedAt) {
         this.bandId = bandId;
         this.eventUid = eventUid;
         this.gigId = gigId;
@@ -36,11 +36,7 @@ class CalendarLinkEntity {
         return eventUid;
     }
 
-    String getGigId() {
+    UUID getGigId() {
         return gigId;
-    }
-
-    void moveTo(String newGigId) {
-        gigId = newGigId;
     }
 }

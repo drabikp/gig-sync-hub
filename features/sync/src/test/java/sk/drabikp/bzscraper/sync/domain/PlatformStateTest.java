@@ -1,10 +1,9 @@
 package sk.drabikp.bzscraper.sync.domain;
 
 import org.junit.jupiter.api.Test;
-import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.TestGigs;
 
 import java.time.Instant;
-import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
@@ -14,7 +13,7 @@ class PlatformStateTest {
 
     private static SyncTask task(SyncStatus status, int attempts) {
         Instant now = Instant.parse("2026-10-09T10:00:00Z");
-        return new SyncTask(1, BAND, new GigId(LocalDate.of(2026, 10, 17), "klub"), "gig", BANDZONE, SyncAction.UPDATE,
+        return new SyncTask(1, BAND, TestGigs.id("2026-10-17|klub"), "gig", BANDZONE, SyncAction.UPDATE,
                 status, attempts, now, now, now, null, null);
     }
 

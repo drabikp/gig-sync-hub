@@ -206,14 +206,25 @@ public abstract class SyncOutboxContract {
         assertThat(get(othersPending).status()).isEqualTo(SyncStatus.PENDING);
     }
 
+    /**
+     * An edit can move a gig to another day or rename it. Which gig the work is about does not
+     * change with it — that is what a gig's own identity is for — but what the work is CALLED does,
+     * for the work that has not happened yet. What is settled keeps the label it was done with: the
+     * log says what the work was about when it ran.
+     */
     @Test
-    void tasks_follow_a_gig_whose_identity_changed() {
-        SyncTask task = queue(gig, SyncAction.UPDATE);
+    void the_waiting_work_says_how_the_gig_reads_now_and_the_log_keeps_what_it_said() {
+        SyncTask waiting = queue(gig, SyncAction.UPDATE);
+        SyncTask settled = queue(gig, SyncAction.CANCEL);
+        outbox().markRunning(settled.id(), NOW);
+        outbox().markDone(settled.id(), "cancelled there", NOW);
+        String asItWas = get(settled).gigLabel();
 
-        outbox().move(BAND, gig.id(), other.id(), "moved");
+        outbox().relabel(BAND, gig.id(), "2026-12-24 · Fest, Brno");
 
-        assertThat(get(task).gigId()).isEqualTo(other.id());
-        assertThat(outbox().openFor(BAND, gig.id())).isEmpty();
-        assertThat(outbox().openFor(BAND, other.id())).hasSize(1);
+        assertThat(get(waiting).gigId()).as("which gig it is cannot change").isEqualTo(gig.id());
+        assertThat(get(waiting).gigLabel()).isEqualTo("2026-12-24 · Fest, Brno");
+        assertThat(get(settled).gigLabel()).as("already done: the log is not rewritten").isEqualTo(asItWas);
+        assertThat(outbox().openFor(BAND, gig.id())).extracting(SyncTask::id).containsExactly(waiting.id());
     }
 }

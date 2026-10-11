@@ -7,7 +7,6 @@ import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.GigId;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -27,13 +26,13 @@ class JpaCalendarLinkStore implements CalendarLinkStore {
     @Override
     public Map<String, GigId> all(BandId band) {
         return jpaRepository.findByBandId(band.value()).stream().collect(Collectors.toMap(
-                CalendarLinkEntity::getEventUid, l -> GigId.fromKey(l.getGigId())));
+                CalendarLinkEntity::getEventUid, l -> new GigId(l.getGigId())));
     }
 
     @Override
     @Transactional
     public void link(BandId band, String eventId, GigId gigId) {
-        jpaRepository.save(new CalendarLinkEntity(band.value(), eventId, gigId.key(), clock.instant()));
+        jpaRepository.save(new CalendarLinkEntity(band.value(), eventId, gigId.value(), clock.instant()));
     }
 
     @Override
@@ -42,14 +41,4 @@ class JpaCalendarLinkStore implements CalendarLinkStore {
         jpaRepository.deleteById(new BandEventKey(band.value(), eventId));
     }
 
-    @Override
-    @Transactional
-    public void move(BandId band, GigId from, GigId to) {
-        if (from.equals(to)) {
-            return;
-        }
-        for (CalendarLinkEntity link : jpaRepository.findByBandIdAndGigId(band.value(), from.key())) {
-            link.moveTo(to.key());
-        }
-    }
 }

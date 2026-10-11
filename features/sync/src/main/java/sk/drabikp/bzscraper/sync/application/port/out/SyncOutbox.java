@@ -32,8 +32,12 @@ public interface SyncOutbox extends SyncTaskQueries {
     List<SyncTask> replaceFailed(BandId band, GigId gigId, Platform platform, Set<SyncAction> actions, String why,
                                  Instant now);
 
-    /** Follows a gig whose identity changed (an edit moved its date or venue). */
-    void move(BandId band, GigId from, GigId to, String newLabel);
+    /**
+     * Says how the gig reads NOW on the work that has not happened yet (PENDING, RUNNING) — an edit
+     * may have moved its day or renamed it. What is settled keeps the label it was done with: the
+     * log says what the work was about when it ran, not what the gig became afterwards.
+     */
+    void relabel(BandId band, GigId gigId, String gigLabel);
 
     /** RUNNING, one more attempt — only if still PENDING (the user may have discarded it); false otherwise. */
     boolean markRunning(long id, Instant now);

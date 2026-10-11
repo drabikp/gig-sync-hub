@@ -8,6 +8,7 @@ import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.GigMatch;
 import sk.drabikp.bzscraper.gig.domain.GigQuery;
 import sk.drabikp.bzscraper.gig.domain.GigSlice;
 
@@ -51,6 +52,11 @@ class JpaGigRepository implements GigRepository {
     }
 
     @Override
+    public Optional<Gig> findByMatch(BandId band, GigMatch match) {
+        return jpaRepository.findByBandIdAndMatchKey(band.value(), match.key()).map(mapper::toDomain);
+    }
+
+    @Override
     public List<Gig> findAll(BandId band) {
         return jpaRepository.findByBandId(band.value()).stream().map(mapper::toDomain).toList();
     }
@@ -83,6 +89,6 @@ class JpaGigRepository implements GigRepository {
     }
 
     private static GigEntity.Key key(BandId band, GigId id) {
-        return new GigEntity.Key(band.value(), id.key());
+        return new GigEntity.Key(band.value(), id.value());
     }
 }

@@ -9,11 +9,11 @@ import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.bzscraper.check.domain.Drift;
 import sk.drabikp.bzscraper.check.domain.PlatformCheck;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.TestGigs;
 import sk.drabikp.bzscraper.gig.domain.TestBands;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +40,7 @@ class JpaCheckResultStoreTest {
 
     @Test
     void a_bands_latest_check_round_trips_and_replaces_the_one_before() {
-        GigId gig = new GigId(LocalDate.of(2026, 11, 14), "Klub 007");
+        GigId gig = TestGigs.id("2026-11-14|klub 007");
         PlatformCheck check = new PlatformCheck(Instant.parse("2026-10-10T04:30:00Z"),
                 List.of(new Drift(ALPHA, gig, "14 Nov · Fest", "563380", Drift.Kind.DIFFERENT,
                                 List.of(new Drift.Difference(Drift.Field.TIME, "20:00", "21:00", "time: 20:00 → 21:00"))),

@@ -42,6 +42,6 @@ class PublishedGigEntity {
     public record Key(
             @Column(name = "band_id") UUID bandId,
             String platform,
-            @Column(name = "gig_id") String gigId) {
+            @Column(name = "gig_id") UUID gigId) {
     }
 }

@@ -99,8 +99,18 @@ public record GigDraft(String title, When when, Where where, About about, boolea
         return problems;
     }
 
-    /** The gig; IllegalArgumentException when it can't be one (see {@link #problems()}). */
+    /** The gig as a NEW one — an identity no other gig has. */
     public Gig toGig() {
+        return toGig(GigId.fresh());
+    }
+
+    /**
+     * The gig the draft describes, as the gig that already has this identity: an edit says what a
+     * gig is now, never which gig it is.
+     *
+     * <p>IllegalArgumentException when the draft can't be a gig (see {@link #problems()}).
+     */
+    public Gig toGig(GigId keeping) {
         List<Problem> problems = problems();
         if (!problems.isEmpty()) {
             throw new IllegalArgumentException("not a gig yet: " + problems);
@@ -109,7 +119,7 @@ public record GigDraft(String title, When when, Where where, About about, boolea
         Slot slot = times.slotStart() == null ? null : new Slot(times.slotStart(), times.slotEnd());
         Address address = Address.ofParts(where.street(), where.postalCode(), where.district(), where.region(),
                 where.latitude(), where.longitude());
-        Gig gig = Gig.create(title, new GigSchedule(times.start(), times.end(), slot),
+        Gig gig = Gig.create(keeping, title, new GigSchedule(times.start(), times.end(), slot),
                 new Location(nullIfBlank(where.venue()), where.city().strip(), where.country(), address),
                 about.lineup(), Admission.of(about.entry(), about.price()), nullIfBlank(about.description()),
                 nullIfBlank(about.facebookUrl()), nullIfBlank(about.ticketUrl()), nullIfBlank(about.posterUrl()));

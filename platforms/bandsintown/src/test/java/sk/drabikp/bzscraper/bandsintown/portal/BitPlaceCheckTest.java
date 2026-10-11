@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.gig.domain.TestGigs;
 
@@ -17,7 +18,7 @@ class BitPlaceCheckTest {
 
     private static Gig in(Address address) {
         Gig gig = TestGigs.gig("Fest", "Zámecký klub");
-        return new Gig("Fest", gig.schedule(), new Location("Zámecký klub", "Hranice", Country.CZECHIA, address),
+        return new Gig(GigId.fresh(), "Fest", gig.schedule(), new Location("Zámecký klub", "Hranice", Country.CZECHIA, address),
                 List.of(), gig.admission(), null, null, null, null, false);
     }
 

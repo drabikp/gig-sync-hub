@@ -96,8 +96,11 @@ adapter.out.*, config}`. `gig` is the shared kernel; platforms plug into the fea
 the page is a separate React app (`web/frontend`) over the features' REST APIs.
 
 ```
-features/gig        shared kernel: Gig + its value objects (GigId.key() = how records refer to a
-                    gig, GigId.token() = in addresses; Gig.fingerprint() = a revision's text; Address,
+features/gig        shared kernel: Gig + its value objects (GigId = a gig's own identity, kept for
+                    life — .key() = how records refer to a gig, .token() = in addresses; GigMatch =
+                    which concert it is, the day + the folded venue, how a platform's or the
+                    calendar's copy is recognised and the one thing a band can't have twice;
+                    Gig.fingerprint() = a revision's text; Address,
                     Coordinates), GigDraft (a gig as the form holds it: When / Where / About, its
                     Problems), Platform (compared with equals — never ==)/PlatformTraits (built with
                     PlatformTraits.of(…)…build())/Platforms, Publication, GigRepository/PublishedGigStore/
@@ -129,7 +132,7 @@ features/sync       outbox (SyncOutbox = SyncTaskQueries + the writes; SyncTask�
                     a step's unexpected fault → SyncFaults, logged in full) + step ports (SyncStep,
                     OneAtATimeStep), breakers, pause, settings, worker; /api/sync; test-jar: SyncFakes
                     (its outbox gives platforms back as new instances, like the database), SyncOutboxContract
-features/catalog    catalog use cases, GigWrites (← CatalogWrites), GigMovedListener, GigExporter;
+features/catalog    catalog use cases, GigWrites (← CatalogWrites), GigExporter;
                     …/gigs, …/exports, /api/platforms; test-jar: CatalogFakes
 features/importing  import planner/merge, GigImporter port (+ PlatformReads); /api/import (reads in the background)
 features/check      Reconciler, platform check service + nightly schedule, each band's latest result
@@ -174,8 +177,8 @@ on the kernel only; only `app` sees everything. Another module uses a feature ON
 `domain` and its ports (`application.port.in` to call, `.out` to implement) — never its services,
 adapters or wiring (e.g. the calendar, Import and the check write gigs and links through `GigWrites`, the check asks
 the sync through `SyncStateUseCase`). Where a feature lower in the order needs something from a
-higher one, the lower one owns a port and the higher one implements it (`GigMovedListener`: the
-calendar's links follow a gig's identity move). Each feature wires its own services
+higher one, the lower one owns a port and the higher one implements it (`PlatformAccountCheck`
+and `PlatformSignIn`: the accounts ask the platform that owns the sign-in). Each feature wires its own services
 (`<feature>.config.<Feature>Configuration`, next to its properties record); the implementations
 are public only so that wiring can build them — `ArchitectureTest` keeps everyone else on the
 ports. Inside a platform, the steps, the importer and the endpoint use the portal client; how it
@@ -337,7 +340,8 @@ optional display name there; one login can manage many bands. `features/accounts
 that touches a band's data (`GigRepository.findAll(band)`, `GigWrites.add(band, gig)`,
 `SyncStep.Item.band()` — every item of one run is one band's —, `LiveUpdates.changed(band, topic)`);
 no thread-local "current band": the worker and the nightly check work for every band in one thread.
-`GigId` stays a gig's identity within its band; rows are keyed `(band_id, …)`.
+`GigId` is a gig's identity within its band — its own, and kept however the gig is edited (V10);
+rows are keyed `(band_id, …)`.
 - **Access**: `BandAccessInterceptor` (app) checks every `/api/bands/{bandId}/**` against the
   signed-in user's memberships — not a member = **404** (`notFound`; a band you aren't in doesn't
   exist for you); owner-only actions are checked in the use cases (`ownerOnly`). `BandIsolationTest`
@@ -413,7 +417,7 @@ no thread-local "current band": the worker and the nightly check work for every 
 **The context map is `docs/context-map.md`**: which module models what, how the seams stand to one
 another (shared kernel, anticorruption layer, dependency inversion, conformist), why the same gig is
 a different type in seven contexts on purpose, and where the boundaries deliberately do NOT follow
-the invariants (`GigId` as a natural key; a band as a tenant rather than an aggregate root). What
+the invariants (a band as a tenant rather than an aggregate root). What
 `ArchitectureTest` and `PlatformNamesTest` enforce is that page, in executable form.
 
 Hexagonal inside every feature module (ports & adapters), see **Structure** above. **The core is
@@ -432,11 +436,12 @@ same way.
 **Catalog writes** (`GigWrites`, implemented by `CatalogWrites`): add, replace, delete, cancel /
 reactivate, link and forget a link — the add page, edits, the calendar, Import and the platform check all
 write gigs and their platform links through it, so its rules hold for every writer — a gig never overwrites another (a new gig
-or an identity move onto an existing gig → `GigIdentityTakenException`); an edit applies only
+or an edit that moves a gig onto another's day and venue → `GigIdentityTakenException`); an edit applies only
 to the gig as the writer saw it (`ConcurrentChangeException`); a gig whose platform work is
-RUNNING is not changed, deleted, re-synced or unlinked (`GigBusyException`); an identity move
-takes the gig's platform records and queued work along and tells the `GigMovedListener`s (the
-calendar's links follow); an edit queues the update everywhere the gig is published.
+RUNNING is not changed, deleted, re-synced or unlinked (`GigBusyException`); a gig keeps its
+identity through every edit, so its publications, its queued work and the calendar's link to it
+stay as they are (only how the waiting work NAMES the gig follows it, `SyncOutbox.relabel`); an
+edit queues the update everywhere the gig is published.
 
 ## Platform sync — outbox, eventually consistent
 
@@ -479,7 +484,8 @@ workers at once; none of a paused band or a lane held back) go to the engine.
 - Queueing rules (`SyncRequests`): no second UPDATE while one (or the PUBLISH) is PENDING;
   delete discards the gig's PENDING tasks and queues DELETE where it is published (the
   `published_gig` record outlives the catalog row until that succeeds); a pending CANCEL
-  and REACTIVATE cancel out into an UPDATE; an identity change moves records AND tasks.
+  and REACTIVATE cancel out into an UPDATE; an edit that moves a gig moves nothing (it is the
+  same gig), it only relabels the work still waiting.
 - `SyncRetryPolicy`: UPDATE/CANCEL/DELETE (repeatable) retry after 1, 5, 15 min, then
   FAILED; PUBLISH/REACTIVATE never auto-retry (a failure may have created the event);
   what a platform failure means is TYPED where it happens (`FailureKind` on
@@ -559,7 +565,8 @@ any platform, LINKED to the platform events so they are managed from the catalog
 instead of published again. `GigImporter` per platform returns `ImportedGig`s
 (gig + platform id): Bandzone scrapes the public band page (year tabs + the "planned"
 tab) keeping the concert id and cancelled state; Bandsintown reads the portal.
-`ImportPlanner`: skip platform events already linked; group by `GigId` with the
+`ImportPlanner`: skip platform events already linked; group by `GigMatch` (the day and the
+venue — a copy read from a platform has an identity of its own that means nothing here) with the
 catalog gig and across platforms; else SUGGEST a match on same date + city (only when
 the candidate is unique) — the user confirms (default: unconfirmed = import each copy
 on its own). Where versions differ (title/time/venue/city) the user picks which to
@@ -600,8 +607,8 @@ the catalog already has is `gigIdentityTaken`, a link to a gone gig `notFound`).
 `CalendarGigDrafter` pre-fills the gig form from an event: show time from the
 `SHOWTIME_LABEL` rule kind (the event's own start is the arrival; a show before 06:00 is the
 next day), venue/city/country from the map-style place (`Venue, Street, 811 05
-City-District, Country`). The user checks and saves → gig + `calendar_link` (event → GigId,
-following the gig's identity moves through `GigMovedListener`). Unlinked gig events are matched
+City-District, Country`). The user checks and saves → gig + `calendar_link` (event → GigId, which
+the gig keeps however it is edited, so the link never has to follow it). Unlinked gig events are matched
 to the catalog's gigs that day (link one, or bulk-link where there is exactly one).
 `CalendarCatalogMatcher` compares a LINKED upcoming gig with the calendar: another day,
 another show time, cancelled in the calendar, gone from the calendar (a multi-day event
@@ -866,7 +873,13 @@ what `Gig.isPast` reads), the index `gig_band_show (band_id, show_at, id)` the p
 index for the substring search — extension and index both optional, so a database whose user may not
 create extensions still answers, by scanning that one band's rows — and `published_gig_band_gig
 (band_id, gig_id)`, which the primary key cannot serve (the platform sits in the middle of it).
-`V9__sequences_for_batching.sql`: `sync_task`, `sync_log`, `calendar_rule` and `audit_event` take their
+`V10__gig_identity.sql`: a gig's identity stops being its day and venue — `gig.id` becomes a
+`uuid` of the gig's own and the old key becomes `gig.match_key` (`unique (band_id, match_key)`: one
+gig per band per day and venue, which is what the primary key used to say), and `published_gig`,
+`sync_task` and `calendar_link` name that identity instead of the key (every key any row named got
+one identity, including the keys of gigs already gone, whose rows outlive them on purpose). The
+band's last platform check is cleared: its JSON named gigs by the old key and the nightly run
+writes a new one. `V9__sequences_for_batching.sql`: `sync_task`, `sync_log`, `calendar_rule` and `audit_event` take their
 ids from sequences instead of identity columns, because an identity column cannot be batched (the
 driver must fetch each assigned id back) and all four are written in bulk; drawn 50 at a time
 (`pooled-lo`, so a block's ids are above what the database gave), each sequence owned by its column so

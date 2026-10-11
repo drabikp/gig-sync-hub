@@ -54,10 +54,15 @@ only partly (no tasks, no calendar links, no update queued, no stale check).
   (`GigIdentityTakenException`); `replace(seen, updated)` = stale check, collision check,
   identity move of gig + records + tasks + calendar links, save, queue update. Used by the
   catalog use cases AND Import apply (with the plan-time gig as `seen`).
-- Considered, not done: a surrogate gig key. A deleted gig's platform records must outlive its
-  row until the platform delete succeeds, so it needs soft deletes across four tables and a
+- Considered, not done *then*: a surrogate gig key. A deleted gig's platform records must outlive
+  its row until the platform delete succeeds, so it needs soft deletes across four tables and a
   migration of the real database; with collisions refused and one write path, the identity
   move is safe and tested.
+  **Done in 2026-10 (V10), and the objection turned out not to hold**: records that outlive their
+  gig need no soft delete, because they simply go on naming an identity no gig row has — exactly as
+  they used to go on naming a key no gig row had. The migration gave one identity to every gig key
+  any row named, the gone ones included, so a delete task still names the publication it is
+  removing. What the natural key was really needed for is matching, and that is `GigMatch`.
 
 **2. "Not while it syncs" in the application.** Only two views check it. Catalog changes,
 re-sync, import apply and "forget link" refuse a gig with a RUNNING task (`GigBusyException`);

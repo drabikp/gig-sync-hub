@@ -10,6 +10,8 @@ import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.TestGigs;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.gig.domain.Slot;
@@ -36,7 +38,8 @@ class JpaGigRepositoryTest {
     private JdbcTemplate jdbc;
 
     private static Gig fullGig() {
-        return Gig.create("The Legends Rock Fest",
+        // one identity, so "the gig we saved" and "a gig we did not" stay different questions
+        return Gig.create(TestGigs.id("the legends rock fest"), "The Legends Rock Fest",
                 new GigSchedule(prague(2026, 9, 15, 20, 0), prague(2026, 9, 15, 23, 30)),
                 new Location("Klub 007", "Hořice", Country.CZECHIA), List.of("Eufory", "Support"),
                 Admission.paid("150 Kč"), "A fun night",
@@ -52,8 +55,9 @@ class JpaGigRepositoryTest {
         jdbc.update(TestBands.INSERT_OTHER);
         Gig gig = fullGig();
         repository.save(BAND, gig);
-        repository.save(OTHER, new Gig("Their title", gig.schedule(), gig.location(), gig.lineup(), gig.admission(),
-                null, null, null, null, false));
+        // the same identity in two bands: the key is the band AND the gig, which is what this proves
+        repository.save(OTHER, new Gig(gig.id(), "Their title", gig.schedule(), gig.location(), gig.lineup(),
+                gig.admission(), null, null, null, null, false));
 
         assertThat(repository.findById(BAND, gig.id())).get().extracting(Gig::title).isEqualTo(gig.title());
         assertThat(repository.findById(OTHER, gig.id())).get().extracting(Gig::title).isEqualTo("Their title");
@@ -89,21 +93,21 @@ class JpaGigRepositoryTest {
     void keeps_a_festivals_length_and_the_bands_slot() {
         GigSchedule festival = new GigSchedule(prague(2026, 8, 27, 12, 0), prague(2026, 8, 30, 0, 0),
                 new Slot(prague(2026, 8, 28, 19, 30), prague(2026, 8, 28, 20, 45)));
-        Gig gig = new Gig("Moto Fest", festival, new Location("Camp", "Stará Turá", Country.CZECHIA), List.of(),
-                Admission.free(), null, null, null, null, false);
+        Gig gig = new Gig(GigId.fresh(), "Moto Fest", festival, new Location("Camp", "Stará Turá", Country.CZECHIA),
+                List.of(), Admission.free(), null, null, null, null, false);
 
         repository.save(BAND, gig);
 
         assertThat(repository.findById(BAND, gig.id())).get().extracting(Gig::schedule).isEqualTo(festival);
-        repository.save(BAND, new Gig("Moto Fest", festival.withSlot(null), gig.location(), List.of(), Admission.free(),
-                null, null, null, null, false));
+        repository.save(BAND, new Gig(gig.id(), "Moto Fest", festival.withSlot(null), gig.location(), List.of(),
+                Admission.free(), null, null, null, null, false));
         assertThat(repository.findById(BAND, gig.id()).orElseThrow().schedule().hasSlot()).as("slot removed").isFalse();
     }
 
     @Test
     void keeps_the_address_that_tells_same_named_towns_apart() {
         Address address = new Address("Pernštejnské nám. 1", "753 01", "okres Přerov", "Olomoucký kraj", 49.548, 17.735);
-        Gig gig = new Gig("Fest", GigSchedule.startingAt(prague(2026, 9, 18, 21, 30)),
+        Gig gig = new Gig(GigId.fresh(), "Fest", GigSchedule.startingAt(prague(2026, 9, 18, 21, 30)),
                 new Location("Zámecký klub", "Hranice", Country.CZECHIA, address), List.of(), Admission.free(),
                 null, null, null, null, false);
 
@@ -114,11 +118,11 @@ class JpaGigRepositoryTest {
     }
 
     @Test
-    void save_upserts_by_identity_same_date_and_venue() {
+    void save_upserts_by_identity_and_the_gig_is_found_by_its_day_and_venue() {
         Gig original = fullGig();
         repository.save(BAND, original);
-        // same id (date + venue), different title/admission
-        Gig edited = Gig.create("Renamed Fest", original.schedule(), original.location(),
+        // the same gig — its identity — with another title and entry
+        Gig edited = Gig.create(original.id(), "Renamed Fest", original.schedule(), original.location(),
                 original.lineup(), Admission.free(), null, null, null, null);
 
         repository.save(BAND, edited);
@@ -126,6 +130,9 @@ class JpaGigRepositoryTest {
         assertThat(repository.findAll(BAND)).hasSize(1);
         assertThat(repository.findById(BAND, original.id())).get()
                 .extracting(Gig::title).isEqualTo("Renamed Fest");
+        assertThat(repository.findByMatch(BAND, original.match())).as("which concert it is, unchanged")
+                .contains(edited);
+        assertThat(repository.findByMatch(BAND, TestGigs.gig("Elsewhere", "Fléda").match())).isEmpty();
     }
 
     @Test

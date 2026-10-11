@@ -24,26 +24,28 @@ import java.util.UUID;
  *
  * Schedule is stored as wall-clock {@code LocalDateTime} plus the country; the
  * zone is reconstructed from the country on the way out, sidestepping Hibernate's
- * {@code ZonedDateTime} timezone handling. {@code id} is the serialized natural key
- * (start date + normalized venue) within its band ({@code band_id}), so {@code save} upserts by the
- * band and the gig's identity.
+ * {@code ZonedDateTime} timezone handling. {@code id} is the gig's own identity within its band
+ * ({@code band_id}), so {@code save} upserts by the band and that identity; {@code matchKey} is
+ * the day and the venue ({@code GigMatch.key()}), written with the row so the store can answer
+ * "which gig is this copy about" and refuse a second gig with the same one
+ * ({@code unique (band_id, match_key)}).
  */
 @Entity
 @Table(name = "gig")
 @IdClass(GigEntity.Key.class)
 class GigEntity {
 
-    /** A gig's key: its band and its identity there ({@code GigId.key()}). */
+    /** A gig's key: its band and its identity there ({@code GigId.value()}). */
     static final class Key implements Serializable {
 
         private UUID bandId;
-        private String id;
+        private UUID id;
 
         Key() {
             // for JPA
         }
 
-        Key(UUID bandId, String id) {
+        Key(UUID bandId, UUID id) {
             this.bandId = bandId;
             this.id = id;
         }
@@ -62,7 +64,9 @@ class GigEntity {
     @Id
     private UUID bandId;
     @Id
-    private String id;
+    private UUID id;
+    /** The day and the venue ({@code GigMatch.key()}): not identity, but what a copy is matched by. */
+    private String matchKey;
     /** Optimistic lock: bumped on every update; a save based on an older one fails. */
     @Version
     private Long version;
@@ -120,12 +124,20 @@ class GigEntity {
         this.bandId = bandId;
     }
 
-    public String getId() {
+    public UUID getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(UUID id) {
         this.id = id;
+    }
+
+    public String getMatchKey() {
+        return matchKey;
+    }
+
+    public void setMatchKey(String matchKey) {
+        this.matchKey = matchKey;
     }
 
     public Long getVersion() {

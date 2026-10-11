@@ -25,7 +25,8 @@ class GigDraftTest {
         assertThat(gig.schedule().end().toLocalDate()).isEqualTo(LocalDate.of(2026, 10, 18));
         assertThat(gig.lineup()).containsExactly("Kinless");
         assertThat(gig.location().address().district()).isEqualTo("okres Košice");
-        assertThat(GigDraft.of(gig).toGig()).isEqualTo(gig);
+        assertThat(GigDraft.of(gig).toGig(gig.id())).as("the form says nothing about which gig it is")
+                .isEqualTo(gig);
     }
 
     @Test

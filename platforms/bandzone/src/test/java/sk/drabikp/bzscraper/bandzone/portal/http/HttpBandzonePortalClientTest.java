@@ -15,6 +15,7 @@ import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.sync.application.port.out.FailureKind;
@@ -55,11 +56,11 @@ class HttpBandzonePortalClientTest {
 
     @Test
     void creates_edits_cancels_and_deletes_a_concert_as_the_pages_do() throws Exception {
-        Gig gig = new Gig("Release show", new GigSchedule(at(2026, 11, 12, 20, 0), at(2026, 11, 13, 1, 0)),
+        Gig gig = new Gig(GigId.fresh(), "Release show", new GigSchedule(at(2026, 11, 12, 20, 0), at(2026, 11, 13, 1, 0)),
                 new Location("Lucerna Music Bar", "Praha", Country.CZECHIA), List.of("Incertus Posterus", "Stubby"),
                 Admission.paid("200 Kč"), "first line\nsecond line", "https://www.facebook.com/events/1", null,
                 bandzone.baseUrl() + "/poster.png", false);
-        Gig edited = new Gig("Release show (moved)", GigSchedule.startingAt(at(2026, 11, 14, 21, 30)), HRANICE_NA_MORAVE,
+        Gig edited = new Gig(GigId.fresh(), "Release show (moved)", GigSchedule.startingAt(at(2026, 11, 14, 21, 30)), HRANICE_NA_MORAVE,
                 List.of("Incertus Posterus"), Admission.voluntary(), "edited", null, null, null, false);
 
         try (BandzoneSession session = client.openSession(BandId.FIRST)) {
@@ -120,7 +121,7 @@ class HttpBandzonePortalClientTest {
 
     @Test
     void a_town_bandzone_knows_several_of_needs_the_user_to_pick_it() throws Exception {
-        Gig typedOnly = new Gig("Somewhere", GigSchedule.startingAt(at(2026, 11, 20, 20, 0)),
+        Gig typedOnly = new Gig(GigId.fresh(), "Somewhere", GigSchedule.startingAt(at(2026, 11, 20, 20, 0)),
                 new Location(null, "Hranice", Country.CZECHIA), List.of(), Admission.free(), null, null, null, null, false);
         try (BandzoneSession session = client.openSession(BandId.FIRST)) {
             assertThatThrownBy(() -> session.createGig(typedOnly))
@@ -151,7 +152,7 @@ class HttpBandzonePortalClientTest {
     @EnumSource(BandzoneHttpFixture.AfterStepOne.class)
     void creates_however_the_wizard_leads_from_its_first_step(BandzoneHttpFixture.AfterStepOne shape) throws Exception {
         bandzone.afterStepOne = shape;
-        Gig gig = new Gig("Club night", GigSchedule.startingAt(at(2026, 12, 1, 21, 0)),
+        Gig gig = new Gig(GigId.fresh(), "Club night", GigSchedule.startingAt(at(2026, 12, 1, 21, 0)),
                 new Location(null, "Praha", Country.CZECHIA), List.of(), Admission.free(), null, null, null, null, false);
         try (BandzoneSession session = client.openSession(BandId.FIRST)) {
             String id = session.createGig(gig);

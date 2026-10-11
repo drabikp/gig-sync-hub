@@ -4,6 +4,7 @@ import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.GigMatch;
 import sk.drabikp.bzscraper.gig.domain.GigQuery;
 import sk.drabikp.bzscraper.gig.domain.GigSlice;
 
@@ -16,13 +17,22 @@ import java.util.Optional;
  * Outbound port for the local gig store — the source of truth, one catalog per band. Speaks only
  * the domain ({@link Gig} / {@link GigId}, the band's {@link BandId}); the persistence technology
  * lives entirely behind the implementing adapter. {@code save} is an upsert keyed by the band and
- * the {@link GigId} — the same day and venue in two bands are two gigs.
+ * the {@link GigId}, which a gig keeps for life — an edit that moves a gig to another day saves
+ * the same gig, and nothing has to be re-keyed.
  */
 public interface GigRepository {
 
     void save(BandId band, Gig gig);
 
     Optional<Gig> findById(BandId band, GigId id);
+
+    /**
+     * The band's gig on that day at that venue, if it has one — how a copy from a platform or the
+     * calendar, which carries no identity of ours, is recognised as one the catalog already holds.
+     * At most one: a band may not have two gigs with the same {@link GigMatch}, and the store keeps
+     * it that way.
+     */
+    Optional<Gig> findByMatch(BandId band, GigMatch match);
 
     /**
      * Every gig of the band. Only for work that is about ALL of them — an export, a reconciliation —

@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.gig.domain.Slot;
@@ -15,6 +16,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Translates between the {@link Gig} aggregate and its {@link GigEntity} (MapStruct). Schedule
@@ -27,7 +29,8 @@ interface GigEntityMapper {
     String LINEUP_DELIMITER = "\n";
 
     @Mapping(target = "bandId", source = "band.value")
-    @Mapping(target = "id", expression = "java(gig.id().key())")
+    @Mapping(target = "id", expression = "java(gig.id().value())")
+    @Mapping(target = "matchKey", expression = "java(gig.match().key())")
     @Mapping(target = "version", ignore = true)
     @Mapping(target = "startDateTime", source = "gig.schedule.start")
     @Mapping(target = "endDateTime", source = "gig.schedule.end")
@@ -61,6 +64,11 @@ interface GigEntityMapper {
     @Mapping(target = "admission", source = ".")
     @Mapping(target = "rescheduledTo", ignore = true)       // a method of Gig's that MapStruct takes for a setter
     Gig toDomain(GigEntity entity);
+
+    /** A gig's identity as the row keeps it; the match key is written with the row, never read back. */
+    default GigId toGigId(UUID id) {
+        return new GigId(id);
+    }
 
     default GigSchedule toSchedule(GigEntity e) {
         ZoneId zone = Location.zoneOf(e.getCountry());

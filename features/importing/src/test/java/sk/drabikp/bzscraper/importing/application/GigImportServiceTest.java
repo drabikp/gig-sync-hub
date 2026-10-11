@@ -44,6 +44,12 @@ class GigImportServiceTest {
     private final Gig klub = TestGigs.gig("Fest", "Klub 007");
     private final Gig klubRenamed = TestGigs.gig("Fest 2026", "Klub 007");
 
+    /** The same concert as {@code gig} says it is, read from a platform — so, a gig of its own. */
+    private static Gig asRead(Gig gig) {
+        return Gig.create(gig.title(), gig.schedule(), gig.location(), gig.lineup(), gig.admission(),
+                gig.description(), gig.facebookUrl(), gig.ticketUrl(), gig.posterImageUrl());
+    }
+
     private static GigImporter importer(Platform platform, Listing listed) {
         return new GigImporter() {
             @Override
@@ -131,8 +137,11 @@ class GigImportServiceTest {
         ImportResult result = service().apply(BAND, List.of(new ImportDecision(proposal, true, true,
                 proposal.versions().get(1))));
 
-        assertThat(gigs.findById(BAND, klub.id())).contains(klubRenamed);
-        assertThat(published.externalRef(BAND, BANDZONE, klubRenamed.id())).contains("100");
+        assertThat(gigs.findById(BAND, klub.id())).get()
+                .as("the catalog's gig, with the platform's details — not a second gig")
+                .extracting(Gig::title).isEqualTo(klubRenamed.title());
+        assertThat(gigs.findAll(BAND)).hasSize(1);
+        assertThat(published.externalRef(BAND, BANDZONE, klub.id())).contains("100");
         assertThat(result).isEqualTo(new ImportResult(0, 1, 1, 0));
         assertThat(outbox.all()).extracting(SyncTask::platform, SyncTask::action)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple(BANDSINTOWN, SyncAction.UPDATE));
@@ -151,8 +160,13 @@ class GigImportServiceTest {
         assertThat(result).isEqualTo(new ImportResult(0, 0, 1, 0));
     }
 
+    /**
+     * This used to be called "moves the catalog gig and its links": taking a version with another
+     * venue changed the gig's identity, and the records had to be carried over to it. Now it is one
+     * gig that has a different venue than it did, and the records never moved.
+     */
     @Test
-    void choosing_a_version_with_another_venue_moves_the_catalog_gig_and_its_links() {
+    void choosing_a_version_with_another_venue_changes_the_catalog_gig_and_keeps_its_links() {
         gigs.save(BAND, klub);
         published.record(BAND, BANDZONE, klub.id(), "100");
         Gig elsewhere = TestGigs.gig("Fest", "Lucerna");
@@ -161,21 +175,26 @@ class GigImportServiceTest {
 
         service().apply(BAND, List.of(new ImportDecision(proposal, true, true, proposal.versions().get(1))));
 
-        assertThat(gigs.findById(BAND, klub.id())).isEmpty();
-        assertThat(gigs.findById(BAND, elsewhere.id())).isPresent();
-        assertThat(published.externalRef(BAND, BANDZONE, elsewhere.id())).contains("100");
-        assertThat(published.externalRef(BAND, BANDSINTOWN, elsewhere.id())).contains("900");
+        assertThat(gigs.findAll(BAND)).hasSize(1);
+        assertThat(gigs.findById(BAND, klub.id())).get()
+                .extracting(g -> g.location().venue()).isEqualTo("Lucerna");
+        assertThat(gigs.findByMatch(BAND, elsewhere.match())).as("it is that concert now").isPresent();
+        assertThat(published.externalRef(BAND, BANDZONE, klub.id())).contains("100");
+        assertThat(published.externalRef(BAND, BANDSINTOWN, klub.id())).contains("900");
     }
 
     @Test
     void the_catalog_rules_hold_for_import_too_nothing_is_written_when_one_says_no() {
-        Gig changedSincePlan = TestGigs.gig("Fest — renamed meanwhile", "Klub 007");
+        Gig changedSincePlan = Gig.create(klub.id(), "Fest — renamed meanwhile", klub.schedule(), klub.location(),
+                klub.lineup(), klub.admission(), null, null, null, null);
         gigs.save(BAND, changedSincePlan);
         ImportProposal stale = new ImportProposal(klub, List.of(new ImportedGig(BANDZONE, klubRenamed, "100")),
                 false);
         Gig other = TestGigs.gig("Other", "Lucerna");
         gigs.save(BAND, other);
-        ImportProposal ontoOther = new ImportProposal(null, List.of(new ImportedGig(BANDZONE, other, "200")), false);
+        // as a platform hands it over: the same night, and no idea it is a gig we already have
+        ImportProposal ontoOther = new ImportProposal(null,
+                List.of(new ImportedGig(BANDZONE, asRead(other), "200")), false);
 
         assertThatThrownBy(() -> service().apply(BAND, List.of(new ImportDecision(stale, true, true,
                 stale.versions().get(1))))).isInstanceOf(ConcurrentChangeException.class);

@@ -45,7 +45,7 @@ class JpaSyncOutbox implements SyncOutbox {
     @Transactional
     public SyncTask enqueue(BandId band, GigId gigId, String gigLabel, Platform platform, SyncAction action,
                             Instant now) {
-        SyncTaskEntity task = tasks.save(new SyncTaskEntity(band.value(), gigId.key(), gigLabel, platform,
+        SyncTaskEntity task = tasks.save(new SyncTaskEntity(band.value(), gigId.value(), gigLabel, platform,
                 action, now));
         write(task, now, "queued");
         return mapper.toTask(task);
@@ -58,7 +58,7 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     public List<SyncTask> openFor(BandId band, GigId gigId) {
-        return mapper.toTasks(tasks.findByBandIdAndGigIdAndStatusInOrderByIdAsc(band.value(), gigId.key(), OPEN));
+        return mapper.toTasks(tasks.findByBandIdAndGigIdAndStatusInOrderByIdAsc(band.value(), gigId.value(), OPEN));
     }
 
     @Override
@@ -73,7 +73,7 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     public List<SyncTask> history(BandId band, GigId gigId, int limit) {
-        return mapper.toTasks(tasks.findByBandIdAndGigIdOrderByUpdatedAtDescIdDesc(band.value(), gigId.key(), Limit.of(limit)));
+        return mapper.toTasks(tasks.findByBandIdAndGigIdOrderByUpdatedAtDescIdDesc(band.value(), gigId.value(), Limit.of(limit)));
     }
 
     @Override
@@ -85,7 +85,7 @@ class JpaSyncOutbox implements SyncOutbox {
     @Transactional
     public List<SyncTask> supersede(BandId band, GigId gigId, Platform platform, String why, Instant now) {
         List<SyncTaskEntity> pending = tasks.findByBandIdAndGigIdAndPlatformAndStatusOrderByIdAsc(
-                band.value(), gigId.key(), platform.id(), SyncStatus.PENDING.name());
+                band.value(), gigId.value(), platform.id(), SyncStatus.PENDING.name());
         for (SyncTaskEntity task : pending) {
             task.change(SyncStatus.DISCARDED, null, "superseded: " + why, now);
             write(task, now, "superseded: " + why);
@@ -98,7 +98,7 @@ class JpaSyncOutbox implements SyncOutbox {
     public List<SyncTask> replaceFailed(BandId band, GigId gigId, Platform platform, Set<SyncAction> actions,
                                         String why, Instant now) {
         List<SyncTaskEntity> failed = tasks.findByBandIdAndGigIdAndPlatformAndStatusOrderByIdAsc(
-                        band.value(), gigId.key(), platform.id(), SyncStatus.FAILED.name()).stream()
+                        band.value(), gigId.value(), platform.id(), SyncStatus.FAILED.name()).stream()
                 .filter(task -> actions.contains(SyncAction.valueOf(task.getAction())))
                 .toList();
         for (SyncTaskEntity task : failed) {
@@ -110,9 +110,10 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     @Transactional
-    public void move(BandId band, GigId from, GigId to, String newLabel) {
-        for (SyncTaskEntity task : tasks.findByBandIdAndGigId(band.value(), from.key())) {
-            task.moveTo(to.key(), newLabel);
+    public void relabel(BandId band, GigId gigId, String gigLabel) {
+        for (SyncTaskEntity task : tasks.findByBandIdAndGigIdAndStatusInOrderByIdAsc(band.value(), gigId.value(),
+                OPEN)) {
+            task.relabel(gigLabel);
         }
     }
 

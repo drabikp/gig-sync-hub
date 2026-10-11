@@ -23,12 +23,15 @@ import java.sql.Types;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * The one-time move from H2 (the app's database until 2026-10) to PostgreSQL: with
@@ -37,6 +40,12 @@ import java.util.Set;
  * (the columns both have) into PostgreSQL, then moves the id counters past the copied ids.
  * Only into an empty database — never over data; one transaction: anything that fails rolls the
  * whole import back and stops the start, so it can be fixed and run again.
+ *
+ * <p>One thing is not a straight copy: in H2 a gig WAS its day and venue ({@code "2026-10-01|klub
+ * 007"}), and here a gig has an identity of its own (V10). So each gig key met in the backup is
+ * given one identity, kept for the rest of the import, and everything that named a gig by that key
+ * — its publications, its sync tasks, the calendar's links — is written with that identity instead.
+ * The key itself is not lost: it is what the gig's {@code match_key} is for.
  */
 @Component
 @ConditionalOnExpression("!'${bzscraper.db.import-h2:}'.isBlank()")
@@ -50,6 +59,9 @@ class H2Import implements Callback {
     private static final Set<String> WITH_ID_COUNTER = Set.of("sync_task", "sync_log", "calendar_rule");
 
     private final Path script;
+
+    /** The identity given to each gig key met in the backup; H2 knew one band, so the key is enough. */
+    private final Map<String, UUID> identities = new HashMap<>();
 
     H2Import(@Value("${bzscraper.db.import-h2}") String script) {
         this.script = Path.of(script);
@@ -119,7 +131,17 @@ class H2Import implements Callback {
         }
     }
 
-    private static int copy(Connection source, Connection target, String table) throws SQLException {
+    /** The identity of the gig this key names — the same one wherever the key turns up again. */
+    private UUID identityOf(String gigKey) {
+        return identities.computeIfAbsent(gigKey, key -> UUID.randomUUID());
+    }
+
+    /** Columns that named a gig by its day and venue, and now name its identity. */
+    private static boolean namesAGig(String table, String column) {
+        return "gig_id".equals(column) || ("gig".equals(table) && "id".equals(column));
+    }
+
+    private int copy(Connection source, Connection target, String table) throws SQLException {
         List<String> columns = columns(source, table.toUpperCase(Locale.ROOT));
         if (columns.isEmpty()) {
             return 0;                                   // an older database without this table
@@ -128,12 +150,21 @@ class H2Import implements Callback {
         columns.retainAll(targetColumns);
         // the H2 database knew one band: its rows are band #1's (the shipped calendar rules nobody's)
         boolean toFirstBand = targetColumns.contains("band_id") && !columns.contains("band_id");
+        // columns this database has and the backup hasn't, worked out per row from what it has
+        List<String> added = new ArrayList<>();
+        if (toFirstBand) {
+            added.add("band_id");
+        }
+        if (targetColumns.contains("match_key") && !columns.contains("match_key")) {
+            added.add("match_key");
+        }
         String list = String.join(", ", columns);
         String marks = String.join(", ", columns.stream().map(c -> "?").toList());
-        String insertSql = toFirstBand
-                ? "insert into " + table + " (" + list + ", band_id) values (" + marks + ", ?)"
-                : "insert into " + table + " (" + list + ") values (" + marks + ")";
+        String insertSql = "insert into " + table + " (" + list
+                + added.stream().map(c -> ", " + c).collect(Collectors.joining()) + ") values (" + marks
+                + added.stream().map(c -> ", ?").collect(Collectors.joining()) + ")";
         int origin = columns.indexOf("origin") + 1;
+        int gigKey = columns.indexOf("id") + 1;
         int count = 0;
         try (Statement read = source.createStatement();
              ResultSet rows = read.executeQuery("select " + list + " from " + table);
@@ -141,11 +172,20 @@ class H2Import implements Callback {
             ResultSetMetaData meta = rows.getMetaData();
             while (rows.next()) {
                 for (int i = 1; i <= columns.size(); i++) {
-                    insert.setObject(i, value(rows, i, meta.getColumnType(i)));
+                    insert.setObject(i, namesAGig(table, columns.get(i - 1))
+                            ? identityOf(rows.getString(i))
+                            : value(rows, i, meta.getColumnType(i)));
                 }
-                if (toFirstBand) {
+                int at = columns.size();
+                for (String column : added) {
+                    at++;
                     boolean preset = origin > 0 && "PRESET".equals(rows.getString(origin));
-                    insert.setObject(columns.size() + 1, preset ? null : BandId.FIRST.value());
+                    insert.setObject(at, switch (column) {
+                        case "band_id" -> preset ? null : BandId.FIRST.value();
+                        // the key the gig USED to be is what it is now matched by
+                        case "match_key" -> rows.getString(gigKey);
+                        default -> throw new IllegalStateException("nothing to put in " + column);
+                    });
                 }
                 insert.addBatch();
                 if (++count % 500 == 0) {

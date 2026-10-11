@@ -91,7 +91,7 @@ class GigsController implements GigsApi {
     public ResponseEntity<GigEditedResponse> editGig(UUID bandId, String id, GigEditRequest edit) {
         BandId band = refs.toBandId(bandId);
         Gig seen = GigRevisions.asSeen(gigs.gig(band, refs.toGigId(id)), edit.getRev());
-        Gig updated = InvalidGigException.gigOf(forms.toDraft(edit.getGig()));
+        Gig updated = InvalidGigException.gigOf(forms.toDraft(edit.getGig()), seen.id());
         return ResponseEntity.ok(views.edited(band, updated, updateGig.update(band, seen, updated)));
     }
 

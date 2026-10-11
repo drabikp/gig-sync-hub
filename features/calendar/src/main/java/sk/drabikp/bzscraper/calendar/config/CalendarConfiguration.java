@@ -6,7 +6,6 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import sk.drabikp.bzscraper.calendar.application.CalendarCatalogService;
-import sk.drabikp.bzscraper.calendar.application.CalendarLinksFollowGigs;
 import sk.drabikp.bzscraper.accounts.application.port.in.SecretBox;
 import sk.drabikp.bzscraper.calendar.application.CalendarReviewService;
 import sk.drabikp.bzscraper.calendar.application.CalendarSetupService;
@@ -74,9 +73,4 @@ class CalendarConfiguration {
         };
     }
 
-    /** A calendar event's link follows its gig when an edit moves the gig's identity. */
-    @Bean
-    CalendarLinksFollowGigs calendarLinksFollowGigs(CalendarLinkStore linkStore) {
-        return new CalendarLinksFollowGigs(linkStore);
-    }
 }

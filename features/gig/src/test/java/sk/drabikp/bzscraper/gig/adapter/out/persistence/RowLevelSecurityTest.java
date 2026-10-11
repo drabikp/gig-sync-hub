@@ -33,8 +33,10 @@ class RowLevelSecurityTest {
         insertGig(OTHER.toString(), "2026-11-14_theirs");
     }
 
-    private void insertGig(String band, String id) {
-        jdbc.update("insert into gig (band_id, id, title, cancelled) values (?::uuid, ?, 'Fest', false)", band, id);
+    /** {@code match} is the gig's day and venue; its identity is its own, and nothing here reads it. */
+    private void insertGig(String band, String match) {
+        jdbc.update("insert into gig (band_id, id, match_key, title, cancelled)"
+                + " values (?::uuid, gen_random_uuid(), ?, 'Fest', false)", band, match);
     }
 
     /** From here on in this transaction: the app's role, told {@code scope}. */
@@ -44,7 +46,7 @@ class RowLevelSecurityTest {
     }
 
     private int gigs() {
-        return jdbc.queryForObject("select count(*) from gig where id like '2026-11-14_%'", Integer.class);
+        return jdbc.queryForObject("select count(*) from gig where match_key like '2026-11-14_%'", Integer.class);
     }
 
     @Test
@@ -52,8 +54,8 @@ class RowLevelSecurityTest {
         asApp(BAND.toString());
 
         assertThat(gigs()).isEqualTo(1);
-        assertThat(jdbc.update("update gig set title = 'Changed' where id like '2026-11-14_%'")).as("only ours").isEqualTo(1);
-        assertThat(jdbc.update("delete from gig where id = '2026-11-14_theirs'")).isZero();
+        assertThat(jdbc.update("update gig set title = 'Changed' where match_key like '2026-11-14_%'")).as("only ours").isEqualTo(1);
+        assertThat(jdbc.update("delete from gig where match_key = '2026-11-14_theirs'")).isZero();
         assertThatThrownBy(() -> insertGig(OTHER.toString(), "2026-11-15_sneaked"))
                 .as("a row of another band can't be written").isInstanceOf(DataAccessException.class);
     }

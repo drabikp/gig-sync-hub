@@ -2,6 +2,7 @@ package sk.drabikp.bzscraper.gig.application;
 
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigDraft;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 
 import java.util.List;
 import java.util.Map;
@@ -14,12 +15,17 @@ public class InvalidGigException extends UserFacingException {
                 "Check the gig: " + String.join(", ", fields) + ".");
     }
 
-    /** The draft's gig, or this exception naming what is wrong with it. */
+    /** The draft's gig as a NEW one, or this exception naming what is wrong with it. */
     public static Gig gigOf(GigDraft draft) {
+        return gigOf(draft, GigId.fresh());
+    }
+
+    /** The draft's gig as an edit of the gig that has this identity, or this exception. */
+    public static Gig gigOf(GigDraft draft, GigId keeping) {
         List<GigDraft.Problem> problems = draft.problems();
         if (!problems.isEmpty()) {
             throw new InvalidGigException(problems.stream().map(GigDraft.Problem::field).toList());
         }
-        return draft.toGig();
+        return draft.toGig(keeping);
     }
 }

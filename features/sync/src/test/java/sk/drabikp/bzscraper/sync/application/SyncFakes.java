@@ -9,6 +9,7 @@ import sk.drabikp.bzscraper.gig.domain.DateRange;
 import sk.drabikp.bzscraper.gig.domain.Gig;
 import sk.drabikp.bzscraper.gig.domain.GigCursor;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.GigMatch;
 import sk.drabikp.bzscraper.gig.domain.GigQuery;
 import sk.drabikp.bzscraper.gig.domain.GigRow;
 import sk.drabikp.bzscraper.gig.domain.GigSlice;
@@ -144,9 +145,10 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized void move(BandId band, GigId from, GigId to, String newLabel) {
-            tasks.replaceAll((id, t) -> t.band().equals(band) && t.gigId().equals(from)
-                    ? new SyncTask(t.id(), t.band(), to, newLabel, t.platform(),
+        public synchronized void relabel(BandId band, GigId gigId, String gigLabel) {
+            tasks.replaceAll((id, t) -> t.band().equals(band) && t.gigId().equals(gigId)
+                    && (t.status() == SyncStatus.PENDING || t.status() == SyncStatus.RUNNING)
+                    ? new SyncTask(t.id(), t.band(), t.gigId(), gigLabel, t.platform(),
                     t.action(), t.status(), t.attempts(), t.createdAt(), t.nextAttemptAt(), t.updatedAt(),
                     t.message(), t.step()) : t);
         }
@@ -278,16 +280,6 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized void move(BandId band, GigId from, GigId to) {
-            for (Publication p : all(band)) {
-                if (p.gigId().equals(from)) {
-                    remove(band, p.platform(), from);
-                    record(band, p.platform(), to, p.externalRef());
-                }
-            }
-        }
-
-        @Override
         public synchronized List<Publication> of(BandId band, Set<GigId> gigIds) {
             return all(band).stream().filter(p -> gigIds.contains(p.gigId())).toList();
         }
@@ -315,6 +307,11 @@ public final class SyncFakes {
         @Override
         public synchronized Optional<Gig> findById(BandId band, GigId id) {
             return Optional.ofNullable(of(band).get(id));
+        }
+
+        @Override
+        public synchronized Optional<Gig> findByMatch(BandId band, GigMatch match) {
+            return of(band).values().stream().filter(g -> g.match().equals(match)).findFirst();
         }
 
         @Override
@@ -373,7 +370,7 @@ public final class SyncFakes {
             if (query.after() == null) {
                 return true;
             }
-            int order = ROWS.compare(row, new GigRow(GigId.fromKey(query.after().id()), query.after().showAt(),
+            int order = ROWS.compare(row, new GigRow(query.after().id(), query.after().showAt(),
                     row.start(), "", null, "", row.country(), false));
             return upcoming ? order > 0 : order < 0;
         }

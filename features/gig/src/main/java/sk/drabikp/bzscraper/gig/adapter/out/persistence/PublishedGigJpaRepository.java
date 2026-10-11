@@ -9,10 +9,10 @@ import java.util.UUID;
 /** Spring Data repository for {@link PublishedGigEntity}; used only by {@link JpaPublishedGigStore}. */
 interface PublishedGigJpaRepository extends JpaRepository<PublishedGigEntity, PublishedGigEntity.Key> {
 
-    List<PublishedGigEntity> findByKeyBandIdAndKeyGigId(UUID bandId, String gigId);
+    List<PublishedGigEntity> findByKeyBandIdAndKeyGigId(UUID bandId, UUID gigId);
 
     List<PublishedGigEntity> findByKeyBandId(UUID bandId);
 
     /** One page's publications, read through published_gig_band_gig rather than the band's lot. */
-    List<PublishedGigEntity> findByKeyBandIdAndKeyGigIdIn(UUID bandId, Collection<String> gigIds);
+    List<PublishedGigEntity> findByKeyBandIdAndKeyGigIdIn(UUID bandId, Collection<UUID> gigIds);
 }

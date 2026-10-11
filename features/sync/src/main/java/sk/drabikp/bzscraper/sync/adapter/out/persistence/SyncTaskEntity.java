@@ -29,7 +29,7 @@ class SyncTaskEntity {
     @SequenceGenerator(name = "syncTaskSeq", sequenceName = "sync_task_seq", allocationSize = 50)
     private Long id;
     private UUID bandId;
-    private String gigId;
+    private UUID gigId;
     private String gigLabel;
     private String platform;
     private String action;
@@ -48,7 +48,7 @@ class SyncTaskEntity {
         // for JPA
     }
 
-    SyncTaskEntity(UUID bandId, String gigId, String gigLabel, Platform platform, SyncAction action, Instant now) {
+    SyncTaskEntity(UUID bandId, UUID gigId, String gigLabel, Platform platform, SyncAction action, Instant now) {
         this.bandId = bandId;
         this.gigId = gigId;
         this.gigLabel = clip(gigLabel, 500);
@@ -69,7 +69,7 @@ class SyncTaskEntity {
         return bandId;
     }
 
-    public String getGigId() {
+    public UUID getGigId() {
         return gigId;
     }
 
@@ -117,8 +117,8 @@ class SyncTaskEntity {
         return attempts;
     }
 
-    void moveTo(String newGigId, String newLabel) {
-        this.gigId = newGigId;
+    /** The gig reads differently now; which gig it is cannot change. */
+    void relabel(String newLabel) {
         this.gigLabel = clip(newLabel, 500);
     }
 

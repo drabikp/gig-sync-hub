@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.gig.domain.TestGigs;
@@ -93,7 +94,7 @@ class ImportPlannerTest {
     @Test
     void an_end_time_on_one_platform_only_is_not_a_difference() {
         Gig bz = gig("Fest", "Klub 007", "Praha", 15);
-        Gig bit = new Gig("Fest", new GigSchedule(bz.schedule().start(), bz.schedule().start().plusHours(6)),
+        Gig bit = new Gig(GigId.fresh(), "Fest", new GigSchedule(bz.schedule().start(), bz.schedule().start().plusHours(6)),
                 bz.location(), List.of(), Admission.free(), null, null, null, null, false);
 
         ImportPlan plan = plan(List.of(), List.of(), on(BANDZONE, bz, "100"), on(BANDSINTOWN, bit, "900"));

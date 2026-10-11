@@ -2,10 +2,10 @@ package sk.drabikp.bzscraper.sync.domain;
 
 import org.junit.jupiter.api.Test;
 import sk.drabikp.bzscraper.gig.domain.GigId;
+import sk.drabikp.bzscraper.gig.domain.TestGigs;
 import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,7 +16,7 @@ import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 /** What a gig's unfinished work says about the work a change to it still needs. */
 class OpenWorkTest {
 
-    private static final GigId GIG = new GigId(LocalDate.of(2026, 10, 17), "klub");
+    private static final GigId GIG = TestGigs.id("2026-10-17|klub");
     private static final Instant NOW = Instant.parse("2026-10-09T10:00:00Z");
 
     private static SyncTask task(Platform platform, SyncAction action, SyncStatus status) {

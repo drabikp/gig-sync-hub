@@ -7,6 +7,7 @@ import sk.drabikp.bzscraper.gig.domain.platform.Platform;
 import sk.drabikp.bzscraper.gig.domain.platform.Publication;
 
 import java.util.List;
+import java.util.UUID;
 
 /** A gig's record on a platform ({@link PublishedGigEntity}) as the domain's {@link Publication} (MapStruct). */
 @Mapper
@@ -22,7 +23,7 @@ interface PublicationEntityMapper {
         return Platform.of(id);
     }
 
-    default GigId toGigId(String key) {
-        return GigId.fromKey(key);
+    default GigId toGigId(UUID id) {
+        return new GigId(id);
     }
 }

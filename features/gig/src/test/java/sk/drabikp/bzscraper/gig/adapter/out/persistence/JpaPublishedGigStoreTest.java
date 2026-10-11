@@ -60,30 +60,6 @@ class JpaPublishedGigStoreTest {
     }
 
     @Test
-    void move_re_keys_every_platform_record_and_keeps_the_refs() {
-        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
-        store.record(BAND, TestPlatforms.BANDSINTOWN, klub, null);
-
-        store.move(BAND, klub, barrak);
-
-        assertThat(store.isPublished(BAND, TestPlatforms.BANDZONE, klub)).isFalse();
-        assertThat(store.isPublished(BAND, TestPlatforms.BANDSINTOWN, klub)).isFalse();
-        assertThat(store.externalRef(BAND, TestPlatforms.BANDZONE, barrak)).contains("100");
-        assertThat(store.isPublished(BAND, TestPlatforms.BANDSINTOWN, barrak)).isTrue();
-    }
-
-    @Test
-    void move_of_an_unpublished_gig_or_to_the_same_id_changes_nothing() {
-        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
-
-        store.move(BAND, barrak, klub);
-        store.move(BAND, klub, klub);
-
-        assertThat(store.externalRef(BAND, TestPlatforms.BANDZONE, klub)).contains("100");
-        assertThat(store.isPublished(BAND, TestPlatforms.BANDZONE, barrak)).isFalse();
-    }
-
-    @Test
     void lists_every_publication_with_its_gig_identity() {
         store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
         store.record(BAND, TestPlatforms.BANDSINTOWN, barrak, null);

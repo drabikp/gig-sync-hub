@@ -117,8 +117,8 @@ public class GigImportService implements ImportGigsUseCase {
      */
     private QueueResult importTogether(BandId band, ImportProposal proposal, ImportProposal.Version chosen,
                                        Tally tally) {
-        Gig merged = GigMerge.merge(chosen, proposal.versions(), platforms);
         Gig local = proposal.local();
+        Gig merged = GigMerge.merge(local, chosen, proposal.versions(), platforms);
         QueueResult queued = QueueResult.NOTHING;
         if (local == null) {
             writes.add(band, merged);
@@ -136,8 +136,8 @@ public class GigImportService implements ImportGigsUseCase {
 
     /** A suggested match the user rejected: the copy becomes its own catalog gig. */
     private void importOnItsOwn(BandId band, ImportedGig copy, Tally tally) {
-        if (gigRepository.findById(band, copy.gig().id()).isPresent()) {
-            tally.skipped++;                     // would overwrite another catalog gig
+        if (gigRepository.findByMatch(band, copy.gig().match()).isPresent()) {
+            tally.skipped++;                     // that day and venue are another catalog gig's
             return;
         }
         writes.add(band, copy.gig());

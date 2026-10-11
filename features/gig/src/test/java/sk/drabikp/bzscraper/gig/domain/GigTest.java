@@ -53,10 +53,14 @@ class GigTest {
     }
 
     @Test
-    void identity_is_start_date_plus_normalized_venue() {
-        GigId id = valid(List.of()).id();
-        assertThat(id.date()).isEqualTo(LocalDate.of(2026, 9, 15));
-        assertThat(id.venue()).isEqualTo("klub 007");
+    void a_gig_is_identified_by_nothing_it_says_about_itself() {
+        Gig gig = valid(List.of());
+
+        assertThat(gig.id()).isNotNull();
+        assertThat(gig.match()).isEqualTo(new GigMatch(LocalDate.of(2026, 9, 15), "klub 007"));
+        // two gigs of the same concert are still two gigs; which one each is was decided when it was made
+        assertThat(valid(List.of()).id()).isNotEqualTo(gig.id());
+        assertThat(valid(List.of()).match()).isEqualTo(gig.match());
     }
 
     @Test
@@ -69,7 +73,8 @@ class GigTest {
 
         assertThat(moved.schedule()).isEqualTo(later);
         assertThat(moved.title()).isEqualTo(gig.title());
-        assertThat(moved.id().date()).isEqualTo(LocalDate.of(2026, 10, 1));
+        assertThat(moved.id()).as("the same gig, on another day").isEqualTo(gig.id());
+        assertThat(moved.match().date()).isEqualTo(LocalDate.of(2026, 10, 1));
         assertThat(gig.schedule()).isEqualTo(SCHEDULE); // original unchanged
     }
 
@@ -83,17 +88,10 @@ class GigTest {
     }
 
     @Test
-    void a_gig_without_a_venue_is_identified_by_its_city() {
-        java.time.ZonedDateTime start = java.time.ZonedDateTime.of(2024, 6, 15, 20, 0, 0, 0,
-                java.time.ZoneId.of("Europe/Prague"));
-        Gig petrvald = Gig.create("Eufory", GigSchedule.startingAt(start),
-                new Location(null, "Petřvald", Country.CZECHIA), java.util.List.of(), Admission.free(),
-                null, null, null, null);
-        Gig presov = Gig.create("Dobrý festival", GigSchedule.startingAt(start),
-                new Location("TBA ", "Prešov", Country.SLOVAKIA), java.util.List.of(), Admission.free(),
-                null, null, null, null);
+    void cancelling_and_reactivating_keep_the_gig_it_is() {
+        Gig gig = valid(List.of());
 
-        org.assertj.core.api.Assertions.assertThat(petrvald.id().venue()).isEqualTo("@petřvald");
-        org.assertj.core.api.Assertions.assertThat(petrvald.id()).isNotEqualTo(presov.id());
+        assertThat(gig.cancel().id()).isEqualTo(gig.id());
+        assertThat(gig.cancel().reactivate().id()).isEqualTo(gig.id());
     }
 }

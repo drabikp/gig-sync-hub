@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -54,7 +55,7 @@ class GigPages {
         TypedQuery<GigRowProjection> ask = bind(entityManager.createQuery(
                 SELECT + FROM + filters + keyset(query, upcoming) + order, GigRowProjection.class), band, query, today);
         if (query.after() != null) {                      // only this query carries the cursor; the count does not
-            ask.setParameter("cursorAt", query.after().showAt()).setParameter("cursorId", query.after().id());
+            ask.setParameter("cursorAt", query.after().showAt()).setParameter("cursorId", query.after().id().value());
         }
         ask.setMaxResults(query.size() + 1);              // the extra row answers "is there more?"
         List<GigRowProjection> found = ask.getResultList();
@@ -111,12 +112,12 @@ class GigPages {
         return query;
     }
 
-    private static Set<String> keysOf(Set<GigId> ids) {
-        return ids.stream().map(GigId::key).collect(Collectors.toSet());
+    private static Set<UUID> keysOf(Set<GigId> ids) {
+        return ids.stream().map(GigId::value).collect(Collectors.toSet());
     }
 
     private static GigRow row(GigRowProjection row) {
-        return new GigRow(GigId.fromKey(row.id()), row.showAt(),
+        return new GigRow(new GigId(row.id()), row.showAt(),
                 row.startDateTime().atZone(Location.zoneOf(row.country())), row.title(), row.venue(), row.city(),
                 row.country(), row.cancelled());
     }

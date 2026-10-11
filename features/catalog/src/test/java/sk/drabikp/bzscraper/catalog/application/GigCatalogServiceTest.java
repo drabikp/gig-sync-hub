@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.catalog.application.port.in.GigIdentityTakenExceptio
 import sk.drabikp.bzscraper.gig.application.ConcurrentChangeException;
 import sk.drabikp.bzscraper.gig.application.NotFoundException;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.TestGigs;
 import sk.drabikp.bzscraper.gig.domain.platform.Publication;
 import sk.drabikp.bzscraper.sync.application.SyncFakes;
@@ -35,9 +36,8 @@ class GigCatalogServiceTest {
     private final SyncFakes.Signals signals = new SyncFakes.Signals();
     private final SyncFakes.DirectTransactions transactions = new SyncFakes.DirectTransactions();
     private final SyncFakes.MutableClock clock = new SyncFakes.MutableClock();
-    private final CatalogFakes.Moves moves = new CatalogFakes.Moves();
     private final GigCatalogService service = CatalogFakes.catalog(gigs, published, transactions, outbox,
-            SyncFakes.requests(outbox, published, signals, clock), moves);
+            SyncFakes.requests(outbox, published, signals, clock));
 
     private final Gig gig = TestGigs.gig("Fest", "Klub 007");
 
@@ -48,8 +48,9 @@ class GigCatalogServiceTest {
         return g;
     }
 
+    /** The same gig, called something else — an edit never changes which gig it is. */
     private static Gig renamed(Gig g, String title) {
-        return new Gig(title, g.schedule(), g.location(), g.lineup(), g.admission(), null, null, null, null,
+        return new Gig(g.id(), title, g.schedule(), g.location(), g.lineup(), g.admission(), null, null, null, null,
                 g.cancelled());
     }
 
@@ -145,8 +146,8 @@ class GigCatalogServiceTest {
         Gig other = TestGigs.gig("Other", "Lucerna");
         gigs.save(BAND, gig);
         gigs.save(BAND, other);
-        Gig movedOntoOther = new Gig(gig.title(), other.schedule(), other.location(), gig.lineup(), gig.admission(),
-                null, null, null, null, false);
+        Gig movedOntoOther = new Gig(gig.id(), gig.title(), other.schedule(), other.location(), gig.lineup(),
+                gig.admission(), null, null, null, null, false);
 
         assertThatThrownBy(() -> service.add(BAND, TestGigs.gig("Same place", "Klub 007")))
                 .isInstanceOf(GigIdentityTakenException.class);
@@ -155,21 +156,27 @@ class GigCatalogServiceTest {
         assertThat(gigs.findById(BAND, gig.id())).contains(gig);
     }
 
+    /**
+     * The test this replaced said the opposite: that an edit to a gig's day took its platform
+     * records and its queued work along to a new identity, and told the listeners. Nothing moves
+     * any more — the gig keeps the identity it was created with — so what is left to check is that
+     * everything pointing at it is still pointing at it, and that the waiting work says the new day.
+     */
     @Test
-    void an_edit_that_moves_the_gigs_identity_takes_its_records_and_pending_work_along_and_says_so() {
+    void an_edit_that_moves_the_gig_to_another_day_leaves_its_records_and_its_work_where_they_are() {
         onBothPlatforms(gig);
         Gig edited = renamed(gig, "Fest 2026");
         service.update(BAND, gig, edited);
-        Gig moved = TestGigs.gig("Fest 2026", "Klub 007",
-                ZonedDateTime.of(2026, 10, 1, 20, 0, 0, 0, ZoneId.of("Europe/Prague")));
+        Gig moved = edited.rescheduledTo(GigSchedule.startingAt(
+                ZonedDateTime.of(2026, 10, 1, 20, 0, 0, 0, ZoneId.of("Europe/Prague"))));
 
         service.update(BAND, edited, moved);
 
-        assertThat(gigs.findById(BAND, gig.id())).isEmpty();
-        assertThat(published.externalRef(BAND, BANDZONE, moved.id())).contains("100");
-        assertThat(moves.moved).containsExactly(edited.id() + " -> " + moved.id());
+        assertThat(gigs.findById(BAND, gig.id())).as("the same gig, on another day").contains(moved);
+        assertThat(moved.match()).isNotEqualTo(gig.match());
+        assertThat(published.externalRef(BAND, BANDZONE, gig.id())).contains("100");
         assertThat(pending()).hasSize(2).allSatisfy(t -> {
-            assertThat(t.gigId()).isEqualTo(moved.id());
+            assertThat(t.gigId()).isEqualTo(gig.id());
             assertThat(t.gigLabel()).startsWith("2026-10-01");
         });
     }

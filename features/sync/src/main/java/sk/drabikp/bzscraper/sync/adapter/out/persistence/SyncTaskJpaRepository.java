@@ -12,17 +12,17 @@ import java.util.UUID;
 /** Spring Data repository for {@link SyncTaskEntity}; used only by {@link JpaSyncOutbox}. */
 interface SyncTaskJpaRepository extends JpaRepository<SyncTaskEntity, Long> {
 
-    List<SyncTaskEntity> findByBandIdAndGigIdAndStatusInOrderByIdAsc(UUID bandId, String gigId,
+    List<SyncTaskEntity> findByBandIdAndGigIdAndStatusInOrderByIdAsc(UUID bandId, UUID gigId,
                                                                     Collection<String> statuses);
 
     List<SyncTaskEntity> findByBandIdAndStatusInOrderByIdAsc(UUID bandId, Collection<String> statuses);
 
     List<SyncTaskEntity> findByStatusInOrderByIdAsc(Collection<String> statuses);
 
-    List<SyncTaskEntity> findByBandIdAndGigIdAndPlatformAndStatusOrderByIdAsc(UUID bandId, String gigId,
+    List<SyncTaskEntity> findByBandIdAndGigIdAndPlatformAndStatusOrderByIdAsc(UUID bandId, UUID gigId,
                                                                              String platform, String status);
 
-    List<SyncTaskEntity> findByBandIdAndGigId(UUID bandId, String gigId);
+    List<SyncTaskEntity> findByBandIdAndGigId(UUID bandId, UUID gigId);
 
     Optional<SyncTaskEntity> findFirstByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(String status, Instant now);
 
@@ -35,5 +35,5 @@ interface SyncTaskJpaRepository extends JpaRepository<SyncTaskEntity, Long> {
     List<SyncTaskEntity> findByBandIdOrderByUpdatedAtDescIdDesc(UUID bandId, Limit limit);
 
     /** A gig's own activity, latest first. */
-    List<SyncTaskEntity> findByBandIdAndGigIdOrderByUpdatedAtDescIdDesc(UUID bandId, String gigId, Limit limit);
+    List<SyncTaskEntity> findByBandIdAndGigIdOrderByUpdatedAtDescIdDesc(UUID bandId, UUID gigId, Limit limit);
 }

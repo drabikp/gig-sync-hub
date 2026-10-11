@@ -86,8 +86,9 @@ Between the kernel and the features (`gig ← accounts ← places ← sync ← �
   it explicitly** — `GigRepository.findAll(BandId)`, `GigWrites.add(BandId, Gig)`,
   `QueueSyncWork.update(BandId, Gig)`, … — no thread-local "current band": the engine and the nightly
   jobs work for many bands in one thread, and explicit is testable and greppable.
-- `GigId` stays a gig's identity *within* its band (date + venue); records refer to a gig as
-  `(band_id, gig_id)`.
+- `GigId` stays a gig's identity *within* its band; records refer to a gig as `(band_id, gig_id)`.
+  (It was the day and the venue when this was written; since V10 it is the gig's own id, and the day
+  and venue are `GigMatch` / `gig.match_key`. The `(band_id, …)` keying is unchanged.)
 - `LiveUpdates.changed(BandId, Topic)`; the stream is per band (`/api/bands/{bandId}/events`).
 - New `ArchitectureTest` rule: every JPA repository method on a band's table takes the band (no
   unscoped `findAll` outside the workers' "due across bands" queries, which are named as such).

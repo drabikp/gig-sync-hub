@@ -17,6 +17,7 @@ import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.sync.application.port.in.PauseSyncUseCase;
@@ -96,16 +97,17 @@ class AnnouncedAfterTheCommitTest {
 
     @Test
     void no_write_path_tells_the_pages_about_a_change_that_is_not_stored_yet() {
-        Gig gig = gig("announcement order", 20, 0);
+        Gig gig = gig(GigId.fresh(), "announcement order", 20);
+        // the same gig, moved a day on: an edit, so it keeps the identity it was added with
+        Gig later = gig(gig.id(), "announcement order, later", 21);
 
         // the band's own rows, as a request would open them
         rows.as(BandId.FIRST, () -> {
             save.add(BandId.FIRST, gig);
-            update.update(BandId.FIRST, gig, gig("announcement order, later", 21, 0));
-            Gig moved = gig("announcement order, later", 21, 0);
-            cancellation.cancel(BandId.FIRST, moved.id());
-            cancellation.reactivate(BandId.FIRST, moved.id());
-            deletion.delete(BandId.FIRST, moved.id());
+            update.update(BandId.FIRST, gig, later);
+            cancellation.cancel(BandId.FIRST, gig.id());
+            cancellation.reactivate(BandId.FIRST, gig.id());
+            deletion.delete(BandId.FIRST, gig.id());
             pause.pause(BandId.FIRST);
             pause.resume(BandId.FIRST);
             return null;
@@ -120,9 +122,9 @@ class AnnouncedAfterTheCommitTest {
                 .hasSizeGreaterThanOrEqualTo(7);
     }
 
-    private static Gig gig(String title, int day, int hour) {
-        return Gig.create(title, GigSchedule.startingAt(
-                        ZonedDateTime.of(2028, 3, day, 20 + hour, 0, 0, 0, ZoneId.of("Europe/Prague"))),
+    private static Gig gig(GigId id, String title, int day) {
+        return Gig.create(id, title, GigSchedule.startingAt(
+                        ZonedDateTime.of(2028, 3, day, 20, 0, 0, 0, ZoneId.of("Europe/Prague"))),
                 new Location("Klub po commite", "Brno", Country.CZECHIA), List.of(), Admission.free(),
                 null, null, null, null);
     }

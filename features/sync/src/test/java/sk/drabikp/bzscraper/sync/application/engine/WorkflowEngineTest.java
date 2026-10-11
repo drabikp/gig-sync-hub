@@ -229,8 +229,8 @@ class WorkflowEngineTest {
     @Test
     void edits_are_made_with_the_gig_as_it_is_when_the_step_runs_and_moot_ones_end_done() {
         SyncTask task = edit(upcoming("A"), BANDZONE);
-        Gig renamed = new Gig("A 2026", upcoming("A").schedule(), upcoming("A").location(), List.of(),
-                upcoming("A").admission(), null, null, null, null, false);
+        Gig renamed = new Gig(upcoming("A").id(), "A 2026", upcoming("A").schedule(), upcoming("A").location(),
+                List.of(), upcoming("A").admission(), null, null, null, null, false);
         gigs.save(BAND, renamed);
         Gig gone = upcoming("Gone");
         SyncTask goneTask = edit(gone, BANDZONE);

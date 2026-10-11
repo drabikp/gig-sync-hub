@@ -11,6 +11,7 @@ import sk.drabikp.bzscraper.gig.domain.Admission;
 import sk.drabikp.bzscraper.gig.domain.BandId;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 
@@ -52,13 +53,13 @@ class HttpBandzonePortalClientLiveTest {
 
         List<String> fullLineup = lineupBand.isBlank() ? List.of(STUB) : List.of(lineupBand, STUB);
         List<String> editedLineup = lineupBand.isBlank() ? List.of() : List.of(lineupBand);
-        Gig gig = new Gig("TEST http client (smazat)",
+        Gig gig = new Gig(GigId.fresh(), "TEST http client (smazat)",
                 new GigSchedule(ZonedDateTime.of(2026, 11, 12, 20, 0, 0, 0, PRAGUE),
                         ZonedDateTime.of(2026, 11, 13, 1, 0, 0, 0, PRAGUE)),
                 new Location("Lucerna Music Bar", "Praha", Country.CZECHIA), fullLineup,
                 Admission.paid("200 Kč"), "created by the live test\nsecond line", "https://www.facebook.com/events/1",
                 null, "https://bandzone.cz/img/default/band-single-small.png", false);
-        Gig edited = new Gig("TEST http client edited (smazat)",
+        Gig edited = new Gig(GigId.fresh(), "TEST http client edited (smazat)",
                 GigSchedule.startingAt(ZonedDateTime.of(2026, 11, 14, 21, 30, 0, 0, PRAGUE)),
                 new Location("Garáž u Nováků", "Hranice", Country.CZECHIA, new Address(null, "753 01",
                         "okres Přerov", "Olomoucký kraj", 49.548, 17.735)), editedLineup,

@@ -74,8 +74,9 @@ class JpaGigPagingTest extends GigPagingContract {
 
         String plan = String.join("\n", jdbc.queryForList(
                 "explain (costs off) select id from gig where band_id = ? and show_at >= ? "
-                        + "and (show_at, id) > (?, ?) order by show_at, id limit 3",
-                String.class, BAND.value(), TODAY.atStartOfDay(), TODAY.atStartOfDay(), "aaa"));
+                        + "and (show_at, id) > (?, ?::uuid) order by show_at, id limit 3",
+                String.class, BAND.value(), TODAY.atStartOfDay(), TODAY.atStartOfDay(),
+                "00000000-0000-0000-0000-000000000000"));
 
         assertThat(plan).as("read in the list's own order off its index:\n" + plan).contains("gig_band_show");
         assertThat(plan).as("nothing sorted to answer a page:\n" + plan).doesNotContain("Sort");

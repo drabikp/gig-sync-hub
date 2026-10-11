@@ -13,11 +13,14 @@ import java.util.stream.Stream;
  * invalid {@code Gig} cannot exist and downstream code needs no defensive checks.
  *
  * Composed of value objects ({@link GigSchedule}, {@link Location}, {@link Admission});
- * identified by {@link GigId} (its natural key). Immutable: state-changing behaviour
- * ({@link #rescheduledTo}, {@link #cancel}) returns a new instance. Descriptive
- * attributes (description, links, poster) are optional and nullable.
+ * identified by {@link GigId}, which is the gig's own and survives every edit — a gig moved to
+ * another day or venue is the same gig, and only {@link #match()} (the day and the place) changes
+ * with it. Immutable: state-changing behaviour ({@link #rescheduledTo}, {@link #cancel}) returns a
+ * new instance, with the same identity. Descriptive attributes (description, links, poster) are
+ * optional and nullable.
  */
 public record Gig(
+        GigId id,
         String title,
         GigSchedule schedule,
         Location location,
@@ -30,6 +33,9 @@ public record Gig(
         boolean cancelled
 ) {
     public Gig {
+        if (id == null) {
+            throw new IllegalArgumentException("a gig's identity is required");
+        }
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("gig title is required");
         }
@@ -46,16 +52,32 @@ public record Gig(
         lineup = lineup == null ? List.of() : List.copyOf(lineup);
     }
 
-    /** Factory for a fresh (not cancelled) gig. */
+    /** Factory for a fresh (not cancelled) gig: a new gig, with an identity no other gig has. */
     public static Gig create(String title, GigSchedule schedule, Location location, List<String> lineup,
                              Admission admission, String description, String facebookUrl,
                              String ticketUrl, String posterImageUrl) {
-        return new Gig(title, schedule, location, lineup, admission, description, facebookUrl,
+        return create(GigId.fresh(), title, schedule, location, lineup, admission, description, facebookUrl,
+                ticketUrl, posterImageUrl);
+    }
+
+    /**
+     * Factory for the gig that already has this identity (not cancelled) — an edit of it, or the
+     * gig a stored row holds.
+     */
+    public static Gig create(GigId id, String title, GigSchedule schedule, Location location, List<String> lineup,
+                             Admission admission, String description, String facebookUrl,
+                             String ticketUrl, String posterImageUrl) {
+        return new Gig(id, title, schedule, location, lineup, admission, description, facebookUrl,
                 ticketUrl, posterImageUrl, false);
     }
 
-    public GigId id() {
-        return GigId.of(this);
+    /**
+     * Which concert this is — the day and the place, as every source of a copy of it writes them.
+     * Not the gig's identity ({@link #id()}): this changes when the gig moves, and a band may have
+     * only one gig per match.
+     */
+    public GigMatch match() {
+        return GigMatch.of(this);
     }
 
     /**
@@ -75,12 +97,12 @@ public record Gig(
     }
 
     public Gig rescheduledTo(GigSchedule newSchedule) {
-        return new Gig(title, newSchedule, location, lineup, admission, description, facebookUrl,
+        return new Gig(id, title, newSchedule, location, lineup, admission, description, facebookUrl,
                 ticketUrl, posterImageUrl, cancelled);
     }
 
     public Gig cancel() {
-        return new Gig(title, schedule, location, lineup, admission, description, facebookUrl,
+        return new Gig(id, title, schedule, location, lineup, admission, description, facebookUrl,
                 ticketUrl, posterImageUrl, true);
     }
 
@@ -100,7 +122,7 @@ public record Gig(
     }
 
     public Gig reactivate() {
-        return new Gig(title, schedule, location, lineup, admission, description, facebookUrl,
+        return new Gig(id, title, schedule, location, lineup, admission, description, facebookUrl,
                 ticketUrl, posterImageUrl, false);
     }
 }

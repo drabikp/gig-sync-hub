@@ -66,7 +66,7 @@ class CalendarCatalogMatcherTest {
 
     @Test
     void an_unlinked_event_or_one_linked_to_a_deleted_gig_is_matched_by_day() {
-        GigId deleted = new GigId(LocalDate.of(2026, 11, 20), "gone");
+        GigId deleted = TestGigs.id("a gig that is gone");
 
         assertThat(match(draft(GIG.schedule().startDate(), null), CalendarEventStatus.CONFIRMED, false, deleted))
                 .satisfies(m -> {
@@ -80,7 +80,7 @@ class CalendarCatalogMatcherTest {
     @Test
     void a_festival_pairs_on_any_of_its_days_and_the_calendars_show_is_offered_as_the_bands_slot() {
         ZoneId zone = ZoneId.of("Europe/Bratislava");
-        Gig festival = new Gig("Moto Fest", new GigSchedule(ZonedDateTime.of(2026, 11, 27, 0, 0, 0, 0, zone),
+        Gig festival = new Gig(GigId.fresh(), "Moto Fest", new GigSchedule(ZonedDateTime.of(2026, 11, 27, 0, 0, 0, 0, zone),
                 ZonedDateTime.of(2026, 11, 30, 0, 0, 0, 0, zone)), GIG.location(), List.of(), GIG.admission(),
                 null, null, null, null, false);
         CalendarGigDraft show = draft(LocalDate.of(2026, 11, 28), LocalTime.of(19, 30));
@@ -89,7 +89,7 @@ class CalendarCatalogMatcherTest {
                 Map.of(festival.id(), festival), TODAY);
         CatalogMatch linked = CalendarCatalogMatcher.match(show, CalendarEventStatus.CONFIRMED, false, festival.id(),
                 Map.of(festival.id(), festival), TODAY);
-        Gig withSlot = new Gig("Moto Fest", festival.schedule().withSlot(new Slot(
+        Gig withSlot = new Gig(festival.id(), "Moto Fest", festival.schedule().withSlot(new Slot(
                 ZonedDateTime.of(2026, 11, 28, 19, 30, 0, 0, zone), null)), GIG.location(), List.of(),
                 GIG.admission(), null, null, null, null, false);
         CatalogMatch agreeing = CalendarCatalogMatcher.match(show, CalendarEventStatus.CONFIRMED, false, withSlot.id(),

@@ -6,6 +6,7 @@ import sk.drabikp.bzscraper.bandsintown.portal.BitSession.EventEdit;
 import sk.drabikp.bzscraper.gig.domain.Address;
 import sk.drabikp.bzscraper.gig.domain.Country;
 import sk.drabikp.bzscraper.gig.domain.Gig;
+import sk.drabikp.bzscraper.gig.domain.GigId;
 import sk.drabikp.bzscraper.gig.domain.GigSchedule;
 import sk.drabikp.bzscraper.gig.domain.Location;
 import sk.drabikp.bzscraper.gig.domain.Slot;
@@ -67,10 +68,10 @@ class BandsintownCsvTest {
         ZoneId zone = ZoneId.of("Europe/Bratislava");
         GigSchedule festival = new GigSchedule(ZonedDateTime.of(2026, 8, 27, 12, 0, 0, 0, zone),
                 ZonedDateTime.of(2026, 8, 30, 0, 0, 0, 0, zone));
-        Gig withSlot = new Gig("Moto Fest", festival.withSlot(new Slot(ZonedDateTime.of(2026, 8, 28, 19, 30, 0, 0, zone),
+        Gig withSlot = new Gig(GigId.fresh(), "Moto Fest", festival.withSlot(new Slot(ZonedDateTime.of(2026, 8, 28, 19, 30, 0, 0, zone),
                 ZonedDateTime.of(2026, 8, 28, 20, 45, 0, 0, zone))), gig.location(), List.of(), gig.admission(),
                 null, null, null, null, false);
-        Gig withoutSlot = new Gig("Moto Fest", festival, gig.location(), List.of(), gig.admission(),
+        Gig withoutSlot = new Gig(GigId.fresh(), "Moto Fest", festival, gig.location(), List.of(), gig.admission(),
                 null, null, null, null, false);
 
         assertThat(Arrays.copyOfRange(parse(BandsintownCsv.newEvents(List.of(withSlot), "X", false)).get(1), 8, 12))
@@ -81,7 +82,7 @@ class BandsintownCsvTest {
 
     @Test
     void street_postal_code_and_region_go_along_so_bandsintown_finds_the_right_town() throws Exception {
-        Gig located = new Gig("Fest", gig.schedule(), new Location("Zámecký klub", "Hranice", Country.CZECHIA,
+        Gig located = new Gig(GigId.fresh(), "Fest", gig.schedule(), new Location("Zámecký klub", "Hranice", Country.CZECHIA,
                 new Address("Pernštejnské nám. 1", "753 01", "okres Přerov", "Olomoucký kraj", 49.548, 17.735)),
                 List.of(), gig.admission(), null, null, null, null, false);
 

@@ -10,5 +10,4 @@ interface CalendarLinkJpaRepository extends JpaRepository<CalendarLinkEntity, Ba
 
     List<CalendarLinkEntity> findByBandId(UUID bandId);
 
-    List<CalendarLinkEntity> findByBandIdAndGigId(UUID bandId, String gigId);
 }

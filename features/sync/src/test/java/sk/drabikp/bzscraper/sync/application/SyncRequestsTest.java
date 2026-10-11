@@ -70,8 +70,8 @@ class SyncRequestsTest {
     }
 
     private static Gig renamed(Gig g) {
-        return new Gig(g.title() + " 2026", g.schedule(), g.location(), g.lineup(), g.admission(), null, null, null,
-                null, g.cancelled());
+        return new Gig(g.id(), g.title() + " 2026", g.schedule(), g.location(), g.lineup(), g.admission(), null,
+                null, null, null, g.cancelled());
     }
 
     @Test

@@ -3,6 +3,7 @@ package sk.drabikp.bzscraper.gig.adapter.out.persistence;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -36,8 +37,10 @@ class JpaGigConcurrencyTest {
         repository.deleteById(BAND, gig.id());
     }
 
+    /** The same gig under another title — two writers edit one gig, they do not make two. */
     private static Gig titled(Gig gig, String title) {
-        return Gig.create(title, gig.schedule(), gig.location(), gig.lineup(), Admission.free(), null, null, null, null);
+        return Gig.create(gig.id(), title, gig.schedule(), gig.location(), gig.lineup(), Admission.free(),
+                null, null, null, null);
     }
 
     @Test
@@ -52,6 +55,22 @@ class JpaGigConcurrencyTest {
         })).isInstanceOf(ConcurrentChangeException.class);
 
         assertThat(repository.findById(BAND, gig.id())).get().extracting(Gig::title).isEqualTo("Theirs");
+    }
+
+    /**
+     * The store is the backstop under {@code GigWrites}' own refusal: a band may not have two gigs
+     * on one day at one venue, and nothing — not an import, not a second window — gets past it.
+     * Not {@code @Transactional}, because a refused insert must not poison the test's own work.
+     */
+    @Test
+    void a_second_gig_on_one_day_and_venue_is_refused_by_the_store_itself() {
+        repository.save(BAND, gig);
+        Gig twin = Gig.create("Someone else's idea of the same night", gig.schedule(), gig.location(),
+                gig.lineup(), Admission.free(), null, null, null, null);
+
+        assertThatThrownBy(() -> transactions.inTransaction(() -> repository.save(BAND, twin)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(repository.findByMatch(BAND, gig.match())).contains(gig);
     }
 
     @Test

@@ -116,8 +116,8 @@ public abstract class GigPagingContract {
         Gig everywhere = save(BAND, "already out", "Klub 007", "Praha", at(2026, 11, 20, 20));
         save(BAND, "not yet", "Fléda", "Brno", at(2026, 11, 21, 20));
         Gig on = TestGigs.gig("called off", "Melodka", "Brno", at(2026, 11, 22, 20));
-        repository().save(BAND, new Gig(on.title(), on.schedule(), on.location(), on.lineup(), on.admission(),
-                on.description(), on.facebookUrl(), on.ticketUrl(), on.posterImageUrl(), true));
+        repository().save(BAND, new Gig(on.id(), on.title(), on.schedule(), on.location(), on.lineup(),
+                on.admission(), on.description(), on.facebookUrl(), on.ticketUrl(), on.posterImageUrl(), true));
 
         assertThat(titles(repository().page(BAND, GigQuery.upcoming()
                 .excluding(Set.of(everywhere.id())).cancelled(false), TODAY)))
@@ -205,12 +205,12 @@ public abstract class GigPagingContract {
         assertThat(GigCursor.decode("")).isNull();
         assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> GigCursor.decode("nonsense")))
                 .isInstanceOf(IllegalArgumentException.class);
-        GigCursor cursor = new GigCursor(at(2026, 11, 20, 21).toLocalDateTime(), "2026-11-20@Klub 007");
+        GigCursor cursor = new GigCursor(at(2026, 11, 20, 21).toLocalDateTime(), GigId.fresh());
         assertThat(GigCursor.decode(cursor.encoded())).isEqualTo(cursor);
     }
 
-    /** A gig id built from a key, so a store can be asked about one it does not have. */
+    /** An identity no gig has, so a store can be asked about one it does not hold. */
     protected static GigId idOf(String key) {
-        return GigId.fromKey(key);
+        return TestGigs.id(key);
     }
 }
