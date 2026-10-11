@@ -11,17 +11,15 @@ import sk.drabikp.bzscraper.sync.application.port.in.QueueSyncWork;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncOutbox;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncTrigger;
+import sk.drabikp.bzscraper.sync.domain.OpenWork;
 import sk.drabikp.bzscraper.sync.domain.QueueResult;
 import sk.drabikp.bzscraper.sync.domain.SyncAction;
-import sk.drabikp.bzscraper.sync.domain.SyncStatus;
 import sk.drabikp.bzscraper.sync.domain.SyncTask;
 
 import java.time.Clock;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -40,12 +38,6 @@ import java.util.function.Function;
  * </ul>
  */
 public class SyncRequests implements QueueSyncWork {
-
-    /**
-     * What a delete replaces. A failed publish or reactivate stays: it may have created an
-     * event on the platform anyway, and only the user can check that.
-     */
-    private static final Set<SyncAction> REPEATABLE = EnumSet.of(SyncAction.UPDATE, SyncAction.CANCEL, SyncAction.DELETE);
 
     private final SyncOutbox outbox;
     private final PublishedGigStore publishedGigStore;
@@ -81,14 +73,14 @@ public class SyncRequests implements QueueSyncWork {
         List<String> leftOut = new ArrayList<>();
         OpenWork open = openWork(band, gig.id());
         for (Platform platform : platforms.all()) {
-            boolean pendingPublish = open.pending(platform, SyncAction.PUBLISH);
-            if (!publishedGigStore.isPublished(band, platform, gig.id()) && !pendingPublish) {
-                continue;
+            boolean goingToBeThere = open.pending(platform, SyncAction.PUBLISH);
+            if (!publishedGigStore.isPublished(band, platform, gig.id()) && !goingToBeThere) {
+                continue;                                       // not there, and nothing is putting it there
             }
             if (!allowed(gig, platform, SyncAction.UPDATE, leftOut)) {
                 continue;
             }
-            if (!pendingPublish && !open.pending(platform, SyncAction.UPDATE)) {
+            if (!open.updateAlreadyComing(platform)) {
                 queued.add(enqueue(band, gig, platform, SyncAction.UPDATE));
             }
         }
@@ -97,12 +89,12 @@ public class SyncRequests implements QueueSyncWork {
 
     @Override
     public QueueResult cancel(BandId band, Gig gig) {
-        return onPublishedPlatforms(band, gig, SyncAction.CANCEL, SyncAction.REACTIVATE);
+        return onPublishedPlatforms(band, gig, SyncAction.CANCEL);
     }
 
     @Override
     public QueueResult reactivate(BandId band, Gig gig) {
-        return onPublishedPlatforms(band, gig, SyncAction.REACTIVATE, SyncAction.CANCEL);
+        return onPublishedPlatforms(band, gig, SyncAction.REACTIVATE);
     }
 
     /**
@@ -117,7 +109,8 @@ public class SyncRequests implements QueueSyncWork {
         List<String> leftOut = new ArrayList<>();
         for (Platform platform : platforms.all()) {
             outbox.supersede(band, id, platform, "the gig was deleted", clock.instant());
-            outbox.replaceFailed(band, id, platform, REPEATABLE, "the gig was deleted", clock.instant());
+            outbox.replaceFailed(band, id, platform, SyncAction.DELETE.replaces(), "the gig was deleted",
+                    clock.instant());
             if (!publishedGigStore.isPublished(band, platform, id)) {
                 continue;
             }
@@ -158,11 +151,11 @@ public class SyncRequests implements QueueSyncWork {
     }
 
     /**
-     * Queues {@code action} on every platform the gig is on — unless the {@code opposite}
-     * change is still pending there: the platform never saw it, so both are dropped and an
-     * update brings the copy to the gig's current details instead.
+     * Queues {@code action} on every platform the gig is on — unless the change that undoes it is
+     * still waiting there ({@link OpenWork#undoesWaitingWork}): the platform never saw it, so both
+     * are dropped and an update brings the copy to the gig's current details instead.
      */
-    private QueueResult onPublishedPlatforms(BandId band, Gig gig, SyncAction action, SyncAction opposite) {
+    private QueueResult onPublishedPlatforms(BandId band, Gig gig, SyncAction action) {
         List<SyncTask> queued = new ArrayList<>();
         List<String> leftOut = new ArrayList<>();
         OpenWork open = openWork(band, gig.id());
@@ -170,7 +163,7 @@ public class SyncRequests implements QueueSyncWork {
             if (!publishedGigStore.isPublished(band, platform, gig.id())) {
                 continue;
             }
-            if (open.pending(platform, opposite)) {
+            if (open.undoesWaitingWork(platform, action)) {
                 outbox.supersede(band, gig.id(), platform, "undone by " + action.verb() + " before it ran",
                         clock.instant());
                 if (allowed(gig, platform, SyncAction.UPDATE, leftOut)) {
@@ -190,44 +183,16 @@ public class SyncRequests implements QueueSyncWork {
         return noStep.isEmpty();
     }
 
-    /**
-     * The gig's open work as it was before this request — read once: what the request queues on one
-     * platform doesn't change what is open on another.
-     */
+    /** The gig's open work as it was before this request, which is what decides what to queue. */
     private OpenWork openWork(BandId band, GigId id) {
-        return new OpenWork(outbox.openFor(band, id));
-    }
-
-    private record OpenWork(List<SyncTask> tasks) {
-
-        /** Work of this action is pending or running there. */
-        boolean has(Platform platform, SyncAction action) {
-            return tasks.stream().anyMatch(t -> t.platform().equals(platform) && t.action() == action);
-        }
-
-        /** Work of this action is still waiting there (the platform hasn't seen it). */
-        boolean pending(Platform platform, SyncAction action) {
-            return tasks.stream().anyMatch(t -> t.platform().equals(platform) && t.action() == action
-                    && t.status() == SyncStatus.PENDING);
-        }
+        return OpenWork.of(outbox.openFor(band, id));
     }
 
     private SyncTask enqueue(BandId band, Gig gig, Platform platform, SyncAction action) {
         SyncTask task = outbox.enqueue(band, gig.id(), SyncTask.labelOf(gig), platform, action, clock.instant());
-        outbox.replaceFailed(band, gig.id(), platform, replacedBy(action),
+        outbox.replaceFailed(band, gig.id(), platform, action.replaces(),
                 "a new " + action.verb() + " was queued (#" + task.id() + ")", clock.instant());
         return task;
-    }
-
-    /** The failed tasks whose work a new {@code action} does. */
-    private static Set<SyncAction> replacedBy(SyncAction action) {
-        return switch (action) {
-            case PUBLISH -> EnumSet.of(SyncAction.PUBLISH);
-            case UPDATE -> EnumSet.of(SyncAction.UPDATE);
-            case CANCEL -> EnumSet.of(SyncAction.CANCEL, SyncAction.UPDATE);
-            case REACTIVATE -> EnumSet.of(SyncAction.REACTIVATE, SyncAction.UPDATE);
-            case DELETE -> REPEATABLE;
-        };
     }
 
 }
