@@ -12,7 +12,6 @@ import sk.drabikp.gigsynchub.catalog.application.port.in.DeleteGigUseCase;
 import sk.drabikp.gigsynchub.catalog.application.port.in.SaveGigUseCase;
 import sk.drabikp.gigsynchub.catalog.application.port.in.UpdateGigUseCase;
 import sk.drabikp.gigsynchub.gig.application.port.out.LiveUpdates;
-import sk.drabikp.gigsynchub.gig.application.port.out.RowScope;
 import sk.drabikp.gigsynchub.gig.domain.Admission;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 import sk.drabikp.gigsynchub.gig.domain.Country;
@@ -92,8 +91,6 @@ class AnnouncedAfterTheCommitTest {
     private DeleteGigUseCase deletion;
     @Autowired
     private PauseSyncUseCase pause;
-    @Autowired
-    private RowScope rows;
 
     @Test
     void no_write_path_tells_the_pages_about_a_change_that_is_not_stored_yet() {
@@ -101,17 +98,13 @@ class AnnouncedAfterTheCommitTest {
         // the same gig, moved a day on: an edit, so it keeps the identity it was added with
         Gig later = gig(gig.id(), "announcement order, later", 21);
 
-        // the band's own rows, as a request would open them
-        rows.as(BandId.FIRST, () -> {
-            save.add(BandId.FIRST, gig);
-            update.update(BandId.FIRST, gig, later);
-            cancellation.cancel(BandId.FIRST, gig.id());
-            cancellation.reactivate(BandId.FIRST, gig.id());
-            deletion.delete(BandId.FIRST, gig.id());
-            pause.pause(BandId.FIRST);
-            pause.resume(BandId.FIRST);
-            return null;
-        });
+        save.add(BandId.FIRST, gig);
+        update.update(BandId.FIRST, gig, later);
+        cancellation.cancel(BandId.FIRST, gig.id());
+        cancellation.reactivate(BandId.FIRST, gig.id());
+        deletion.delete(BandId.FIRST, gig.id());
+        pause.pause(BandId.FIRST);
+        pause.resume(BandId.FIRST);
 
         assertThat(announcements.insideATransaction)
                 .as("announced while a transaction was still open — the pages would read it too early")

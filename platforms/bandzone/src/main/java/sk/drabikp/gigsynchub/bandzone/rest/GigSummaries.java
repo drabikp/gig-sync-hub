@@ -10,7 +10,6 @@ import sk.drabikp.gigsynchub.bandzone.rest.api.GigSummaryResponse;
 import sk.drabikp.gigsynchub.catalog.application.port.in.ListGigsUseCase;
 import sk.drabikp.gigsynchub.catalog.application.port.in.ListPublicationsUseCase;
 import sk.drabikp.gigsynchub.gig.application.NotFoundException;
-import sk.drabikp.gigsynchub.gig.application.port.out.RowScope;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 import sk.drabikp.gigsynchub.gig.domain.Gig;
 import sk.drabikp.gigsynchub.gig.domain.GigId;
@@ -47,16 +46,14 @@ class GigSummaries {
     private final Platforms platforms;
     private final BandDirectory bands;
     private final GigSummaryMapper mapper;
-    private final RowScope rows;
 
     GigSummaries(ListGigsUseCase listGigs, ListPublicationsUseCase listPublications, Platforms platforms,
-                 BandDirectory bands, GigSummaryMapper mapper, RowScope rows) {
+                 BandDirectory bands, GigSummaryMapper mapper) {
         this.listGigs = listGigs;
         this.listPublications = listPublications;
         this.platforms = platforms;
         this.bands = bands;
         this.mapper = mapper;
-        this.rows = rows;
     }
 
     /**
@@ -68,18 +65,16 @@ class GigSummaries {
     List<GigSummaryResponse> ofBand(String requested) {
         BandId band = bands.bySlug(requested.toLowerCase(Locale.ROOT)).filter(Band::publicList).map(Band::id)
                 .orElseThrow(() -> new NotFoundException("No gigs for band '" + requested + "' here."));
-        return rows.as(band, () -> {                       // a public address: the band's rows only
-            List<Gig> gigs = listGigs.gigsEarliestFirst(band, MOST_A_BAND_PLAYS);
-            if (gigs.size() == MOST_A_BAND_PLAYS) {
-                log.warn("The public list of band {} stops at {} gigs — it has at least that many", band,
-                        MOST_A_BAND_PLAYS);
-            }
-            Map<GigId, Map<Platform, Publication>> published = listPublications.publicationsOf(band,
-                    gigs.stream().map(Gig::id).collect(Collectors.toSet()));
-            return gigs.stream()
-                    .map(gig -> summary(gig, published.getOrDefault(gig.id(), Map.of()).get(BandzonePlatform.PLATFORM)))
-                    .toList();
-        });
+        List<Gig> gigs = listGigs.gigsEarliestFirst(band, MOST_A_BAND_PLAYS);
+        if (gigs.size() == MOST_A_BAND_PLAYS) {
+            log.warn("The public list of band {} stops at {} gigs — it has at least that many", band,
+                    MOST_A_BAND_PLAYS);
+        }
+        Map<GigId, Map<Platform, Publication>> published = listPublications.publicationsOf(band,
+                gigs.stream().map(Gig::id).collect(Collectors.toSet()));
+        return gigs.stream()
+                .map(gig -> summary(gig, published.getOrDefault(gig.id(), Map.of()).get(BandzonePlatform.PLATFORM)))
+                .toList();
     }
 
     /** The gig with its concert on Bandzone (its id and page) when it is there. */

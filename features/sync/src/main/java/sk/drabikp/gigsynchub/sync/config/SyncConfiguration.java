@@ -5,7 +5,6 @@ import org.springframework.context.annotation.Configuration;
 import sk.drabikp.gigsynchub.gig.application.port.out.GigRepository;
 import sk.drabikp.gigsynchub.gig.application.port.out.LiveUpdates;
 import sk.drabikp.gigsynchub.gig.application.port.out.PublishedGigStore;
-import sk.drabikp.gigsynchub.gig.application.port.out.RowScope;
 import sk.drabikp.gigsynchub.gig.application.port.out.Transactions;
 import sk.drabikp.gigsynchub.gig.domain.platform.Platforms;
 import sk.drabikp.gigsynchub.sync.application.GigPublishingService;
@@ -117,9 +116,9 @@ class SyncConfiguration {
     @Bean
     SyncDispatcher syncDispatcher(WorkflowEngine workflowEngine, SyncOutbox outbox, SyncNotifier notifier,
                                   Clock clock, SyncPause syncPause, PlatformBreakers platformBreakers,
-                                  Platforms platforms, FairTurns fairTurns, RowScope rowScope) {
+                                  Platforms platforms, FairTurns fairTurns) {
         return new SyncDispatcher(workflowEngine, outbox, notifier, clock, syncPause, platformBreakers, platforms,
-                fairTurns, rowScope);
+                fairTurns);
     }
 
     @Bean

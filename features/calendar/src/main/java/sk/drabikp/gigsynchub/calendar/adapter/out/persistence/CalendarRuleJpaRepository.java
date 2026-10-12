@@ -3,6 +3,7 @@ package sk.drabikp.gigsynchub.calendar.adapter.out.persistence;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import sk.drabikp.gigsynchub.gig.application.port.out.AcrossBands;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +16,7 @@ interface CalendarRuleJpaRepository extends JpaRepository<CalendarRuleEntity, Lo
     List<CalendarRuleEntity> forBand(UUID bandId);
 
     @Modifying
+    @AcrossBands("the shipped presets are no band's (band_id null) — they are everyone's, re-synced on start")
     @Query("delete from CalendarRuleEntity r where r.bandId is null and r.origin = :origin")
     void deleteShipped(String origin);
 

@@ -2,6 +2,7 @@ package sk.drabikp.gigsynchub.sync.adapter.out.persistence;
 
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import sk.drabikp.gigsynchub.gig.application.port.out.AcrossBands;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -17,6 +18,7 @@ interface SyncTaskJpaRepository extends JpaRepository<SyncTaskEntity, Long> {
 
     List<SyncTaskEntity> findByBandIdAndStatusInOrderByIdAsc(UUID bandId, Collection<String> statuses);
 
+    @AcrossBands("after a restart, every band's RUNNING work has to be picked up or failed")
     List<SyncTaskEntity> findByStatusInOrderByIdAsc(Collection<String> statuses);
 
     List<SyncTaskEntity> findByBandIdAndGigIdAndPlatformAndStatusOrderByIdAsc(UUID bandId, UUID gigId,
@@ -24,8 +26,10 @@ interface SyncTaskJpaRepository extends JpaRepository<SyncTaskEntity, Long> {
 
     List<SyncTaskEntity> findByBandIdAndGigId(UUID bandId, UUID gigId);
 
+    @AcrossBands("the worker asks whether ANY band has work due before it asks whose turn it is")
     Optional<SyncTaskEntity> findFirstByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(String status, Instant now);
 
+    @AcrossBands("FairTurns puts the bands in order, so it has to see every band's due work at once")
     List<SyncTaskEntity> findByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(String status, Instant now);
 
     List<SyncTaskEntity> findByBandIdAndPlatformAndActionAndStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(

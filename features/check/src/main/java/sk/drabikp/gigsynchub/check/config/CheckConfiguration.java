@@ -10,7 +10,6 @@ import sk.drabikp.gigsynchub.check.application.port.out.CheckResultStore;
 import sk.drabikp.gigsynchub.gig.application.port.out.GigRepository;
 import sk.drabikp.gigsynchub.gig.application.port.out.LiveUpdates;
 import sk.drabikp.gigsynchub.gig.application.port.out.PublishedGigStore;
-import sk.drabikp.gigsynchub.gig.application.port.out.RowScope;
 import sk.drabikp.gigsynchub.gig.application.port.out.Transactions;
 import sk.drabikp.gigsynchub.gig.domain.platform.Platforms;
 import sk.drabikp.gigsynchub.importing.application.port.out.GigImporter;
@@ -35,7 +34,7 @@ class CheckConfiguration {
 
     /** A check the user starts runs on Spring's task executor. */
     @Bean
-    BackgroundCheck backgroundCheck(PlatformCheckService platformCheckService, TaskExecutor executor, RowScope rows) {
-        return new BackgroundCheck(platformCheckService, executor, rows);
+    BackgroundCheck backgroundCheck(PlatformCheckService platformCheckService, TaskExecutor executor) {
+        return new BackgroundCheck(platformCheckService, executor);
     }
 }

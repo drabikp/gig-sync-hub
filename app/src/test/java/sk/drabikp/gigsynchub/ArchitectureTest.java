@@ -1,6 +1,7 @@
 package sk.drabikp.gigsynchub;
 
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -11,6 +12,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.CompositeArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,6 +23,7 @@ import java.util.stream.Stream;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 /**
@@ -94,6 +97,28 @@ class ArchitectureTest {
                     (JavaMethodCall call) -> Set.of("findAll", "count", "deleteAll").contains(call.getTarget().getName())
                             && call.getTarget().getRawParameterTypes().isEmpty()
                             && call.getTarget().getOwner().isAssignableTo(Repository.class)));
+
+    /**
+     * No query is written in one database's own SQL. Every query is JPQL (or a derived method name),
+     * so the dialect writes the SQL and the schema is not tied to PostgreSQL by the queries on top of
+     * it — the last native one, the roster's {@code for update}, became a {@code LockModeType} in
+     * October 2026, which is why this rule can go in with NO exceptions at all. Raw JDBC is a separate
+     * matter and still used where it has to be (the Flyway callbacks, which run before there is a
+     * session, and the connection pool's own setup); what is banned here is hand-written SQL standing
+     * in for a query.
+     */
+    @ArchTest
+    static final ArchRule no_query_is_written_in_one_databases_own_sql = noMethods()
+            .that().areDeclaredInClassesThat().resideInAPackage(BASE + "..")
+            .should().beAnnotatedWith(DescribedPredicate.describe("@Query(nativeQuery = true)",
+                    (JavaAnnotation<?> at) -> at.getRawType().isAssignableTo(Query.class)
+                            && Boolean.TRUE.equals(at.get("nativeQuery").orElse(Boolean.FALSE))));
+
+    @ArchTest
+    static final ArchRule nothing_asks_the_entity_manager_for_a_native_query = noClasses()
+            .that().resideInAPackage(BASE + "..")
+            .should().callMethodWhere(DescribedPredicate.describe("createNativeQuery",
+                    (JavaMethodCall call) -> call.getTarget().getName().equals("createNativeQuery")));
 
     @ArchTest
     static final ArchRule the_kernels_persistence_and_wiring_are_its_own = classes()

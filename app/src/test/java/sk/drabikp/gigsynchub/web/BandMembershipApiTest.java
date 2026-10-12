@@ -6,11 +6,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
@@ -40,12 +42,24 @@ class BandMembershipApiTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    /**
+     * The app's connections are not the database's owner. Row-level security is gone (V12) and the
+     * queries keep the bands apart themselves, but the restricted role stays, for its own reasons:
+     * the app cannot change the schema it validates against, and it cannot read the migration
+     * history. Those two are what {@code set role gigsynchub_app} is still here for, so they are what
+     * is asserted — not the policies, which no longer exist.
+     */
     @Test
-    void the_apps_connections_work_as_the_role_the_policies_hold() {
+    void the_apps_connections_work_as_the_restricted_role_not_the_owner() {
         assertThat(jdbc.queryForObject("select current_user", String.class)).isEqualTo("gigsynchub_app");
-        assertThat(jdbc.queryForObject("select current_setting('app.band')", String.class))
-                .as("a thread that opened nothing: no band's rows").isEmpty();
-        assertThat(jdbc.queryForObject("select count(*) from gig", Integer.class)).isZero();
+
+        assertThatThrownBy(() -> jdbc.execute("alter table gig add column sneaked_in text"))
+                .as("the app cannot change its own schema").isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> jdbc.queryForObject("select count(*) from flyway_schema_history", Integer.class))
+                .as("nor read the migration history").isInstanceOf(DataAccessException.class);
+
+        assertThat(jdbc.queryForObject("select count(*) from gig", Integer.class))
+                .as("and it does read the tables it is meant to").isNotNull();
     }
 
     @Test
