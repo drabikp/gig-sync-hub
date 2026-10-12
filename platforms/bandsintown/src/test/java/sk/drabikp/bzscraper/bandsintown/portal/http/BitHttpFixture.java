@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -64,6 +65,13 @@ final class BitHttpFixture implements AutoCloseable {
     volatile boolean updatesMakeDrafts;
     /** Whether an uploaded draft refuses to be published (it is then left there for the user). */
     volatile boolean publishFails;
+    /**
+     * Where the portal decides an uploaded row IS, from the row's text alone — the real one geocodes
+     * what the spreadsheet says, because the template has no coordinate columns. Given the town's name,
+     * it answers {@code {latitude, longitude}} or null for "it placed nothing". Unset: it says nothing
+     * about where it put the event, as the portal does for a place it couldn't work out.
+     */
+    volatile Function<String, double[]> geocoder = town -> null;
     /**
      * The artists the manager looks after, by {@code managed_actor_id} — answered ONLY to a list asked
      * for with {@code type=artists}, as the portal does: the bare path answers an empty list however many
@@ -270,11 +278,15 @@ final class BitHttpFixture implements AutoCloseable {
             }
             String[] values = rows.get(row);
             String eventId = eventIdColumn < 0 || eventIdColumn >= values.length ? "" : values[eventIdColumn];
-            Map<String, Object> fromRow = Map.of(
+            Map<String, Object> fromRow = new LinkedHashMap<>(Map.of(
                     "start_date", cell(header, values, "Start Date* (yyyy-mm-dd)"),
                     "title", cell(header, values, "Event Name"),
                     "venue_name", cell(header, values, "Venue*"),
-                    "venue_city", cell(header, values, "City*"));
+                    "venue_city", cell(header, values, "City*")));
+            // the portal works the place out from the row's text: the template carries no coordinates
+            double[] placed = geocoder.apply(cell(header, values, "City*"));
+            fromRow.put("venue_latitude", placed == null ? null : placed[0]);
+            fromRow.put("venue_longitude", placed == null ? null : placed[1]);
             if (eventId.isBlank() || updatesMakeDrafts) {
                 String id = event("DRAFT", String.valueOf(fromRow.get("start_date")), fromRow);
                 drafts.add("{\"row\":" + spreadsheetRow + ",\"id\":" + id + "}");

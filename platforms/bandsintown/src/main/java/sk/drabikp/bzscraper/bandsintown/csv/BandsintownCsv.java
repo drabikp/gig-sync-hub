@@ -124,7 +124,9 @@ public final class BandsintownCsv {
         // Bandsintown finds the place from these texts; with only a town's name it guessed the
         // wrong one of several (Hranice near Cheb, a Hořice near Brno) — street and postal code
         // tell them apart, and the region a village, whose name repeats more than a town's (and
-        // Photon often has no postal code for it)
+        // Photon often has no postal code for it). The gig's own coordinates cannot be sent here at
+        // all, so a wrong guess is put right afterwards, by the one-event form edit, which can
+        // (HttpBitSession.placedWhereTheGigIs)
         row.put(Column.ADDRESS, addressPart(gig, Address::street));
         row.put(Column.CITY, gig.location().city());
         row.put(Column.REGION, addressPart(gig, Address::region));

@@ -72,18 +72,23 @@ public interface BitSession extends AutoCloseable {
     }
 
     /**
-     * Outcome of editing one event: updated, or why not and what that means — REFUSED
-     * (Bandsintown's own "no" for the row, e.g. {@code INVALID_START_TIME}), TEMPORARY (the row
-     * wasn't applied), NEEDS_USER (a new draft was made instead).
+     * Outcome of editing one event: updated (with a {@code note} worth showing, e.g. the upload put
+     * the place somewhere else and it had to be set from the town), or why not and what that means —
+     * REFUSED (Bandsintown's own "no" for the row, e.g. {@code INVALID_START_TIME}), TEMPORARY (the
+     * row wasn't applied), NEEDS_USER (a new draft was made instead).
      */
-    record Edited(String eventId, FailureKind failure, String error) {
+    record Edited(String eventId, String note, FailureKind failure, String error) {
 
         public static Edited updated(String eventId) {
-            return new Edited(eventId, null, null);
+            return updated(eventId, null);
+        }
+
+        public static Edited updated(String eventId, String note) {
+            return new Edited(eventId, note, null, null);
         }
 
         public static Edited notUpdated(String eventId, FailureKind failure, String error) {
-            return new Edited(eventId, failure, error);
+            return new Edited(eventId, null, failure, error);
         }
 
         public boolean isUpdated() {
@@ -91,7 +96,7 @@ public interface BitSession extends AutoCloseable {
         }
 
         public StepOutcome outcome() {
-            return isUpdated() ? StepOutcome.done(null) : failure.outcome(error);
+            return isUpdated() ? StepOutcome.done(note) : failure.outcome(error);
         }
     }
 

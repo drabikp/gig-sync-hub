@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalDouble;
 
 /**
  * One band's artist-portal session over plain HTTP — the API the portal's own pages call, no browser:
@@ -120,7 +121,7 @@ final class HttpBitSession implements BitSession {
                 results.add(Created.failed(gig, FailureKind.REFUSED,
                         "Bandsintown rejected this row — " + reply.describe()));
             } else if (event != null && event.published()) {
-                results.add(Created.published(gig, id, BitPlaces.check(gig, event)));
+                results.add(Created.published(gig, id, placedWhereTheGigIs(id, gig, event)));
             } else {
                 results.add(Created.failed(gig, FailureKind.NEEDS_USER, "Uploaded to Bandsintown as event " + id
                         + ", but it is not published (" + (event == null ? "not listed" : event.status())
@@ -198,7 +199,64 @@ final class HttpBitSession implements BitSession {
                 results.add(Edited.notUpdated(eventId, FailureKind.TEMPORARY, "not applied — " + reply.describe()));
             }
         }
-        return results;
+        return placedWhereTheGigsAre(edits, results);
+    }
+
+    /**
+     * The places this upload gave the events it changed, put right. An edit moves an event's place by
+     * the same guesswork a create does — the row carries text and the portal geocodes it — so the
+     * events are read back and each one checked, which nothing did here before: a bulk edit could move
+     * an event to the wrong town and say nothing, and only the nightly check would ever notice.
+     */
+    private List<Edited> placedWhereTheGigsAre(List<EventEdit> edits, List<Edited> results)
+            throws BitPortalException {
+        if (results.stream().noneMatch(Edited::isUpdated)) {
+            return results;
+        }
+        Map<String, BitEvent> listed = listed(edits.stream().map(EventEdit::gig).toList());
+        List<Edited> checked = new ArrayList<>();
+        for (int i = 0; i < results.size(); i++) {
+            Edited result = results.get(i);
+            BitEvent event = result.isUpdated() ? listed.get(result.eventId()) : null;
+            checked.add(event == null ? result
+                    : Edited.updated(result.eventId(),
+                            placedWhereTheGigIs(result.eventId(), edits.get(i).gig(), event)));
+        }
+        return checked;
+    }
+
+    /**
+     * The place an upload gave one event, put right. The upload can only ever GUESS a place: its
+     * template has no coordinate columns, so the portal works the place out from the row's text, and
+     * with little more than a village's name it has put an event 71 km away (Luková, 2026-10-09 — the
+     * gig had no venue, and the place search had neither street nor postal code for the village).
+     *
+     * <p>The gig's own coordinates cannot travel in an upload, but they can in the one-event form
+     * edit, which is the only way the portal lets a place be set outright. So when the read-back shows
+     * the event far from the gig's town, it is set from the town there and then, in this session.
+     * Anything else leaves the event in the wrong place with a note nobody can act on: a re-sync of an
+     * UPCOMING gig goes through the upload again and guesses the same way, and only a gig already
+     * played reaches the form edit at all (the upload refuses the past).
+     *
+     * <p>A note at all means the town HAS whereabouts — {@link BitPlaces} has nothing to measure
+     * without them — so the form edit has what the portal insists on for a place of the band's own.
+     *
+     * @return what to keep against the work: nothing when the place was right, what was done when it
+     *         had to be set, and what is still wrong with it when that didn't work
+     */
+    private String placedWhereTheGigIs(String eventId, Gig gig, BitEvent event) {
+        OptionalDouble km = BitPlaces.kilometresOff(gig, event);
+        if (km.isEmpty()) {
+            return null;
+        }
+        try {
+            String stillOff = editEventInForm(eventId, gig).orElse(null);
+            return stillOff != null ? stillOff : BitPlaces.setFromTheTown(km.getAsDouble(), gig);
+        } catch (BitPortalException e) {
+            logger.warn("Bandsintown put event {} {} km from the gig's town and would not take the town's place",
+                    eventId, Math.round(km.getAsDouble()), e);
+            return BitPlaces.check(gig, event) + " (setting it from the town failed: " + e.getMessage() + ")";
+        }
     }
 
     /**

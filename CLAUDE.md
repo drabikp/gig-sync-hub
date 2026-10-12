@@ -670,9 +670,11 @@ allowed, flagged "not picked from the list"); the calendar pre-fill picks the to
 exactly one fits name + country + postal area (`TownChoice`).
 - **Bandzone** has its own town list: `BandzoneTowns` picks the suggestion with the same name,
   country and district — several fits or none → a clear permanent error, never a guess.
-- **Bandsintown** geocodes the uploaded text: rows carry street and postal code; after a
-  publish the event's coordinates are compared with the town's (> 25 km → the task's note
-  says "check the place there").
+- **Bandsintown** geocodes the uploaded text — an upload carries no coordinates, its template has
+  no such columns — so rows carry street and postal code to tell same-named places apart. After an
+  upload (a publish or a bulk edit) the event is read back and its coordinates compared with the
+  town's; further than 25 km, the place is **set from the town** by the one-event form edit, which is
+  the only way the portal takes a place outright (`BitPlaces`, `HttpBitSession.placedWhereTheGigIs`).
 
 ## Bandzone (no browser needed)
 
@@ -827,8 +829,12 @@ is the one place the portal's JSON is read.
   of Bandsintown's own venue pages). The coordinates are what makes it a place — the portal keeps a
   venue only with a name, town, country AND whereabouts — so a town merely TYPED into the gig's form
   leaves the event's place as it stands, and a gig that has moved somewhere else then needs the user
-  ("pick the town from the list"). The place it saved is checked (`BitPlaces.check`, > 25 km from the
-  town → a note).
+  ("pick the town from the list"). This is also how a place the UPLOAD guessed wrong is put right: an
+  upload can only geocode the row's text (with little more than a village's name it put a gig 71 km
+  away, Luková 2026-10-09), so the read-back measures it (`BitPlaces.kilometresOff`) and anything
+  further than 25 km from the town is written again this way, in the same session. Without that the
+  event simply stayed wrong: a re-sync of an UPCOMING gig goes through the upload again and guesses
+  the same, and only a gig already played reaches the form edit at all (the upload refuses the past).
 - **When** — rows carry the band's `Slot` when the gig has one (`GigSchedule.showStart/showEnd`),
   else the event's start/end: Bandsintown is about when the artist plays.
 - **Past events** — a published past gig is listed under Past, not Upcoming: the create read-back

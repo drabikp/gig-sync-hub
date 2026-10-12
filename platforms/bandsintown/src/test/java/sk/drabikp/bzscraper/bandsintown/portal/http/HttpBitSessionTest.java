@@ -209,6 +209,53 @@ class HttpBitSessionTest {
                 .containsEntry("venue_name", "Lucerna Music Bar").containsEntry("venue_city", "Praha");
     }
 
+    // --- the place an upload can only guess ---
+
+    @Test
+    void a_place_the_upload_guessed_wrong_is_set_from_the_gigs_own_town_in_the_same_session() {
+        portal.geocoder = town -> new double[]{50.0755, 14.4378};       // it reads "Luková" as Praha
+
+        List<BitSession.Created> created = session.createEvents(List.of(inLukova("Moto Big Bang")), false);
+
+        assertThat(created).singleElement().satisfies(one -> {
+            assertThat(one.isPublished()).isTrue();
+            assertThat(one.note()).as("said plainly: the upload guessed, and the guess was replaced")
+                    .contains("km from Luková", "the place was set from the town itself");
+        });
+        assertThat(portal.writes).as("the upload could not carry the town's point, so the form edit did")
+                .anySatisfy(write -> assertThat(write).startsWith("PUT "));
+        assertThat(portal.events.values()).singleElement().satisfies(event ->
+                assertThat(event).containsEntry("venue_city", "Luková")
+                        .containsEntry("venue_latitude", 49.8759177)
+                        .containsEntry("venue_longitude", 16.6029795));
+    }
+
+    @Test
+    void a_place_the_upload_got_right_is_left_alone() {
+        portal.geocoder = town -> new double[]{49.8759177, 16.6029795};
+
+        List<BitSession.Created> created = session.createEvents(List.of(inLukova("Moto Big Bang")), false);
+
+        assertThat(created).singleElement().satisfies(one -> assertThat(one.note()).isNull());
+        assertThat(portal.writes).as("no second thought about a place that is right")
+                .noneSatisfy(write -> assertThat(write).startsWith("PUT "));
+    }
+
+    @Test
+    void a_bulk_edit_that_moves_a_place_is_read_back_and_put_right_too() throws Exception {
+        String id = portal.event("PUBLISHED", "2026-11-12", Map.of());
+        portal.geocoder = town -> new double[]{50.0755, 14.4378};       // again Praha, whatever it is told
+
+        List<BitSession.Edited> edited = session.updateEvents(
+                List.of(new BitSession.EventEdit(id, inLukova("Moto Big Bang"))));
+
+        assertThat(edited).singleElement().satisfies(one -> {
+            assertThat(one.isUpdated()).isTrue();
+            assertThat(one.note()).contains("km from Luková", "the place was set from the town itself");
+        });
+        assertThat(portal.events.get(id)).containsEntry("venue_latitude", 49.8759177);
+    }
+
     @Test
     void removing_an_event_sets_its_state_with_the_reason_and_an_event_already_gone_is_let_be() throws Exception {
         String id = portal.event("PUBLISHED", "2026-11-12", Map.of());
@@ -220,6 +267,19 @@ class HttpBitSessionTest {
         assertThat(portal.writes).as("the second removal saw it was gone and wrote nothing").hasSize(1);
         assertThat(portal.changes).singleElement().satisfies(change ->
                 assertThat(change.getValue()).contains("\"status\":\"DELETED\"").contains("CANCELED"));
+    }
+
+    /**
+     * A village gig whose town was picked from the place search but which has no venue yet — the shape
+     * that went wrong live: the row carries little more than "Luková", and the portal has several to
+     * choose from.
+     */
+    private static Gig inLukova(String title) {
+        return Gig.create(title, GigSchedule.startingAt(at(2026, 11, 12)),
+                new Location(null, "Luková", Country.CZECHIA,
+                        new Address(null, null, "okres Ústí nad Orlicí", "Pardubický kraj",
+                                49.8759177, 16.6029795)),
+                List.of(), Admission.free(), null, null, null, null);
     }
 
     /** A gig in Praha whose town was picked from the place search, so its whereabouts are known. */
