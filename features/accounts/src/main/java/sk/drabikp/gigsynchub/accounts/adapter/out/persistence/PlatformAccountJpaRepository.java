@@ -1,6 +1,7 @@
 package sk.drabikp.gigsynchub.accounts.adapter.out.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import sk.drabikp.gigsynchub.gig.application.port.out.AcrossBands;
 
 import java.util.List;
 import java.util.UUID;
@@ -11,5 +12,6 @@ interface PlatformAccountJpaRepository extends JpaRepository<PlatformAccountEnti
     List<PlatformAccountEntity> findByBandIdOrderByPlatform(UUID bandId);
 
     /** The accounts that keep secrets (to seal again with a new key). */
+    @AcrossBands("key rotation on start seals EVERY band's secrets again, so it must see them all")
     List<PlatformAccountEntity> findBySecretsIsNotNull();
 }
