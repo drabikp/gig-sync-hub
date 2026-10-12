@@ -18,8 +18,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Runs the sync outbox in the background on {@code bzscraper.sync.worker.threads} threads (2): each takes
- * the next due run — the bands in turn, one run per lane (a band's account on a platform) at a time, so
- * one band's slow or broken platform doesn't hold up the others — until nothing is due. Woken when tasks
+ * the next workload — a band's work of one action on one platform, taken through its workflow by the
+ * engine; the bands in turn, one workload per lane (a band's account on a platform) at a time, so one
+ * band's slow or broken platform doesn't hold up the others — until nothing is due. This loop is how work
+ * is HANDED OUT, not how a workflow is driven: the engine runs a workflow to its end (or to the end of
+ * what a pass allows) before this thread asks for anything else. Woken when tasks
  * are queued, and checks every {@code bzscraper.sync.poll-seconds} anyway (retries come due by time). On
  * start it first settles tasks a previous run left RUNNING. Off with {@code bzscraper.sync.worker.enabled=false}
  * (tests): tasks are then queued but never run.
@@ -99,7 +102,7 @@ class SyncWorker {
     private void drain() {
         try {
             while (!Thread.currentThread().isInterrupted() && dispatcher.runNext()) {
-                // one lane's due runs per round
+                // one workload per round
             }
         } catch (RuntimeException e) {
             log.error("Sync worker round failed; next round in {} s", pollSeconds, e);

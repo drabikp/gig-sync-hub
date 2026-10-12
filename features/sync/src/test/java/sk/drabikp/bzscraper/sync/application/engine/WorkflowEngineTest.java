@@ -14,6 +14,7 @@ import sk.drabikp.bzscraper.sync.domain.SyncAction;
 import sk.drabikp.bzscraper.sync.domain.SyncLogEntry;
 import sk.drabikp.bzscraper.sync.domain.SyncStatus;
 import sk.drabikp.bzscraper.sync.domain.SyncTask;
+import sk.drabikp.bzscraper.sync.domain.Workload;
 
 import java.time.Duration;
 import java.time.ZoneId;
@@ -28,7 +29,10 @@ import static sk.drabikp.bzscraper.gig.domain.TestBands.BAND;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDSINTOWN;
 import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
-/** The edit workflow (bulk edit → form edit → by hand) run by the engine. */
+/**
+ * The workflows run by the engine, the edit one (bulk edit → form edit → by hand) first: ONE call
+ * takes a band's due work on a platform through as much of its workflow as this pass allows.
+ */
 class WorkflowEngineTest {
 
     private final SyncFakes.Outbox outbox = new SyncFakes.Outbox();
@@ -65,11 +69,11 @@ class WorkflowEngineTest {
         return outbox.find(task.id()).orElseThrow();
     }
 
-    /** What the worker does: run until nothing is due. */
+    /** What the worker does: the next due task names a workload, over and over until none is due. */
     private void runAll(WorkflowEngine engine) {
         Optional<SyncTask> next;
         while ((next = outbox.nextDue(clock.instant())).isPresent()) {
-            engine.runFrom(next.get());
+            engine.run(Workload.of(next.get()));
         }
     }
 
@@ -98,7 +102,7 @@ class WorkflowEngineTest {
         }
         bitBulk.outcome = item -> item.gig().title().equals("B") ? StepOutcome.failed("timeout") : StepOutcome.done(null);
 
-        engine(bitBulk, bitForm).runFrom(tasks.getFirst());
+        engine(bitBulk, bitForm).run(Workload.of(tasks.getFirst()));
 
         assertThat(bitBulk.calls).singleElement().satisfies(batch -> assertThat(batch).hasSize(3));
         assertThat(after(tasks.get(0)).status()).isEqualTo(SyncStatus.DONE);
@@ -110,9 +114,9 @@ class WorkflowEngineTest {
     }
 
     @Test
-    void work_postponed_because_the_browser_was_busy_runs_again_later_without_using_an_attempt() {
+    void work_that_never_reached_the_platform_runs_again_later_without_using_an_attempt() {
         SyncTask task = edit(upcoming("A"), BANDSINTOWN);
-        bitBulk.outcome = item -> StepOutcome.postponed("Another Bandsintown operation is using the browser.");
+        bitBulk.outcome = item -> StepOutcome.postponed("Interrupted while talking to Bandsintown — again later.");
         List<String> health = new ArrayList<>();
         PlatformHealth watched = new PlatformHealth() {
             @Override
@@ -133,7 +137,7 @@ class WorkflowEngineTest {
         WorkflowEngine engine = SyncFakes.engine(SyncFakes.registry(published, bitBulk, bitForm), gigs, published,
                 outbox, signals, clock, new SyncPause(signals, signals, new SyncFakes.Settings()), watched);
 
-        engine.runFrom(task);
+        engine.run(Workload.of(task));
 
         assertThat(after(task).status()).isEqualTo(SyncStatus.PENDING);
         assertThat(after(task).attempts()).as("it never ran").isZero();
@@ -143,19 +147,19 @@ class WorkflowEngineTest {
 
         clock.advance(Duration.ofMinutes(1));
         bitBulk.outcome = item -> StepOutcome.done(null);
-        engine.runFrom(after(task));
+        engine.run(Workload.of(task));
 
         assertThat(after(task).status()).isEqualTo(SyncStatus.DONE);
         assertThat(after(task).attempts()).isEqualTo(1);
     }
 
     @Test
-    void a_gig_the_bulk_step_refuses_moves_on_to_the_form_and_the_path_is_logged() {
+    void what_the_bulk_step_passes_on_is_done_through_the_form_in_the_same_pass_and_the_path_is_logged() {
         SyncTask past = edit(TestGigs.gig("Summer", "Klub 007"), BANDSINTOWN);           // 2026-09-15
         SyncTask refused = edit(upcoming("Winter"), BANDSINTOWN);
         bitBulk.outcome = item -> StepOutcome.refused("INVALID_START_TIME");
 
-        runAll(engine(bitBulk, bitForm));
+        engine(bitBulk, bitForm).run(Workload.of(past));         // one call: the bulk edit, then the form
 
         assertThat(bitBulk.ran()).extracting(i -> i.gig().title()).containsExactly("Winter");
         assertThat(bitForm.ran()).extracting(i -> i.gig().title()).containsExactlyInAnyOrder("Summer", "Winter");
@@ -184,21 +188,23 @@ class WorkflowEngineTest {
     }
 
     @Test
-    void a_one_at_a_time_step_takes_a_limited_share_per_pass_each_result_saved_on_its_own() {
+    void a_one_at_a_time_step_takes_a_limited_share_of_a_pass_each_result_saved_on_its_own() {
         List<SyncTask> tasks = new ArrayList<>();
-        for (int i = 0; i < WorkflowEngine.SINGLE_PER_PASS + 2; i++) {
+        for (int i = 0; i < WorkflowEngine.ONE_AT_A_TIME_PER_PASS + 2; i++) {
             tasks.add(edit(upcoming("G" + i), BANDZONE));
         }
         WorkflowEngine engine = engine(bzForm);
 
-        engine.runFrom(tasks.getFirst());           // Bandzone has no bulk edit: all move on to its form
+        engine.run(Workload.of(tasks.getFirst()));      // Bandzone has no bulk edit: its form does them all
+
         assertThat(tasks).allSatisfy(t -> assertThat(after(t).step()).isEqualTo(StepType.FORM_EDIT));
         assertThat(outbox.log(tasks.getFirst().id())).extracting(SyncLogEntry::message)
                 .contains("bulk edit: none for Bandzone → form edit");
-        engine.runFrom(after(tasks.getFirst()));
+        assertThat(bzForm.calls).as("one gig at a time, as many as a pass gives this step")
+                .hasSize(WorkflowEngine.ONE_AT_A_TIME_PER_PASS).allSatisfy(c -> assertThat(c).hasSize(1));
+        assertThat(tasks).filteredOn(t -> after(t).status() == SyncStatus.PENDING)
+                .as("the rest waits at the form, for the next pass").hasSize(2);
 
-        assertThat(bzForm.calls).hasSize(WorkflowEngine.SINGLE_PER_PASS).allSatisfy(c -> assertThat(c).hasSize(1));
-        assertThat(tasks).filteredOn(t -> after(t).status() == SyncStatus.PENDING).hasSize(2);
         runAll(engine);
         assertThat(tasks).allSatisfy(t -> assertThat(after(t).status()).isEqualTo(SyncStatus.DONE));
     }
@@ -437,11 +443,19 @@ class WorkflowEngineTest {
         WorkflowEngine engine = SyncFakes.engine(SyncFakes.registry(published, bzForm), gigs, published, outbox, signals,
                 clock, pause, PlatformBreakers.never(clock));
 
-        engine.runFrom(tasks.getFirst());           // moves all to the form step
-        engine.runFrom(after(tasks.getFirst()));
+        engine.run(Workload.of(tasks.getFirst()));
 
-        assertThat(bzForm.calls).hasSize(1);
+        assertThat(bzForm.calls).as("the gig in progress finished; nothing else started").hasSize(1);
         assertThat(tasks).extracting(t -> after(t).status())
                 .containsExactly(SyncStatus.DONE, SyncStatus.PENDING, SyncStatus.PENDING);
+
+        // a pass cut short leaves each run written down where it got to, so the next one carries on
+        assertThat(tasks.subList(1, 3)).allSatisfy(t -> assertThat(after(t).step()).isEqualTo(StepType.FORM_EDIT));
+        bzForm.outcome = item -> StepOutcome.done(null);
+        pause.resume(BAND);
+        runAll(engine);
+
+        assertThat(bzForm.calls).as("two more gigs, and no step done twice").hasSize(3);
+        assertThat(tasks).allSatisfy(t -> assertThat(after(t).status()).isEqualTo(SyncStatus.DONE));
     }
 }

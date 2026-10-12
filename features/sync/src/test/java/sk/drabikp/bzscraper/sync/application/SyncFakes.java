@@ -21,7 +21,7 @@ import sk.drabikp.bzscraper.sync.application.engine.OutcomeSettlement;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformBreakers;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformHealth;
 import sk.drabikp.bzscraper.sync.application.engine.RecreateStep;
-import sk.drabikp.bzscraper.sync.application.engine.RunPreparation;
+import sk.drabikp.bzscraper.sync.application.engine.RunIntake;
 import sk.drabikp.bzscraper.sync.application.engine.StepRegistry;
 import sk.drabikp.bzscraper.sync.application.engine.SyncAdmission;
 import sk.drabikp.bzscraper.sync.application.engine.SyncDispatcher;
@@ -559,10 +559,11 @@ public final class SyncFakes {
 
     public static WorkflowEngine engine(StepRegistry steps, Gigs gigs, Published published, Outbox outbox, Signals signals,
                                  Clock clock, PauseSyncUseCase pause, PlatformHealth health, SyncFaults faults) {
-        RunPreparation preparation = new RunPreparation(steps, gigs, published, outbox, TestPlatforms.PLATFORMS, clock);
-        OutcomeSettlement settlement = new OutcomeSettlement(steps, published, outbox, new DirectTransactions(),
+        RunIntake intake = new RunIntake(gigs, published, TestPlatforms.PLATFORMS);
+        OutcomeSettlement settlement = new OutcomeSettlement(published, outbox, new DirectTransactions(),
                 TestPlatforms.PLATFORMS, clock);
-        return new WorkflowEngine(steps, preparation, settlement, outbox, signals, faults, clock, pause, health);
+        return new WorkflowEngine(steps, intake, settlement, outbox, signals, faults, clock, pause, health,
+                TestPlatforms.PLATFORMS);
     }
 
     /** Never paused, platforms never held back. */

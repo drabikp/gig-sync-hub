@@ -25,8 +25,11 @@ public enum FailureKind {
     NEEDS_USER,
 
     /**
-     * Not tried: the platform's browser is busy with another operation (an import, the platform
-     * check). Again a little later; no attempt used.
+     * Not tried: the work never got as far as the platform, because the thread was interrupted —
+     * which in practice means the app is stopping. Again a little later; no attempt used, and the
+     * platform is told nothing about it, because it heard nothing. (A create is the exception its
+     * adapter makes: an interrupted create may have happened all the same, so it is reported
+     * {@link #TEMPORARY} with "check there".)
      */
     BUSY;
 

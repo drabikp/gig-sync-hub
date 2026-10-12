@@ -34,7 +34,7 @@ import static sk.drabikp.bzscraper.gig.domain.platform.TestPlatforms.BANDZONE;
 
 /**
  * Many bands' work on one server (multi-band plan, phase 3): several workers at once, the bands taking
- * turns, one run per lane at a time, and a band whose account is broken holding back only itself.
+ * turns, one workload per lane at a time, and a band whose account is broken holding back only itself.
  */
 class ManyBandsSyncTest {
 

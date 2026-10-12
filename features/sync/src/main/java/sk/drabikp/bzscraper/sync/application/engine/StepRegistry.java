@@ -7,7 +7,6 @@ import sk.drabikp.bzscraper.gig.domain.platform.Platforms;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncStep;
 import sk.drabikp.bzscraper.sync.domain.StepType;
 import sk.drabikp.bzscraper.sync.domain.SyncAction;
-import sk.drabikp.bzscraper.sync.domain.SyncTask;
 import sk.drabikp.bzscraper.sync.domain.Workflows;
 
 import java.util.ArrayList;
@@ -20,9 +19,11 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * The sync steps each platform provides ({@link SyncStep}, at most one per type), and the
- * questions about them: which step of a workflow takes a gig first, and — when work is
- * queued — whether any does ({@link SyncAdmission}). A platform without a step of its own for
+ * The sync steps each platform provides ({@link SyncStep}, at most one per type), and the two
+ * questions about them: which step a platform has for a type, and — before any work is queued —
+ * whether any step of the workflow could take this gig at all ({@link SyncAdmission}, so that the
+ * user hears "left out" at once). Where a run already queued goes next is NOT asked here: the
+ * {@link WorkflowEngine} walks the workflow itself. A platform without a step of its own for
  * "remove and create again" gets one built from its remove and create steps ({@link Recreator},
  * {@link RecreateStep}).
  */
@@ -57,17 +58,14 @@ public class StepRegistry implements SyncAdmission {
                 ? Optional.empty() : Optional.of(byHand(platform, reasons));
     }
 
-    /** The step a task waits at (the workflow's first before it started). */
-    static StepType stepOf(SyncTask task) {
-        return task.step() != null ? task.step() : Workflows.of(task.action()).getFirst();
-    }
-
     /**
      * From {@code from} on, the first step the platform has that takes the gig; why the others
-     * didn't goes to {@code reasons}. Without the gig (deleted from the catalog), a step is
-     * taken as it is — it was checked when the work was queued.
+     * didn't goes to {@code reasons}. This is the question {@link #leftOut} asks before any work
+     * is queued — "can anything here do this at all" — walked ahead of time. What happens to work
+     * already queued is not asked this way: the {@link WorkflowEngine} walks the workflow itself,
+     * one step at a time, and writes down each hop as it makes it.
      */
-    Optional<StepType> firstTaking(Platform platform, StepType from, Gig gig, List<String> reasons) {
+    private Optional<StepType> firstTaking(Platform platform, StepType from, Gig gig, List<String> reasons) {
         for (StepType type = from; type != null; type = Workflows.after(type).orElse(null)) {
             SyncStep step = step(platform, type);
             if (step == null) {

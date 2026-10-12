@@ -13,8 +13,9 @@ import org.jmolecules.ddd.annotation.ValueObject;
  *       never move on — it may have half-happened.</li>
  *   <li>{@link Kind#FAILED_FOR_GOOD} — trying again won't help and nothing else should try
  *       (e.g. the platform made a new event instead of editing): the user decides.</li>
- *   <li>{@link Kind#POSTPONED} — not tried at all (the platform's browser was busy with a
- *       read): again a little later, no attempt used, not a sign of the platform's health.</li>
+ *   <li>{@link Kind#POSTPONED} — not tried at all: the step never got as far as the platform
+ *       (the app was stopping, so the thread was interrupted). Again a little later, no attempt
+ *       used, and it says nothing about the platform's health — nothing reached it.</li>
  * </ul>
  */
 @ValueObject

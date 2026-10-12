@@ -20,7 +20,7 @@ import sk.drabikp.bzscraper.sync.application.engine.FairTurns;
 import sk.drabikp.bzscraper.sync.application.engine.OutcomeSettlement;
 import sk.drabikp.bzscraper.sync.application.engine.PlatformBreakers;
 import sk.drabikp.bzscraper.sync.application.engine.RecreateStep;
-import sk.drabikp.bzscraper.sync.application.engine.RunPreparation;
+import sk.drabikp.bzscraper.sync.application.engine.RunIntake;
 import sk.drabikp.bzscraper.sync.application.engine.StepRegistry;
 import sk.drabikp.bzscraper.sync.application.engine.SyncDispatcher;
 import sk.drabikp.bzscraper.sync.application.engine.WorkflowEngine;
@@ -58,18 +58,16 @@ class SyncConfiguration {
         return new StepRegistry(steps, platforms, RecreateStep.recreator(transactions, publishedGigStore));
     }
 
-    /** Runs the sync tasks through the platforms' steps — docs/sync-workflow-plan.md. */
+    /** Runs a band's due work on a platform through its workflow — docs/sync-workflow-plan.md. */
     @Bean
     WorkflowEngine workflowEngine(StepRegistry stepRegistry, GigRepository gigRepository,
                                   PublishedGigStore publishedGigStore, SyncOutbox outbox, Transactions transactions,
                                   SyncNotifier notifier, SyncFaults faults, Clock clock, Platforms platforms,
                                   SyncPause syncPause, PlatformBreakers platformBreakers) {
-        RunPreparation preparation = new RunPreparation(stepRegistry, gigRepository, publishedGigStore, outbox,
-                platforms, clock);
-        OutcomeSettlement settlement = new OutcomeSettlement(stepRegistry, publishedGigStore, outbox, transactions,
-                platforms, clock);
-        return new WorkflowEngine(stepRegistry, preparation, settlement, outbox, notifier, faults, clock, syncPause,
-                platformBreakers);
+        RunIntake intake = new RunIntake(gigRepository, publishedGigStore, platforms);
+        OutcomeSettlement settlement = new OutcomeSettlement(publishedGigStore, outbox, transactions, platforms, clock);
+        return new WorkflowEngine(stepRegistry, intake, settlement, outbox, notifier, faults, clock, syncPause,
+                platformBreakers, platforms);
     }
 
     /**
@@ -82,7 +80,7 @@ class SyncConfiguration {
                 Duration.ofMinutes(sync.breaker().cooldownMinutes()), clock, notifier, trigger);
     }
 
-    /** Whose work runs next — the bands in turn, one run per lane at a time. */
+    /** Whose work runs next — the bands in turn, one workload per lane at a time. */
     @Bean
     FairTurns fairTurns() {
         return new FairTurns();

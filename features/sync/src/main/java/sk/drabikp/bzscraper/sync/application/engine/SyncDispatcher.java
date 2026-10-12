@@ -10,6 +10,7 @@ import sk.drabikp.bzscraper.sync.application.port.out.SyncNotifier;
 import sk.drabikp.bzscraper.sync.application.port.out.SyncOutbox;
 import sk.drabikp.bzscraper.sync.domain.Lane;
 import sk.drabikp.bzscraper.sync.domain.SyncTask;
+import sk.drabikp.bzscraper.sync.domain.Workload;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -17,13 +18,14 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Drives the sync outbox for the background workers (several may call {@link #runNext} at once): the next
- * due task — the bands taking turns ({@link FairTurns}), one run per lane (a band's account on a platform)
- * at a time, none of a paused band or a lane held back by its breaker — goes to the {@link WorkflowEngine},
- * which runs it — with the band's runs waiting at the same step on the same platform — through the
- * platform's steps. Each task works from the state at the time
- * it RUNS, so whatever changed since it was queued is what reaches the platform. Failures
- * are retried or left for the user by {@link SyncRetryPolicy}.
+ * Drives the sync outbox for the background workers (several may call {@link #runNext} at once). The next
+ * due task — the bands taking turns ({@link FairTurns}), one workload per lane (a band's account on a platform)
+ * at a time, none of a paused band or a lane held back by its breaker — says which {@link Workload} runs:
+ * that band's work of that action on that platform, all of it, which the {@link WorkflowEngine} then takes
+ * through its workflow. A task is never run on its own, because a task cannot say which batch it belongs in.
+ *
+ * <p>Each task works from the state at the time it RUNS, so whatever changed since it was queued is what
+ * reaches the platform. Failures are retried or left for the user by {@link SyncRetryPolicy}.
  */
 @Application
 public class SyncDispatcher implements DispatchSyncUseCase {
@@ -61,7 +63,8 @@ public class SyncDispatcher implements DispatchSyncUseCase {
             return false;
         }
         try {
-            rows.as(next.get().band(), () -> engine.runFrom(next.get()));    // the lane sees its band's rows only
+            Workload workload = Workload.of(next.get());
+            rows.as(workload.band(), () -> engine.run(workload));            // the lane sees its band's rows only
         } finally {
             turns.release(Lane.of(next.get()));
         }

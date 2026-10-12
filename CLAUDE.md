@@ -128,8 +128,10 @@ features/accounts   users, bands, memberships (User, Band — id, slug, name —
 features/places     Town (coordinates null when only typed), TownChoice, place search (Photon); /api/places
 features/sync       outbox (SyncOutbox = SyncTaskQueries + the writes; SyncTask…, PlatformState: a gig's
                     state on a platform), queueing (QueueSyncWork), read-only state (SyncStateUseCase),
-                    workflow engine (WorkflowEngine → RunPreparation, OutcomeSettlement, RecreateStep;
-                    a step's unexpected fault → SyncFaults, logged in full) + step ports (SyncStep,
+                    workflow engine (WorkflowEngine.run(Workload) walks a workflow; RunIntake answers
+                    what a step is to do, OutcomeSettlement what an outcome means, RecreateStep is built
+                    from a platform's own steps; a step's unexpected fault → SyncFaults, logged in full)
+                    + step ports (SyncStep,
                     OneAtATimeStep), breakers, pause, settings, worker; /api/sync; test-jar: SyncFakes
                     (its outbox gives platforms back as new instances, like the database), SyncOutboxContract
 features/catalog    catalog use cases, GigWrites (← CatalogWrites), GigExporter;
@@ -488,18 +490,36 @@ REACTIVATE  remove and create again — built by the engine from the platform's 
             first of remove / remove in the form that takes the gig) + create
 ```
 
+**The engine orchestrates; it is not coordinated.** `WorkflowEngine.run(Workload)` is given a
+**`Workload`** — a band's due work of ONE action on ONE platform, because a single task cannot say
+which batch it belongs in — and walks that action's workflow itself, in one call: each step with the
+gigs waiting there, and a gig a step passes on tried the next way **in the same pass**, while the
+platform's session is still open. `sync_task.step` is written down at each hop
+(`SyncOutbox.advance`), so a restart or a pass cut short carries on from where each run stands: it is
+a **checkpoint, not a program counter** — nothing has to come round again for a workflow to finish,
+and no step is redone because of one. Each step does at most one batch per pass (a batch step its own
+size, a one-at-a-time step ≤10 gigs, each result saved on its own), then the lane is given up so the
+other bands and platforms get their turn and what is left waits where it stands.
+Who decides what: the engine the ORDER; `Workflows` each action's steps; `StepRegistry` which step a
+platform has (and, at queue time only, whether any could take the gig); `RunIntake` what a step is to
+do for one run — it answers and writes nothing; `OutcomeSettlement` what an outcome means for the
+record, written at once — except a refusal, which is the engine's, because what follows it is the
+workflow's next step.
+
 A step's `refusal(gig)` passes the gig on (also asked at queue time → "Left out: … by hand",
 and a delete then forgets the copy). Outcomes: done (a created event's id recorded, a removed
 one's forgotten — in the same transaction) / refused (the platform said no, nothing happened
-→ next step) / failed (retry at the same step per `SyncRetryPolicy`; never for creates) /
-failed for good (→ user) / postponed (the work was interrupted, as when the app stops — again in a
-minute, no attempt used, not counted by the breaker). The run's step is `sync_task.step`; the path is logged ("bulk edit:
-… → form edit"); due runs at one step go together (batch, or ≤10 one by one, each saved on
-its own). Moot work (gig deleted/cancelled/published meanwhile) ends done with a note.
+→ next step, whatever the action) / failed (retry at the same step per `SyncRetryPolicy`; never for creates) /
+failed for good (→ user) / postponed (the step never reached the platform — the thread was interrupted,
+as when the app stops — again in a minute, no attempt used, not counted by the breaker). The path is
+logged ("bulk edit: doesn't take past events → form edit"), and what no step can do ends FAILED with
+every reason it collected on the way. Moot work (gig deleted/cancelled/published meanwhile) ends done
+with a note.
 `SyncWorker` (`bzscraper.sync.worker.threads` threads, 2; woken on enqueue + every
-`bzscraper.sync.poll-seconds`) calls `SyncDispatcher.runNext()` until nothing it may run is due: the next
-lane's due runs (the bands in turn, `FairTurns`; a lane — a band's work on a platform — never by two
-workers at once; none of a paused band or a lane held back) go to the engine.
+`bzscraper.sync.poll-seconds`) calls `SyncDispatcher.runNext()` until nothing it may run is due — it
+HANDS WORK OUT and drives no workflow: the next due task names the workload to run (the bands in turn,
+`FairTurns`; a lane — a band's work on a platform — never by two workers at once; none of a paused band
+or a lane held back).
 
 - Tasks work from the state when they RUN; work that became moot ends DONE with a note.
 - Queueing rules (`SyncRequests`): no second UPDATE while one (or the PUBLISH) is PENDING;
