@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: gigsynchub — signing in
+  version: "1"
+  description: |
+    Signing in is Rauthy's (OpenID Connect): the page sends the browser to
+    /oauth2/authorization/rauthy (not an API call — a page load), Rauthy signs the user in and
+    sends them back to /login/oauth2/code/rauthy, which starts the session; then GET /me says
+    who it is (the first time, it makes them a user of the app). Every /api address but these
+    answers 401 until signed in; which bands one may use is their memberships' (accounts.yaml).
+    GET /csrf hands out the CSRF token (and sets its cookie XSRF-TOKEN; every change sends it
+    back as the header X-XSRF-TOKEN). POST /logout ends the session and says where to send the
+    browser to sign out of Rauthy too.
+servers:
+  - url: /
+tags:
+  - name: Auth
+  - name: SignOut
+    description: Answered by the security filter itself (no controller).
+paths:
+  /api/auth/csrf:
+    get:
+      tags: [Auth]
+      operationId: csrfToken
+      responses:
+        "200":
+          description: The token (also in the XSRF-TOKEN cookie).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfTokenResponse'
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      operationId: currentUser
+      responses:
+        "200":
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        "401":
+          description: Not signed in.
+  /api/auth/logout:
+    post:
+      tags: [SignOut]
+      operationId: logout
+      responses:
+        "200":
+          description: Signed out of the app; the browser goes to `redirect` to sign out of Rauthy too.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+components:
+  schemas:
+    CsrfTokenResponse:
+      type: object
+      required: [headerName, token]
+      properties:
+        headerName:
+          type: string
+        token:
+          type: string
+    MeResponse:
+      type: object
+      required: [username, name]
+      properties:
+        username:
+          description: How Rauthy names the user (the e-mail address).
+          type: string
+        name:
+          description: How the app shows the user (their name, else the e-mail address).
+          type: string
+    LogoutResponse:
+      type: object
+      required: [redirect]
+      properties:
+        redirect:
+          description: Rauthy's sign-out, which then leads back to the page.
+          type: string

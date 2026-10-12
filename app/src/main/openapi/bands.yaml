@@ -1,0 +1,30 @@
+openapi: 3.0.3
+info:
+  title: gigsynchub — a band's data as a whole
+  version: "1"
+  description: |
+    What spans a band's features: its data exported as one file (owners). Never a secret — the
+    platform accounts' settings only, the calendar's host only.
+servers:
+  - url: /
+tags:
+  - name: BandData
+paths:
+  /api/bands/{bandId}/export:
+    parameters:
+      - $ref: '../../../../features/gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    get:
+      tags: [BandData]
+      operationId: exportBand
+      summary: The band's data as one JSON file (owners only) — its gigs, their platform copies, the calendar's verdicts and links, its own rules, members, accounts' settings, the audit log.
+      responses:
+        "200":
+          description: The band's data (a download).
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          $ref: '../../../../features/gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+        "409":
+          $ref: '../../../../features/gig/src/main/openapi/gig.yaml#/components/responses/Refused'

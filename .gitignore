@@ -32,3 +32,38 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Frontend (web/frontend) ###
+web/frontend/node/
+web/frontend/dist/
+*.tsbuildinfo
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+# local test credentials (never commit)
+.bz-test-creds
+# the band's real Bandzone login (line 1 login, line 2 password)
+.bz-creds
+.gstack/
+
+### App data / index (never commit) ###
+data/
+.codegraph/
+.bit-test-creds
+
+# private iCal address of the band calendar (never commit)
+/calendar
+
+# the old sign-in password (before Rauthy; never commit)
+.app-login
+
+# Docker: the secrets (docker/make-secrets.sh) and the settings (never commit)
+/secrets/
+/.env
+# the sign-in's (Rauthy's) cache — sessions; its data is in PostgreSQL
+/auth-data/
+
+# the page's API types, generated from the OpenAPI specs (npm run generate)
+web/frontend/src/api/generated/

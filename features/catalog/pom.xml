@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>sk.drabik</groupId>
+		<artifactId>gigsynchub</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+	<artifactId>gigsynchub-catalog</artifactId>
+	<name>gigsynchub-catalog</name>
+	<description>The gig catalog: adding, editing, cancelling and deleting gigs, the catalog page, file downloads, the REST endpoint.</description>
+	<dependencies>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-gig</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-places</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-sync</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-gig</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-sync</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+	<build>
+		<plugins>
+			<plugin>
+				<!-- the API this module serves: src/main/openapi/catalog.yaml → sk.drabikp.gigsynchub.catalog.adapter.in.rest.api -->
+				<groupId>org.openapitools</groupId>
+				<artifactId>openapi-generator-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>api</id>
+						<configuration>
+							<inputSpec>${project.basedir}/src/main/openapi/catalog.yaml</inputSpec>
+							<apiPackage>sk.drabikp.gigsynchub.catalog.adapter.in.rest.api</apiPackage>
+							<modelPackage>sk.drabikp.gigsynchub.catalog.adapter.in.rest.api</modelPackage>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<!-- CatalogFakes is shared with the importing and calendar tests -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>test-jar</goal>
+						</goals>
+						<configuration>
+							<!-- the shared helpers only: a test application or test class here would be
+							     picked up by the other modules' tests -->
+							<includes>
+								<include>**/CatalogFakes*</include>
+							</includes>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>

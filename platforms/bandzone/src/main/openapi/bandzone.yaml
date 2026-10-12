@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: gigsynchub — the band's gigs (public)
+  version: "1"
+  description: |
+    The band's gigs as JSON, from the catalog, in the shape this endpoint has always had (it
+    began as a Bandzone scraper): `bzId` and `url` are the gig's concert on Bandzone when it is
+    there; the band is the one configured for Bandzone. Any other band is "not found" — the
+    server never fetches pages for whoever asks. Public (no sign-in).
+servers:
+  - url: /
+tags:
+  - name: BandGigs
+paths:
+  /gigs/{band_slug}:
+    get:
+      tags: [BandGigs]
+      operationId: bandGigs
+      parameters:
+        - name: band_slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The band's gigs, earliest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GigSummaryResponse'
+        "404":
+          $ref: '../../../../../features/gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+components:
+  schemas:
+    GigSummaryResponse:
+      type: object
+      required: [bzId, title, start, end, url, city, venue, bands, entryFee, isCancelled]
+      properties:
+        bzId:
+          description: The concert's id on Bandzone.
+          type: string
+          nullable: true
+        title:
+          type: string
+        start:
+          description: With the gig's own UTC offset, e.g. 2026-10-17T20:30:00+02:00.
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+          nullable: true
+        url:
+          type: string
+          nullable: true
+        city:
+          type: string
+        venue:
+          type: string
+        bands:
+          type: array
+          items:
+            type: string
+        entryFee:
+          description: The price, "voluntary" or "free".
+          type: string
+        isCancelled:
+          type: boolean

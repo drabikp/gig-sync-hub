@@ -1,0 +1,39 @@
+# The way in (compose service "proxy"): HTTPS for GSH_DOMAIN with a Let's Encrypt certificate
+# Caddy gets and renews itself (the domain's DNS must point here, ports 80 and 443 open), HTTP
+# redirected to HTTPS; /auth/* goes to the sign-in (Rauthy), everything else to the app — one
+# origin. GSH_DOMAIN=localhost (the default) runs it locally with Caddy's own certificate.
+{$GSH_DOMAIN} {
+	# the live updates (server-sent events) are a stream: never compressed or held back
+	@notLive not path /api/bands/*/events
+	encode @notLive zstd gzip
+
+	# the sign-in: Rauthy serves everything under /auth/v1
+	handle /auth/* {
+		reverse_proxy rauthy:8080
+	}
+
+	handle {
+		reverse_proxy app:8080 {
+			flush_interval -1
+		}
+	}
+
+	header {
+		-Server
+		# browsers remember to come only over HTTPS (a year)
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	# no token in the log: an invitation link's (/invite/…, /api/invitations/…) nor the sign-out's id_token_hint
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "(invite/|invitations/|id_token_hint=)[^/?&]+" "${1}REDACTED"
+			}
+		}
+	}
+}

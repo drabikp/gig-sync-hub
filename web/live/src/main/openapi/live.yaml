@@ -1,0 +1,33 @@
+openapi: 3.0.3
+info:
+  title: gigsynchub — live updates
+  version: "1"
+  description: |
+    The page's stream of live updates (server-sent events). The first event is `hello`; then each
+    event is named after what changed (a LiveTopic) and the page reads that part again through
+    the API. A comment every 25 s keeps the stream open. Only the page side is generated from
+    this file: the server streams through Spring's SseEmitter (LiveController), which a
+    generated interface can't express.
+servers:
+  - url: /
+tags:
+  - name: Live
+paths:
+  /api/bands/{bandId}/events:
+    parameters:
+      - $ref: '../../../../../features/gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    get:
+      tags: [Live]
+      operationId: liveEvents
+      responses:
+        "200":
+          description: 'The stream: "event: <topic>" lines, the data is the topic again.'
+          content:
+            text/event-stream:
+              schema:
+                type: string
+components:
+  schemas:
+    LiveTopicValue:
+      type: string
+      enum: [gigs, sync, check, import, calendar]

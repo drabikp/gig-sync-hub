@@ -1,0 +1,48 @@
+# The API's specs (one per module that serves requests) → TypeScript types for the page
+# (openapi-typescript, `npm run generate`; runs before dev, build and test). Generated files are
+# not kept in git.
+apis:
+  gig:
+    root: ../../features/gig/src/main/openapi/gig.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/gig.ts
+  accounts:
+    root: ../../features/accounts/src/main/openapi/accounts.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/accounts.ts
+  auth:
+    root: ../../app/src/main/openapi/auth.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/auth.ts
+  bands:
+    root: ../../app/src/main/openapi/bands.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/bands.ts
+  catalog:
+    root: ../../features/catalog/src/main/openapi/catalog.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/catalog.ts
+  places:
+    root: ../../features/places/src/main/openapi/places.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/places.ts
+  sync:
+    root: ../../features/sync/src/main/openapi/sync.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/sync.ts
+  calendar:
+    root: ../../features/calendar/src/main/openapi/calendar.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/calendar.ts
+  check:
+    root: ../../features/check/src/main/openapi/check.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/check.ts
+  import:
+    root: ../../features/importing/src/main/openapi/import.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/import.ts
+  live:
+    root: ../../web/live/src/main/openapi/live.yaml
+    x-openapi-ts:
+      output: ./src/api/generated/live.ts

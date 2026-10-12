@@ -1,0 +1,49 @@
+# Rauthy, the sign-in for the app (compose service "rauthy"; https://sebadob.github.io/rauthy/).
+# Not secret: the secrets are in the secrets file (secrets/rauthy.toml, docker/make-secrets.sh),
+# each named here as '$SECRETS'. What depends on this machine comes from compose's environment:
+# PUB_URL, RP_ID, RP_ORIGIN (GSH_DOMAIN), TRUSTED_PROXIES (GSH_SUBNET), BOOTSTRAP_ADMIN_EMAIL
+# (GSH_ADMIN_EMAIL) and SECRETS_FILE.
+
+[server]
+# behind Caddy, which routes https://GSH_DOMAIN/auth/* here: plain HTTP inside the network
+scheme = 'http'
+port_http = 8080
+proxy_mode = true
+# overwritten by PUB_URL / TRUSTED_PROXIES
+pub_url = 'localhost'
+trusted_proxies = ['10.201.0.0/24']
+
+[database]
+# the `rauthy` database on the app's PostgreSQL (compose service "db"; made by "rauthy-db")
+hiqlite = false
+pg_host = 'db'
+pg_port = 5432
+pg_user = 'rauthy'
+pg_password = '$SECRETS'
+pg_db_name = 'rauthy'
+pg_tls = 'disable'
+
+[cluster]
+# one node; Hiqlite still keeps Rauthy's cache (sessions…) in data_dir (./auth-data)
+node_id = 1
+nodes = ["1 localhost:8100 localhost:8200"]
+data_dir = 'data'
+secret_raft = '$SECRETS'
+secret_api = '$SECRETS'
+
+[encryption]
+keys = ['$SECRETS']
+key_active = '$SECRETS'
+
+[bootstrap]
+# read once, while the database is empty: the group gigsynchub and the app's client
+# (secrets/rauthy-bootstrap, made by docker/make-secrets.sh). The first admin's password is
+# printed once in the log (docker compose logs rauthy). Overwritten by BOOTSTRAP_ADMIN_EMAIL.
+admin_email = 'admin@localhost'
+bootstrap_dir = 'bootstrap'
+
+[webauthn]
+# passkeys belong to the domain; overwritten by RP_ID / RP_ORIGIN
+rp_id = 'localhost'
+rp_origin = 'https://localhost:443'
+rp_name = 'gigsynchub'

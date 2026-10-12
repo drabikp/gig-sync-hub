@@ -1,0 +1,9 @@
+:root {
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  overscroll-behavior-y: none;
+}
+.mantine-Notifications-root[data-position^='top'] {
+  top: calc(8px + env(safe-area-inset-top)) !important;
+}

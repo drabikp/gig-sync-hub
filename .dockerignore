@@ -1,0 +1,15 @@
+# An allowlist: only the sources go into the image's build. Never the secrets (.bz-creds,
+# .bit-test-creds, calendar, .app-login, secrets/), the data or local build output.
+*
+!.mvn
+!mvnw
+!pom.xml
+!features
+!platforms
+!web
+!app
+**/target
+**/node_modules
+web/frontend/node
+web/frontend/dist
+**/*.tsbuildinfo

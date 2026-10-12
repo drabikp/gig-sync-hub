@@ -1,0 +1,256 @@
+openapi: 3.0.3
+info:
+  title: gigsynchub — sync
+  version: "1"
+  description: |
+    The platform sync: every platform task and its history, Retry and Discard of failed work,
+    Pause / Resume, and the platforms held back by their circuit breakers. Every change here
+    is announced on the live updates (sync, gigs).
+servers:
+  - url: /
+tags:
+  - name: Sync
+paths:
+  /api/bands/{bandId}/sync/tasks:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    get:
+      tags: [Sync]
+      operationId: listTasks
+      parameters:
+        - name: show
+          in: query
+          description: all — the latest (500); open — not finished; failed — waiting for the user.
+          schema:
+            type: string
+            enum: [all, open, failed]
+            default: all
+      responses:
+        "200":
+          description: The tasks, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaskResponse'
+  /api/bands/{bandId}/sync/tasks/{id}/log:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    get:
+      tags: [Sync]
+      operationId: taskLog
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        "200":
+          description: The task's history, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogEntryResponse'
+  /api/bands/{bandId}/sync/tasks/{id}/retry:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    post:
+      tags: [Sync]
+      operationId: retryTask
+      summary: Runs a failed (or discarded) task again, from the step where it stopped.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        "204":
+          description: Queued again.
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+        "409":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
+  /api/bands/{bandId}/sync/tasks/{id}/discard:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    post:
+      tags: [Sync]
+      operationId: discardTask
+      summary: Gives up on a waiting or failed task — the platform is left as it is.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        "204":
+          description: Discarded.
+        "404":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/NotFound'
+        "409":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/Refused'
+  /api/bands/{bandId}/sync/status:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    get:
+      tags: [Sync]
+      operationId: syncStatus
+      responses:
+        "200":
+          description: Paused or not, the platforms' breakers, the open work by what it is doing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatusResponse'
+  /api/bands/{bandId}/sync/pause:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    post:
+      tags: [Sync]
+      operationId: pauseSync
+      summary: The gig in progress finishes, nothing new starts; survives a restart.
+      responses:
+        "204":
+          description: Paused.
+  /api/bands/{bandId}/sync/resume:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    post:
+      tags: [Sync]
+      operationId: resumeSync
+      responses:
+        "204":
+          description: Running again.
+  /api/bands/{bandId}/sync/breakers/{platform}/resume:
+    parameters:
+      - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/parameters/BandId'
+    post:
+      tags: [Sync]
+      operationId: resumePlatform
+      summary: Lets the band's work on a platform, held back by its circuit breaker, run again now.
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Running again.
+        "400":
+          $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/responses/BadRequest'
+components:
+  parameters:
+    TaskId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    SyncActionValue:
+      type: string
+      enum: [PUBLISH, UPDATE, CANCEL, DELETE, REACTIVATE]
+    SyncTaskStatusValue:
+      type: string
+      enum: [PENDING, RUNNING, DONE, FAILED, DISCARDED]
+    TaskResponse:
+      description: A platform task. `retrying` — failed and tried again at nextAttemptAt.
+      type: object
+      required: [id, gigId, gigLabel, platform, action, status, retrying, attempts, createdAt, updatedAt,
+                 nextAttemptAt, message, step]
+      properties:
+        id:
+          type: integer
+          format: int64
+        gigId:
+          description: The gig's token (its address in the API).
+          type: string
+        gigLabel:
+          type: string
+        platform:
+          type: string
+        action:
+          $ref: '#/components/schemas/SyncActionValue'
+        status:
+          $ref: '#/components/schemas/SyncTaskStatusValue'
+        retrying:
+          type: boolean
+        attempts:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        nextAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+        message:
+          type: string
+          nullable: true
+        step:
+          description: Where its workflow is, e.g. "bulk edit".
+          type: string
+          nullable: true
+    LogEntryResponse:
+      type: object
+      required: [at, message]
+      properties:
+        at:
+          type: string
+          format: date-time
+        message:
+          type: string
+    BreakerResponse:
+      description: |
+        A breaker of the band's on a platform that isn't plainly closed: `failures` in a row; `held`
+        while its work is held back (until heldUntil); `trial` when the next batch decides.
+        `everyone`: the platform is held back for every band (many bands failing there at once —
+        it seems down); `failures` then counts those bands, and it can't be resumed by one band.
+      type: object
+      required: [platform, failures, heldUntil, held, trial, lastFailure, everyone]
+      properties:
+        platform:
+          type: string
+        failures:
+          type: integer
+        heldUntil:
+          type: string
+          format: date-time
+          nullable: true
+        held:
+          type: boolean
+        trial:
+          type: boolean
+        lastFailure:
+          type: string
+          nullable: true
+        everyone:
+          type: boolean
+    SyncCountsResponse:
+      description: The open tasks by what they are doing now.
+      type: object
+      required: [queued, running, retrying, failed]
+      properties:
+        queued:
+          type: integer
+          format: int64
+        running:
+          type: integer
+          format: int64
+        retrying:
+          type: integer
+          format: int64
+        failed:
+          type: integer
+          format: int64
+    SyncStatusResponse:
+      type: object
+      required: [paused, breakers, counts]
+      properties:
+        paused:
+          type: boolean
+        breakers:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakerResponse'
+        counts:
+          $ref: '#/components/schemas/SyncCountsResponse'

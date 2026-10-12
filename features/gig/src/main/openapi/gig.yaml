@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: gigsynchub — shared parts
+  version: "1"
+  description: |
+    What every part of the API shares: a gig as the form holds it (GigFormRequest when sent,
+    GigFormResponse when answered — the same fields), its country and entry type, and how the
+    API says no. The features' specs refer to these schemas; the kernel generates them once
+    (sk.drabikp.gigsynchub.gig.api) and the features use those classes. Names: …Request for what
+    is sent, …Response for what is answered, …Value for an enum.
+paths: {}
+components:
+  parameters:
+    BandId:
+      name: bandId
+      in: path
+      required: true
+      description: The band (its id). A band the signed-in user doesn't manage is "not found" (404).
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Refused:
+      description: A rule said no — nothing changed. The page says it from `code` and `args`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemResponse'
+    BadRequest:
+      description: The request makes no sense (a body that can't be read, a gig or platform that isn't one).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemResponse'
+    NotFound:
+      description: Nothing there (e.g. a gig deleted meanwhile).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemResponse'
+  schemas:
+    ProblemCodeValue:
+      description: |
+        Every case the API says no with — each feature's own (the server's `<Feature>ErrorCode` enums,
+        checked against this list by the app's tests; the page translates every one, `errors.<code>`).
+        Kernel: changedMeanwhile, deletedMeanwhile, invalidGig (args.fields), notFound, badRequest,
+        notConfigured (args.setting). Catalog: gigBusy (args.gig), gigIdentityTaken (args.date, venue).
+        Sync: taskMovedOn (args.gig, status). Import: noPlatform, noPlan, nothingSelected, importReading.
+        Calendar: calendarUnavailable, invalidCalendar (args.fields: address, zone), invalidRule
+        (args.rule: its number, args.reason). Accounts: slugTaken (args.slug), invalidBand (args.fields:
+        name, slug), ownerOnly, invalidAccount (args.fields), platformSignInFailed (args.platform, args.problem), secretsUnavailable, invalidEmail (args.email),
+        alreadyMember (args.email), invitationGone, invitationNotForYou (args.email), lastOwner, confirmDelete
+        (args.slug), tooManyBands (args.max). The app: tooManyRequests (args.seconds), unexpected.
+      type: string
+      enum: [changedMeanwhile, deletedMeanwhile, invalidGig, notFound, badRequest, notConfigured,
+             gigBusy, gigIdentityTaken, taskMovedOn, noPlatform, noPlan, nothingSelected, importReading,
+             calendarUnavailable, invalidCalendar, invalidRule, slugTaken, invalidBand, ownerOnly,
+             invalidAccount, platformSignInFailed, secretsUnavailable, invalidEmail, alreadyMember, invitationGone,
+             invitationNotForYou, lastOwner, confirmDelete, tooManyBands, tooManyRequests, unexpected]
+    ProblemResponse:
+      description: |
+        How the API says no: `code` names the case (ProblemCodeValue), `args` its details; `message` is
+        the English fallback.
+      type: object
+      required: [code, args, message]
+      properties:
+        code:
+          $ref: '#/components/schemas/ProblemCodeValue'
+        args:
+          type: object
+          additionalProperties:
+            type: string
+        message:
+          type: string
+          nullable: true
+    CountryValue:
+      type: string
+      enum: [CZECHIA, SLOVAKIA]
+    EntryTypeValue:
+      type: string
+      enum: [FREE, VOLUNTARY, PAID]
+    # A gig as the form holds it — one definition, sent both ways under two names (&gigForm).
+    GigFormRequest: &gigForm
+      description: |
+        A gig as the form holds it: days and times as the band reads them in the gig's own
+        country. Times are "HH:mm" (or "HH:mm:ss"). The town's address details come from the
+        place search.
+      type: object
+      required: [title, date, time, endDate, endTime, slotDate, slotTime, slotEndTime, venue, city, country,
+                 street, postalCode, district, region, latitude, longitude, lineup, entry, price,
+                 description, facebookUrl, ticketUrl, posterUrl, cancelled]
+      properties:
+        title:
+          type: string
+        date:
+          type: string
+          format: date
+          nullable: true
+        time:
+          $ref: '#/components/schemas/TimeOfDay'
+        endDate:
+          description: Null with an endTime — the day it starts, or the next one when the end is earlier.
+          type: string
+          format: date
+          nullable: true
+        endTime:
+          $ref: '#/components/schemas/TimeOfDay'
+        slotDate:
+          description: When the band itself plays (a festival over several days); with slotTime.
+          type: string
+          format: date
+          nullable: true
+        slotTime:
+          $ref: '#/components/schemas/TimeOfDay'
+        slotEndTime:
+          $ref: '#/components/schemas/TimeOfDay'
+        venue:
+          description: Null or blank — not known yet (the gig is then known by its town).
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        country:
+          allOf:
+            - $ref: '#/components/schemas/CountryValue'
+          nullable: true
+        street:
+          type: string
+          nullable: true
+        postalCode:
+          type: string
+          nullable: true
+        district:
+          type: string
+          nullable: true
+        region:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          format: double
+          nullable: true
+        longitude:
+          type: number
+          format: double
+          nullable: true
+        lineup:
+          description: The other bands.
+          type: array
+          items:
+            type: string
+        entry:
+          $ref: '#/components/schemas/EntryTypeValue'
+        price:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        facebookUrl:
+          type: string
+          nullable: true
+        ticketUrl:
+          type: string
+          nullable: true
+        posterUrl:
+          type: string
+          nullable: true
+        cancelled:
+          type: boolean
+    GigFormResponse: *gigForm
+    TimeOfDay:
+      description: '"HH:mm" or "HH:mm:ss".'
+      type: string
+      pattern: '^\d{2}:\d{2}(:\d{2})?$'
+      nullable: true

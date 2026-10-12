@@ -1,0 +1,228 @@
+# The app with its database, its sign-in (Rauthy) and daily backups:
+#   docker/make-secrets.sh        (once: ./secrets from the git-ignored login files + random ones)
+#   cp .env.example .env          (the band's and this machine's settings; git-ignored)
+#   docker compose up -d --build  → https://$GSH_DOMAIN (default https://localhost) through Caddy:
+#                                   /auth/* is Rauthy, the rest the app
+# Secrets are files under ./secrets, given to the containers as Docker secrets (never
+# environment variables); ./data holds the band's calendar profile and the backups,
+# ./auth-data Rauthy's cache.
+name: gigsynchub
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gigsynchub
+      POSTGRES_USER: gigsynchub
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - db-data:/var/lib/postgresql
+    # only this machine: for running the app outside Docker during development
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "gigsynchub", "-d", "gigsynchub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      args:
+        UID: ${GSH_UID:-1000}
+        GID: ${GSH_GID:-1000}
+    image: gigsynchub:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/gigsynchub
+      # the app signs in as gigsynchub_app (row-level security holds it, no superuser); the migrations as the owner
+      SPRING_DATASOURCE_USERNAME: gigsynchub_app
+      SPRING_FLYWAY_USER: gigsynchub
+      # the sign-in: Rauthy as the browser sees it, and as the app reaches it inside the network
+      GIGSYNCHUB_AUTH_ISSUER: https://${GSH_DOMAIN:-localhost}/auth/v1/
+      GIGSYNCHUB_AUTH_INTERNALURL: http://rauthy:8080/auth/v1/
+    # each secret appears as /run/secrets/<property name>, read by spring.config.import=configtree
+    secrets:
+      - source: db_password
+        target: spring.flyway.password
+      - source: db_app_password
+        target: spring.datasource.password
+      - source: db_app_password
+        target: gigsynchub.db.app-role-password
+      - source: auth_client_secret
+        target: gigsynchub.auth.client-secret
+      # the key the bands' secrets (their platform accounts, calendar addresses) are sealed with
+      - source: data_keys
+        target: gigsynchub.accounts.data-keys
+      # band #1's accounts and calendar from before each band connected its own: kept once in the
+      # database on start, then unused (empty files are fine)
+      - source: bandzone_login
+        target: gigsynchub.bandzone.login
+      - source: bandzone_password
+        target: gigsynchub.bandzone.password
+      - source: bandsintown_login
+        target: gigsynchub.bandsintown.login
+      - source: bandsintown_password
+        target: gigsynchub.bandsintown.password
+      - source: bandsintown_totp
+        target: gigsynchub.bandsintown.totp-secret
+      - source: calendar_url
+        target: gigsynchub.calendar.ical-url
+    volumes:
+      - ./data:/app/data
+    # this machine only (health, debugging): the way in for people is the proxy — signing in
+    # needs https://$GSH_DOMAIN. GSH_APP_BIND=0.0.0.0 opens it to the local network.
+    ports:
+      - "${GSH_APP_BIND:-127.0.0.1}:8080:8080"
+    # names on the internet (the platforms, the calendar, the town search): Docker's own forwarding
+    # failed behind a VPN's name servers; container names (db) still resolve. GSH_DNS to change it.
+    dns:
+      - ${GSH_DNS:-1.1.1.1}
+
+  # makes the `rauthy` database and role on db when they're missing (then exits)
+  rauthy-db:
+    image: postgres:18-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: gigsynchub
+      PGDATABASE: gigsynchub
+    secrets:
+      - db_password
+      - rauthy_db_password
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        export PGPASSWORD="$$(cat /run/secrets/db_password)"
+        pw="$$(cat /run/secrets/rauthy_db_password)"
+        if [ "$$(psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'rauthy'")" != 1 ]; then
+          # a variable (the password, quoted by psql) only works in what psql reads, not in -c
+          echo "CREATE ROLE rauthy LOGIN PASSWORD :'pw'" | psql -v ON_ERROR_STOP=1 -q -v pw="$$pw"
+          echo "made the role rauthy"
+        fi
+        if [ "$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'rauthy'")" != 1 ]; then
+          psql -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE rauthy OWNER rauthy"
+          echo "made the database rauthy"
+        fi
+
+  # the sign-in: OpenID Connect for the app (docker/rauthy/config.toml), its users, groups and
+  # passkeys; reached at https://$GSH_DOMAIN/auth/ through the proxy. The first admin's password
+  # is in its log once, on the first start.
+  rauthy:
+    image: ghcr.io/sebadob/rauthy:0.37.1
+    restart: unless-stopped
+    user: "${GSH_UID:-1000}:${GSH_GID:-1000}"
+    depends_on:
+      rauthy-db:
+        condition: service_completed_successfully
+    environment:
+      PUB_URL: ${GSH_DOMAIN:-localhost}
+      RP_ID: ${GSH_DOMAIN:-localhost}
+      RP_ORIGIN: https://${GSH_DOMAIN:-localhost}:443
+      TRUSTED_PROXIES: ${GSH_SUBNET:-10.201.0.0/24}
+      BOOTSTRAP_ADMIN_EMAIL: ${GSH_ADMIN_EMAIL:-admin@localhost}
+      # Rauthy's own default: its admin pages need a passkey. A machine that cannot make one yet
+      # (GSH_ADMIN_MFA=false in its .env) gets in with the password alone — never on a public server.
+      ADMIN_FORCE_MFA: ${GSH_ADMIN_MFA:-true}
+      SECRETS_FILE: /run/secrets/rauthy_secrets
+    secrets:
+      - rauthy_secrets
+    volumes:
+      - ./docker/rauthy/config.toml:/app/config.toml:ro
+      - ./secrets/rauthy-bootstrap:/app/bootstrap:ro
+      - ./auth-data:/app/data
+    dns:
+      - ${GSH_DNS:-1.1.1.1}
+
+  # the way in: HTTPS for GSH_DOMAIN (docker/Caddyfile) — /auth/* to Rauthy, the rest to the app
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+      - rauthy
+    environment:
+      # the address the app is reached at (.env); localhost: a try with Caddy's own certificate
+      GSH_DOMAIN: ${GSH_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # the certificates: kept, so a restart doesn't ask Let's Encrypt again
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # pg_dump on start and then daily into ./data/backups, the newest 14 kept
+  backup:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    user: "${GSH_UID:-1000}:${GSH_GID:-1000}"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: gigsynchub
+      PGDATABASE: gigsynchub
+      KEEP: 14
+    secrets:
+      - db_password
+    volumes:
+      - ./data/backups:/backups
+      - ./docker/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
+  db_app_password:
+    file: ./secrets/db_app_password
+  auth_client_secret:
+    file: ./secrets/auth_client_secret
+  rauthy_secrets:
+    file: ./secrets/rauthy.toml
+  rauthy_db_password:
+    file: ./secrets/rauthy_db_password
+  data_keys:
+    file: ./secrets/data_keys
+  bandzone_login:
+    file: ./secrets/bandzone_login
+  bandzone_password:
+    file: ./secrets/bandzone_password
+  bandsintown_login:
+    file: ./secrets/bandsintown_login
+  bandsintown_password:
+    file: ./secrets/bandsintown_password
+  bandsintown_totp:
+    file: ./secrets/bandsintown_totp
+  calendar_url:
+    file: ./secrets/calendar_url
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+
+# A fixed subnet: Docker's own pick (172.x) can collide with a VPN's routes, and the page then
+# can't be reached from this machine. Change GSH_SUBNET if this one is taken.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${GSH_SUBNET:-10.201.0.0/24}

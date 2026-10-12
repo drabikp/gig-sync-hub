@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>sk.drabik</groupId>
+		<artifactId>gigsynchub</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+	<artifactId>gigsynchub-importing</artifactId>
+	<name>gigsynchub-importing</name>
+	<description>Import: reading the platforms' events and linking them to the catalog.</description>
+	<dependencies>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-gig</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-sync</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-catalog</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-gig</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-sync</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>sk.drabik</groupId>
+			<artifactId>gigsynchub-catalog</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+	<build>
+		<plugins>
+			<plugin>
+				<!-- the API this module serves: src/main/openapi/import.yaml → sk.drabikp.gigsynchub.importing.adapter.in.rest.api -->
+				<groupId>org.openapitools</groupId>
+				<artifactId>openapi-generator-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>api</id>
+						<configuration>
+							<inputSpec>${project.basedir}/src/main/openapi/import.yaml</inputSpec>
+							<apiPackage>sk.drabikp.gigsynchub.importing.adapter.in.rest.api</apiPackage>
+							<modelPackage>sk.drabikp.gigsynchub.importing.adapter.in.rest.api</modelPackage>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>

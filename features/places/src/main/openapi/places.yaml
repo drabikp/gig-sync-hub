@@ -1,0 +1,88 @@
+openapi: 3.0.3
+info:
+  title: gigsynchub — places
+  version: "1"
+  description: The town picker of the gig form (OpenStreetMap Photon behind it).
+servers:
+  - url: /
+tags:
+  - name: Places
+paths:
+  /api/places:
+    get:
+      tags: [Places]
+      operationId: searchTowns
+      summary: Towns by what was typed (only towns with their district and coordinates).
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            default: ""
+      responses:
+        "200":
+          description: The towns, best first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TownResponse'
+  /api/places/resolve:
+    get:
+      tags: [Places]
+      operationId: resolveTown
+      summary: The one town that fits a name, country and postal code.
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: country
+          in: query
+          schema:
+            $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/schemas/CountryValue'
+        - name: postalCode
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Exactly one town fits.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TownResponse'
+        "204":
+          description: None or several fit.
+components:
+  schemas:
+    TownResponse:
+      type: object
+      required: [name, district, region, postalCode, country, latitude, longitude]
+      properties:
+        name:
+          type: string
+        district:
+          description: The district, e.g. "okres Přerov".
+          type: string
+          nullable: true
+        region:
+          type: string
+          nullable: true
+        postalCode:
+          type: string
+          nullable: true
+        country:
+          allOf:
+            - $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/schemas/CountryValue'
+          nullable: true
+        latitude:
+          type: number
+          format: double
+          nullable: true
+        longitude:
+          type: number
+          format: double
+          nullable: true

@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>sk.drabik</groupId>
+		<artifactId>gigsynchub</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+	<artifactId>gigsynchub-gig</artifactId>
+	<name>gigsynchub-gig</name>
+	<description>Shared kernel: the gig, the platforms it is published to, their persistence and the database schema (Flyway).</description>
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
+		</dependency>
+		<!-- the generated API classes (gig.api and every feature's) carry these annotations -->
+		<!-- the mappers between the API's classes and the domain (every module's …Mapper) -->
+		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>jakarta.validation</groupId>
+			<artifactId>jakarta.validation-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-annotations</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<!-- only to read the old H2 database's SQL backup for the one-time import -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+	<build>
+		<plugins>
+			<plugin>
+				<!-- the API's shared parts: GigFormRequest/Response, CountryValue, EntryTypeValue, ProblemResponse + ProblemCodeValue → sk.drabikp.gigsynchub.gig.api -->
+				<groupId>org.openapitools</groupId>
+				<artifactId>openapi-generator-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>api</id>
+						<configuration>
+							<inputSpec>${project.basedir}/src/main/openapi/gig.yaml</inputSpec>
+							<modelPackage>sk.drabikp.gigsynchub.gig.api</modelPackage>
+							<generateApis>false</generateApis>
+							<!-- here they are made, not mapped to existing classes -->
+							<schemaMappings combine.self="override">
+								<schemaMapping>TimeOfDay=java.lang.String</schemaMapping>
+							</schemaMappings>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<!-- TestGigs and TestPlatforms are shared with the other modules' tests -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>test-jar</goal>
+						</goals>
+						<configuration>
+							<!-- the shared helpers only: a test application or test class here would be
+							     picked up by the other modules' tests -->
+							<includes>
+								<include>sk/drabikp/gigsynchub/gig/domain/TestGigs*</include>
+								<include>sk/drabikp/gigsynchub/gig/domain/TestBands*</include>
+								<include>sk/drabikp/gigsynchub/gig/domain/platform/TestPlatforms*</include>
+								<include>sk/drabikp/gigsynchub/gig/application/port/out/TestLiveUpdates*</include>
+								<include>sk/drabikp/gigsynchub/gig/application/port/out/GigPagingContract*</include>
+							</includes>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>
