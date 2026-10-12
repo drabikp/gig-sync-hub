@@ -8,7 +8,6 @@ import sk.drabikp.gigsynchub.accounts.application.port.in.BandAccess;
 import sk.drabikp.gigsynchub.accounts.application.port.in.UsersUseCase;
 import sk.drabikp.gigsynchub.accounts.domain.User;
 import sk.drabikp.gigsynchub.gig.application.NotFoundException;
-import sk.drabikp.gigsynchub.gig.application.port.out.RowScope;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 
 import java.util.Map;
@@ -17,7 +16,9 @@ import java.util.Map;
  * Every band's address ({@code /api/bands/{bandId}/…}) is for its members only: anyone else gets
  * the band's "not found" (404) — a band you aren't in doesn't exist for you, so its id can't be
  * probed. What a member may do in the band (an owner's actions) is the use cases' to check. A member's
- * request then sees the band's rows in the database ({@link RowScope}), no other band's.
+ * request reads and writes its band's rows because every query over a band's table names the band —
+ * which {@code BandScopedQueriesTest} enumerates the repositories to insist on, rather than the
+ * database being told whose rows to show (row-level security, dropped in V12).
  */
 class BandAccessInterceptor implements HandlerInterceptor {
 
@@ -25,16 +26,12 @@ class BandAccessInterceptor implements HandlerInterceptor {
     /** The request attribute naming the member the request was let through for (see {@link AuditInterceptor}). */
     static final String MEMBER = BandAccessInterceptor.class.getName() + ".member";
 
-    private static final String SCOPE = BandAccessInterceptor.class.getName() + ".scope";
-
     private final UsersUseCase users;
     private final BandAccess access;
-    private final RowScope rows;
 
-    BandAccessInterceptor(UsersUseCase users, BandAccess access, RowScope rows) {
+    BandAccessInterceptor(UsersUseCase users, BandAccess access) {
         this.users = users;
         this.access = access;
-        this.rows = rows;
     }
 
     @Override
@@ -52,15 +49,6 @@ class BandAccessInterceptor implements HandlerInterceptor {
             throw new NotFoundException("No such band.");
         }
         request.setAttribute(MEMBER, user.id());
-        request.setAttribute(SCOPE, rows.open(band));          // the database shows this band's rows only
         return true;
-    }
-
-    @Override
-    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler,
-                                Exception ex) {
-        if (request.getAttribute(SCOPE) instanceof RowScope.Scope scope) {
-            scope.close();
-        }
     }
 }

@@ -55,7 +55,7 @@ uid/gid match the host's, `GSH_UID`/`GSH_GID`, default 1000); compose runs `db` 
 `pg_dump` of the app's and Rauthy's databases on start and daily into `./data/backups`, the newest 14
 of each kept). **Secrets are files** under `./secrets` (git-ignored, `600`; `docker/make-secrets.sh` makes
 them: random ones — the database passwords (`db_password`: the owner, for Flyway; `db_app_password`: the
-app's own login `gigsynchub_app`, which row-level security holds), Rauthy's secrets, the app's client secret, **`data_keys`** (the
+app's own login `gigsynchub_app`, which may not change the schema), Rauthy's secrets, the app's client secret, **`data_keys`** (the
 key every band's secrets are sealed with in the database: back it up apart from the database dumps, lose it
 and they can't be read) — and band #1's old logins from `.bz-creds`, `.bit-test-creds`, `calendar`, which
 the app keeps once in the database and doesn't read after),
@@ -164,7 +164,7 @@ web/frontend        the page: React + TypeScript + Vite + Mantine 8, TanStack Qu
 app/                GigSyncHubApplication; web (security: sign-in through Rauthy (OIDC), session + CSRF
                     for a single-page app; OidcCurrentLogin; BandAccessInterceptor: a band's addresses
                     for its members; ApiErrors; SinglePageApp: the page's own addresses load
-                    index.html; RowScopeFilter + BandAccessInterceptor: the database's row-level security scope;
+                    index.html; BandAccessInterceptor: a band's addresses are its members';
                     AuditInterceptor; RateLimits); bands (BandExport: a band's data as one file, bands.yaml);
                     metrics (BandMetrics, the operator's); application.properties;
                     ArchitectureTest, PlatformNamesTest,
@@ -382,17 +382,25 @@ rows are keyed `(band_id, …)`.
   and **export** it (`GET …/export`, one JSON file — never a secret); one's own account is deleted
   (`DELETE /api/me`; a band one is alone in goes too; the Rauthy login stays). The **audit log**
   (`audit_event`): every change a member makes through a band's API (`AuditInterceptor`: the operation,
-  what it named, how it ended), read by owners. **Row-level security** (V6): the app's connections work
-  as the role `gigsynchub_app` — in Docker its own login (`SPRING_DATASOURCE_USERNAME`, the secret
-  `db_app_password`, given its password after each migration by `AppRoleLogin`), not the database's
-  superuser; Flyway connects as the owner (`spring.flyway.user/password`); `set role` on each pooled
-  connection either way — told at checkout which band's rows they may see (`app.band`: a band's id, ''
-  none, '*' every band's — `RowScope`, `ThreadRowScope`, `RowScopedDataSource`). **Fail-closed**: a thread
-  that opened nothing sees no band's rows; every request starts at none (`RowScopeFilter`), a member's
-  band address opens its band (`BandAccessInterceptor`; no band in the address = 404), the public list,
-  each sync lane, the import, the check and the metrics open theirs (`rows.as(band, …)`); only the
-  cross-band reads say so (`rows.acrossBands(…)`: the worker's due work and pauses, the restart's
-  recovery; `StartUpRowScope`: start-up, until the app is ready). **Limits**:
+  what it named, how it ended), read by owners. **Tenant isolation is the queries' own** (V12
+  dropped the row-level security of V6): every query over a band's table names the band — in a derived
+  method's own name (`findByBandId…`) or in a predicate of its `@Query` — and `band_id` is part of the
+  primary key of the main tables, so a row cannot even be fetched by id without its band. What keeps it
+  that way is enforcement at BUILD time, not a database policy: `BandScopedQueriesTest` (app)
+  ENUMERATES the repository interfaces on the classpath, works out which entities keep a band's rows (a
+  `bandId` field, or the band inside an `@IdClass`/`@EmbeddedId`) and insists on every method, so a
+  query added later is covered the moment it exists; the eight reads that genuinely belong to no band
+  carry `@AcrossBands("why")` (the worker's due work and pauses, `FairTurns`, restart recovery, key
+  rotation's two re-seals, the shipped presets, and a task's log — whose band is checked on its task in
+  `SyncLogService#log`). Two ArchUnit rules close the way round it: nothing is annotated
+  `@Query(nativeQuery = true)` and nothing calls `createNativeQuery` — with no exceptions, main has no
+  native SQL at all. Each band-scoped store also has a persistence test that writes two bands' rows and
+  reads one band's back. **The restricted role stays** and has nothing to do with tenancy: the app's
+  connections work as `gigsynchub_app` — in Docker its own login (`SPRING_DATASOURCE_USERNAME`, the
+  secret `db_app_password`, given its password after each migration by `AppRoleLogin`), not the
+  database's superuser, `set role` on each pooled connection — so the app cannot alter a table and
+  cannot read `flyway_schema_history`; Flyway connects as the owner (`spring.flyway.user/password`).
+  **Limits**:
   `gigsynchub.limits.requests-per-minute` (600) / `changes-per-minute` (120) per user (per address before
   signing in) on `/api`, `/gigs`, `/oauth2`, `/login` → 429 `tooManyRequests`;
   `gigsynchub.accounts.max-bands-owned` (10) → `tooManyBands`; live streams: 100 per band, 2000 in all
@@ -912,7 +920,8 @@ address, `key_id`, zone). `V4__band_check.sql`: `band_check (band_id)` — the b
 check as JSON. `V5__invitations_audit.sql`: `invitation` (the token's hash only), `audit_event`.
 `V6__row_level_security.sql`: the role (`bzscraper_app` as it wrote it — see V11), `band_visible(band_id)` and a policy on every
 band's table (`calendar_rule`'s shipped rows readable by all, written only by '*'; `sync_log` through its
-task); not on `band`, `membership`, `app_user`, `invitation`. `V7__public_list.sql`: `band.public_list`
+task); not on `band`, `membership`, `app_user`, `invitation`. **All of the policies are gone again as of
+V12** — only the role survives; V6 stays as written because an applied migration is never rewritten. `V7__public_list.sql`: `band.public_list`
 (off; band #1's on — it had the list before). `V8__gig_search_and_indexes.sql`: what the LIST reads —
 `gig.show_at` (generated: the slot if the event has one, else the start — when the band plays, which is
 what `Gig.isPast` reads), the index `gig_band_show (band_id, show_at, id)` the page and its keyset walk,
@@ -937,6 +946,18 @@ ids from sequences instead of identity columns, because an identity column canno
 driver must fetch each assigned id back) and all four are written in bulk; drawn 50 at a time
 (`pooled-lo`, so a block's ids are above what the database gave), each sequence owned by its column so
 `pg_get_serial_sequence` still answers the H2 import, and started well above the rows already there.
+
+`V12__drop_row_level_security.sql`: row-level security goes (2026-10-12) — the thirteen `band_rows`
+policies, the RLS flags and `band_visible(uuid)` — and tenant isolation becomes the queries' own, kept
+that way at build time (see **Bands** above: `BandScopedQueriesTest`, `@AcrossBands`, the two ArchUnit
+rules against native SQL). It was always described as a net under the ports' own band checks, and that
+is what it proved to be: the feature modules' persistence tests connect as the user that OWNS the
+tables, and a table's owner bypasses RLS (V6 never asked for `force row level security`), so those
+tests were already proving the queries' predicates and never the policies. Worth knowing before anyone
+proposes putting it back: `app.band` had no privilege check on it, so anyone able to connect as
+`gigsynchub_app` could `select set_config('app.band', '*', false)` — it guarded against a mistake in
+the app's own queries, never against a leaked database password. The **role stays** for its own sake
+(no DDL, no `flyway_schema_history`), as do its grants and default privileges.
 
 **From H2** (the database until 2026-10): `H2Import` (a Flyway `afterMigrate` callback in the kernel)
 copies an H2 SQL backup (`SCRIPT TO`, `gigsynchub.db.import-h2`) into an EMPTY database right after
@@ -974,9 +995,9 @@ its code, the page's own addresses load `index.html`. `BandIsolationTest`: every
 spec (read from the YAML) is 404 for a non-member, both ways. The test properties carry a made-up data
 key (`gigsynchub.accounts.data-keys`; `AccountsFakes.TEST_KEYS` for module tests); the JPA tests of the
 sealed rows check the secret isn't in the row, that a row copied to another band doesn't open, and key
-rotation. The app's tests connect as `gigsynchub_app` like production, so every API test runs under
-row-level security (`BandMembershipApiTest` checks it; `RowLevelSecurityTest` in the kernel checks the
-policies themselves); `BandMembershipApiTest`: an invitation joins whom it's for, once; the audit log;
+rotation. The app's tests connect as `gigsynchub_app` like production
+(`BandMembershipApiTest` checks the role is the restricted one, and that it can neither alter a table
+nor read the migration history); `BandMembershipApiTest`: an invitation joins whom it's for, once; the audit log;
 the export without a secret; `RateLimitsTest`. `ManyBandsSyncTest` (sync): ten bands queued at once on three workers all finish, a lane is never
 run twice at once, one band's broken account holds back only it, many failing bands hold the platform back.
 Each feature's tests run with a band

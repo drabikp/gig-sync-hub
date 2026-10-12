@@ -20,8 +20,6 @@ import java.lang.annotation.Target;
  * <p>The reason is the whole point of the annotation. {@code @AcrossBands("the worker picking the
  * next due task")} tells the next reader why one query is allowed what the others are not; an empty
  * one would make the test pass and teach nobody anything.
- *
- * @see RowScope#acrossBands(java.util.function.Supplier)
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

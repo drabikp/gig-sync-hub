@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
 import sk.drabikp.gigsynchub.accounts.application.port.in.BandDirectory;
 import sk.drabikp.gigsynchub.check.application.port.in.CheckPlatformsUseCase;
 import sk.drabikp.gigsynchub.check.config.CheckProperties;
-import sk.drabikp.gigsynchub.gig.application.port.out.RowScope;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 
 import java.time.Clock;
@@ -31,7 +30,6 @@ class PlatformCheckSchedule {
     private static final Logger log = LoggerFactory.getLogger(PlatformCheckSchedule.class);
 
     private final CheckPlatformsUseCase platformCheck;
-    private final RowScope rows;
     private final BandDirectory bands;
     private final boolean enabled;
     private final Clock clock;
@@ -43,8 +41,7 @@ class PlatformCheckSchedule {
     });
 
     public PlatformCheckSchedule(CheckPlatformsUseCase platformCheck, BandDirectory bands, CheckProperties properties,
-                                 Clock clock, RowScope rows) {
-        this.rows = rows;
+                                 Clock clock) {
         this.platformCheck = platformCheck;
         this.bands = bands;
         this.enabled = properties.enabled();
@@ -87,7 +84,7 @@ class PlatformCheckSchedule {
     /** One band's check; its failure doesn't keep the other bands from theirs. */
     private void check(BandId band) {
         try {
-            rows.as(band, () -> platformCheck.check(band)).ifPresent(check -> log.info(
+            platformCheck.check(band).ifPresent(check -> log.info(
                     "Platform check of band {}: {} difference(s), unreadable: {}", band, check.drifts().size(),
                     check.unreadable().keySet()));
         } catch (RuntimeException e) {

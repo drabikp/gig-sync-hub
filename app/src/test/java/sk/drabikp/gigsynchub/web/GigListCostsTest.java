@@ -9,7 +9,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 import sk.drabikp.gigsynchub.catalog.application.port.in.SaveGigUseCase;
-import sk.drabikp.gigsynchub.gig.application.port.out.RowScope;
 import sk.drabikp.gigsynchub.gig.domain.Admission;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 import sk.drabikp.gigsynchub.gig.domain.Country;
@@ -51,9 +50,6 @@ class GigListCostsTest {
     private SaveGigUseCase catalog;
 
     @Autowired
-    private RowScope rows;
-
-    @Autowired
     private SessionFactory sessions;
 
     private Statistics statistics;
@@ -61,14 +57,9 @@ class GigListCostsTest {
     @BeforeEach
     void aCatalogOfSixtyGigs() {
         if (!seeded) {
-            // the band's own rows, as a request would open them: row-level security refuses a write
-            // that names no band, which is exactly what it is there for
-            rows.as(BandId.FIRST, () -> {
-                for (int day = 1; day <= 60; day++) {
-                    catalog.add(BandId.FIRST, gig("cost gig " + day, day));
-                }
-                return null;
-            });
+            for (int day = 1; day <= 60; day++) {
+                catalog.add(BandId.FIRST, gig("cost gig " + day, day));
+            }
             seeded = true;
         }
         statistics = sessions.getStatistics();
