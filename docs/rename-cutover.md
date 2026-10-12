@@ -1,8 +1,9 @@
 # Renaming bzscraper → gigsynchub: the cutover (2026-10-12)
 
-The source rename is done and committed. Four things are **not** in the source: they live in the
-running stack, and this is how they follow. Nothing here is reversible by a rebuild, so read it
-before starting; the whole thing takes a few minutes and the app is down for about one of them.
+The source rename is done and committed. Five things are **not** in the source: four live in the
+running stack and one lives on GitHub, and this is how they follow. Nothing here is reversible by a
+rebuild, so read it before starting; steps 1–4 take a few minutes and the app is down for about one
+of them. Step 5 is independent of the others and can wait as long as you like.
 
 A dump taken before any of this is the way back:
 
@@ -103,14 +104,45 @@ docker compose exec app curl -s localhost:8081/actuator/metrics/gigsynchub.sync.
 Then check a gig page and the Activity page — the catalog should hold the same 289 gigs, with their
 publications, sync history and calendar links.
 
+## 5. The repository itself
+
+The repository was `drabikp/bzscraper` — the one name the rename commit could not change from
+inside, because it is GitHub's rather than ours. It is not urgent: nothing in the build, the image
+or the stack asks GitHub what this repository is called, and no file in the tree names its own URL
+(no README, no `<scm>` block, no `repository` field in `package.json`).
+
+```bash
+gh repo rename gig-sync-hub        # run inside the clone: it also rewrites origin
+```
+
+**The old URL goes on working.** GitHub redirects a renamed repository permanently, for HTTPS and
+SSH alike, so a clone whose remote was never updated keeps fetching and pushing. That is a courtesy
+to other clones, not a reason to leave one pointing at the old name — set it straight where you
+find it:
+
+```bash
+git remote set-url origin git@github.com:drabikp/gig-sync-hub.git
+```
+
+What the rename does **not** touch, by design: commit hashes, the branches, the open and closed
+pull requests (`/pull/2` answers under the new name), and the issue numbers. What it also does not
+touch is the **working copy's directory name** — this clone still sits in `workspace/bzscraper`.
+Renaming that is a `mv` and a fresh `cd`, with nothing in the repository depending on it; only
+things outside it do (a shell's history, an editor's recent projects, a tool that keyed its own
+state on the path).
+
 ## Done, 2026-10-12 — and what it taught us
 
-All four steps are done and sign-in was verified end to end (the app's authorize redirect →
+All five steps are done. Steps 1–4 went first and sign-in was verified end to end (the app's authorize redirect →
 Rauthy's password login → the app exchanging the code, which is the only step that uses the client
 secret → `/api/bands` answering 200 as the OWNER). The data came through intact: 289 gigs, 429
 publications, 21 tasks, 75 calendar links, 438 events, and no publication naming a gig that is not
 there. The first start also applied **V10** — this database was still at V9, so the surrogate gig
 identity landed in the same breath as the rename.
+
+Step 5 followed once the branch was merged: `drabikp/bzscraper` → `drabikp/gig-sync-hub`, with the
+old URL redirecting and `origin` rewritten in this clone. The working copy's directory keeps its
+old name for now.
 
 Four things were not as written above, and are worth keeping:
 
@@ -151,3 +183,5 @@ otherwise have recreated the old client under the old name.
   rotation in `docker/backup.sh` now prunes a different set of names — the old ones simply stay.
 - **Each device's remembered band.** The page's keys became `gigsynchub.band` and
   `gigsynchub.returnTo`, so every browser forgets which band it had open, once.
+- **This clone's directory**, `workspace/bzscraper`, and GitHub's **redirect** from the old
+  repository URL — see step 5. Both are outside the tree, and nothing in it depends on either.
