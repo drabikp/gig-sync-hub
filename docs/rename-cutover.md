@@ -103,6 +103,40 @@ docker compose exec app curl -s localhost:8081/actuator/metrics/gigsynchub.sync.
 Then check a gig page and the Activity page — the catalog should hold the same 289 gigs, with their
 publications, sync history and calendar links.
 
+## Done, 2026-10-12 — and what it taught us
+
+All four steps are done and sign-in was verified end to end (the app's authorize redirect →
+Rauthy's password login → the app exchanging the code, which is the only step that uses the client
+secret → `/api/bands` answering 200 as the OWNER). The data came through intact: 289 gigs, 429
+publications, 21 tasks, 75 calendar links, 438 events, and no publication naming a gig that is not
+there. The first start also applied **V10** — this database was still at V9, so the surrogate gig
+identity landed in the same breath as the rename.
+
+Four things were not as written above, and are worth keeping:
+
+- **The owner role cannot rename itself.** PostgreSQL refuses to rename the session user, and this
+  cluster's only superuser *is* that role. A throw-away superuser does the one statement:
+  `create role rename_helper superuser login`, rename `bzscraper` from a session as the helper, then
+  `drop role rename_helper`. Passwords survive because `password_encryption` is `scram-sha-256`,
+  whose hash is salted at random; under `md5` the hash includes the user name and every password
+  would have had to be set again.
+- **Renaming a group in Rauthy's admin drops its members.** The group came out as `gigsynchub` with
+  nobody in it, and `restrict_group_prefix` would then have refused every sign-in. Check the member
+  list after renaming a group, and put the members back.
+- **Rauthy's password login is `POST /auth/v1/oidc/authorize`** (not `/oidc/login`), its body needs a
+  solved proof of work from `POST /auth/v1/pow` — hashcash, `ver:bits:ts:id:sig:` plus a nonce whose
+  SHA-256 has `bits` leading zero bits — and the admin API wants the session cookie from
+  `POST /auth/v1/oidc/session` together with its `csrf_token` in an `x-csrf-token` header. A client
+  created through that API takes Rauthy's defaults, which are NOT this client's: `EdDSA` tokens
+  instead of `RS256` and `default_scopes` of `openid` alone. Put the whole client back with a PUT.
+- **A changed secret file does not restart the app.** `docker compose up -d app` sees no change in
+  the compose config and leaves the container running with the secret it read at start;
+  `docker compose restart app` is what picks a new one up.
+
+`secrets/rauthy-bootstrap/{groups,clients}.json` were realigned by hand afterwards: `secrets/` is
+git-ignored, so the rename never saw them, and a future install into an empty database would
+otherwise have recreated the old client under the old name.
+
 ## What keeps the old name on purpose
 
 - **The applied migrations V1–V10.** Flyway checksums every migration it has run, so changing one
