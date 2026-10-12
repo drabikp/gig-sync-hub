@@ -1,20 +1,20 @@
 # The app with its database, its sign-in (Rauthy) and daily backups:
 #   docker/make-secrets.sh        (once: ./secrets from the git-ignored login files + random ones)
 #   cp .env.example .env          (the band's and this machine's settings; git-ignored)
-#   docker compose up -d --build  → https://$BZ_DOMAIN (default https://localhost) through Caddy:
+#   docker compose up -d --build  → https://$GSH_DOMAIN (default https://localhost) through Caddy:
 #                                   /auth/* is Rauthy, the rest the app
 # Secrets are files under ./secrets, given to the containers as Docker secrets (never
 # environment variables); ./data holds the band's calendar profile and the backups,
 # ./auth-data Rauthy's cache.
-name: bzscraper
+name: gigsynchub
 
 services:
   db:
     image: postgres:18-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: bzscraper
-      POSTGRES_USER: bzscraper
+      POSTGRES_DB: gigsynchub
+      POSTGRES_USER: gigsynchub
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
     secrets:
       - db_password
@@ -24,7 +24,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "bzscraper", "-d", "bzscraper"]
+      test: ["CMD", "pg_isready", "-U", "gigsynchub", "-d", "gigsynchub"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -33,9 +33,9 @@ services:
     build:
       context: .
       args:
-        UID: ${BZ_UID:-1000}
-        GID: ${BZ_GID:-1000}
-    image: bzscraper:latest
+        UID: ${GSH_UID:-1000}
+        GID: ${GSH_GID:-1000}
+    image: gigsynchub:latest
     restart: unless-stopped
     depends_on:
       db:
@@ -44,13 +44,13 @@ services:
       - path: .env
         required: false
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/bzscraper
-      # the app signs in as bzscraper_app (row-level security holds it, no superuser); the migrations as the owner
-      SPRING_DATASOURCE_USERNAME: bzscraper_app
-      SPRING_FLYWAY_USER: bzscraper
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/gigsynchub
+      # the app signs in as gigsynchub_app (row-level security holds it, no superuser); the migrations as the owner
+      SPRING_DATASOURCE_USERNAME: gigsynchub_app
+      SPRING_FLYWAY_USER: gigsynchub
       # the sign-in: Rauthy as the browser sees it, and as the app reaches it inside the network
-      BZSCRAPER_AUTH_ISSUER: https://${BZ_DOMAIN:-localhost}/auth/v1/
-      BZSCRAPER_AUTH_INTERNALURL: http://rauthy:8080/auth/v1/
+      GIGSYNCHUB_AUTH_ISSUER: https://${GSH_DOMAIN:-localhost}/auth/v1/
+      GIGSYNCHUB_AUTH_INTERNALURL: http://rauthy:8080/auth/v1/
     # each secret appears as /run/secrets/<property name>, read by spring.config.import=configtree
     secrets:
       - source: db_password
@@ -58,36 +58,36 @@ services:
       - source: db_app_password
         target: spring.datasource.password
       - source: db_app_password
-        target: bzscraper.db.app-role-password
+        target: gigsynchub.db.app-role-password
       - source: auth_client_secret
-        target: bzscraper.auth.client-secret
+        target: gigsynchub.auth.client-secret
       # the key the bands' secrets (their platform accounts, calendar addresses) are sealed with
       - source: data_keys
-        target: bzscraper.accounts.data-keys
+        target: gigsynchub.accounts.data-keys
       # band #1's accounts and calendar from before each band connected its own: kept once in the
       # database on start, then unused (empty files are fine)
       - source: bandzone_login
-        target: bzscraper.bandzone.login
+        target: gigsynchub.bandzone.login
       - source: bandzone_password
-        target: bzscraper.bandzone.password
+        target: gigsynchub.bandzone.password
       - source: bandsintown_login
-        target: bzscraper.bandsintown.login
+        target: gigsynchub.bandsintown.login
       - source: bandsintown_password
-        target: bzscraper.bandsintown.password
+        target: gigsynchub.bandsintown.password
       - source: bandsintown_totp
-        target: bzscraper.bandsintown.totp-secret
+        target: gigsynchub.bandsintown.totp-secret
       - source: calendar_url
-        target: bzscraper.calendar.ical-url
+        target: gigsynchub.calendar.ical-url
     volumes:
       - ./data:/app/data
     # this machine only (health, debugging): the way in for people is the proxy — signing in
-    # needs https://$BZ_DOMAIN. BZ_APP_BIND=0.0.0.0 opens it to the local network.
+    # needs https://$GSH_DOMAIN. GSH_APP_BIND=0.0.0.0 opens it to the local network.
     ports:
-      - "${BZ_APP_BIND:-127.0.0.1}:8080:8080"
+      - "${GSH_APP_BIND:-127.0.0.1}:8080:8080"
     # names on the internet (the platforms, the calendar, the town search): Docker's own forwarding
-    # failed behind a VPN's name servers; container names (db) still resolve. BZ_DNS to change it.
+    # failed behind a VPN's name servers; container names (db) still resolve. GSH_DNS to change it.
     dns:
-      - ${BZ_DNS:-1.1.1.1}
+      - ${GSH_DNS:-1.1.1.1}
 
   # makes the `rauthy` database and role on db when they're missing (then exits)
   rauthy-db:
@@ -97,8 +97,8 @@ services:
         condition: service_healthy
     environment:
       PGHOST: db
-      PGUSER: bzscraper
-      PGDATABASE: bzscraper
+      PGUSER: gigsynchub
+      PGDATABASE: gigsynchub
     secrets:
       - db_password
       - rauthy_db_password
@@ -120,24 +120,24 @@ services:
         fi
 
   # the sign-in: OpenID Connect for the app (docker/rauthy/config.toml), its users, groups and
-  # passkeys; reached at https://$BZ_DOMAIN/auth/ through the proxy. The first admin's password
+  # passkeys; reached at https://$GSH_DOMAIN/auth/ through the proxy. The first admin's password
   # is in its log once, on the first start.
   rauthy:
     image: ghcr.io/sebadob/rauthy:0.37.1
     restart: unless-stopped
-    user: "${BZ_UID:-1000}:${BZ_GID:-1000}"
+    user: "${GSH_UID:-1000}:${GSH_GID:-1000}"
     depends_on:
       rauthy-db:
         condition: service_completed_successfully
     environment:
-      PUB_URL: ${BZ_DOMAIN:-localhost}
-      RP_ID: ${BZ_DOMAIN:-localhost}
-      RP_ORIGIN: https://${BZ_DOMAIN:-localhost}:443
-      TRUSTED_PROXIES: ${BZ_SUBNET:-10.201.0.0/24}
-      BOOTSTRAP_ADMIN_EMAIL: ${BZ_ADMIN_EMAIL:-admin@localhost}
+      PUB_URL: ${GSH_DOMAIN:-localhost}
+      RP_ID: ${GSH_DOMAIN:-localhost}
+      RP_ORIGIN: https://${GSH_DOMAIN:-localhost}:443
+      TRUSTED_PROXIES: ${GSH_SUBNET:-10.201.0.0/24}
+      BOOTSTRAP_ADMIN_EMAIL: ${GSH_ADMIN_EMAIL:-admin@localhost}
       # Rauthy's own default: its admin pages need a passkey. A machine that cannot make one yet
-      # (BZ_ADMIN_MFA=false in its .env) gets in with the password alone — never on a public server.
-      ADMIN_FORCE_MFA: ${BZ_ADMIN_MFA:-true}
+      # (GSH_ADMIN_MFA=false in its .env) gets in with the password alone — never on a public server.
+      ADMIN_FORCE_MFA: ${GSH_ADMIN_MFA:-true}
       SECRETS_FILE: /run/secrets/rauthy_secrets
     secrets:
       - rauthy_secrets
@@ -146,9 +146,9 @@ services:
       - ./secrets/rauthy-bootstrap:/app/bootstrap:ro
       - ./auth-data:/app/data
     dns:
-      - ${BZ_DNS:-1.1.1.1}
+      - ${GSH_DNS:-1.1.1.1}
 
-  # the way in: HTTPS for BZ_DOMAIN (docker/Caddyfile) — /auth/* to Rauthy, the rest to the app
+  # the way in: HTTPS for GSH_DOMAIN (docker/Caddyfile) — /auth/* to Rauthy, the rest to the app
   proxy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -157,7 +157,7 @@ services:
       - rauthy
     environment:
       # the address the app is reached at (.env); localhost: a try with Caddy's own certificate
-      BZ_DOMAIN: ${BZ_DOMAIN:-localhost}
+      GSH_DOMAIN: ${GSH_DOMAIN:-localhost}
     ports:
       - "80:80"
       - "443:443"
@@ -172,14 +172,14 @@ services:
   backup:
     image: postgres:18-alpine
     restart: unless-stopped
-    user: "${BZ_UID:-1000}:${BZ_GID:-1000}"
+    user: "${GSH_UID:-1000}:${GSH_GID:-1000}"
     depends_on:
       db:
         condition: service_healthy
     environment:
       PGHOST: db
-      PGUSER: bzscraper
-      PGDATABASE: bzscraper
+      PGUSER: gigsynchub
+      PGDATABASE: gigsynchub
       KEEP: 14
     secrets:
       - db_password
@@ -220,9 +220,9 @@ volumes:
   caddy-config:
 
 # A fixed subnet: Docker's own pick (172.x) can collide with a VPN's routes, and the page then
-# can't be reached from this machine. Change BZ_SUBNET if this one is taken.
+# can't be reached from this machine. Change GSH_SUBNET if this one is taken.
 networks:
   default:
     ipam:
       config:
-        - subnet: ${BZ_SUBNET:-10.201.0.0/24}
+        - subnet: ${GSH_SUBNET:-10.201.0.0/24}

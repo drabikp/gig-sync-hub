@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — a band's data as a whole
+  title: gigsynchub — a band's data as a whole
   version: "1"
   description: |
     What spans a band's features: its data exported as one file (owners). Never a secret — the

@@ -1,6 +1,6 @@
 # Slovak / Czech words bands commonly use in their calendars. Compared without accents
 # or case. Band-specific words — members' names, the band's own labels — belong in the
-# band's profile file (bzscraper.calendar.profile-file), not here.
+# band's profile file (gigsynchub.calendar.profile-file), not here.
 
 # --- Not a gig ---------------------------------------------------------------
 # What the event is, by the first word of the title: rehearsal, travel, call, meal,

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — places
+  title: gigsynchub — places
   version: "1"
   description: The town picker of the gig form (OpenStreetMap Photon behind it).
 servers:

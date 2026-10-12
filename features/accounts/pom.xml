@@ -4,17 +4,17 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-accounts</artifactId>
-	<name>bzscraper-accounts</name>
+	<artifactId>gigsynchub-accounts</artifactId>
+	<name>gigsynchub-accounts</name>
 	<description>Who uses the app: users (Rauthy logins), bands, and who manages which band as what (memberships).</description>
 	<dependencies>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -26,7 +26,7 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
@@ -45,7 +45,7 @@
 	<build>
 		<plugins>
 			<plugin>
-				<!-- the API this module serves: src/main/openapi/accounts.yaml → sk.drabikp.bzscraper.accounts.adapter.in.rest.api -->
+				<!-- the API this module serves: src/main/openapi/accounts.yaml → sk.drabikp.gigsynchub.accounts.adapter.in.rest.api -->
 				<groupId>org.openapitools</groupId>
 				<artifactId>openapi-generator-maven-plugin</artifactId>
 				<executions>
@@ -53,8 +53,8 @@
 						<id>api</id>
 						<configuration>
 							<inputSpec>${project.basedir}/src/main/openapi/accounts.yaml</inputSpec>
-							<apiPackage>sk.drabikp.bzscraper.accounts.adapter.in.rest.api</apiPackage>
-							<modelPackage>sk.drabikp.bzscraper.accounts.adapter.in.rest.api</modelPackage>
+							<apiPackage>sk.drabikp.gigsynchub.accounts.adapter.in.rest.api</apiPackage>
+							<modelPackage>sk.drabikp.gigsynchub.accounts.adapter.in.rest.api</modelPackage>
 						</configuration>
 					</execution>
 				</executions>

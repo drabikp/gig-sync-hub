@@ -1,0 +1,20 @@
+package sk.drabikp.gigsynchub.sync.application.port.in;
+
+import sk.drabikp.gigsynchub.gig.domain.BandId;
+import sk.drabikp.gigsynchub.gig.domain.GigId;
+import sk.drabikp.gigsynchub.gig.domain.platform.Platform;
+
+import java.util.Set;
+
+/** Where the sync is, for whoever must not get in its way (read-only). */
+public interface SyncStateUseCase {
+
+    /** Whether the gig's platform work is running right now (then the gig must not change). */
+    boolean busy(BandId band, GigId gigId);
+
+    /** The band's gigs with platform work queued, running or waiting for the user. */
+    Set<GigId> gigsWithOpenWork(BandId band);
+
+    /** Whether the band's work on the platform is held back by a circuit breaker (its own or the platform's) right now. */
+    boolean heldBack(BandId band, Platform platform);
+}

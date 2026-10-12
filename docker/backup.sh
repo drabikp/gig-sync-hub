@@ -2,7 +2,7 @@
 # The databases' backup (compose service "backup"): pg_dump in PostgreSQL's custom format of the
 # app's database and the sign-in's (rauthy) on start and then every day into /backups, keeping
 # the newest $KEEP of each. Restore into an empty database:
-#   pg_restore -d bzscraper --no-owner bzscraper-<day>.dump   (rauthy: -d rauthy --role=rauthy)
+#   pg_restore -d gigsynchub --no-owner gigsynchub-<day>.dump   (rauthy: -d rauthy --role=rauthy)
 set -eu
 KEEP="${KEEP:-14}"
 PGPASSWORD="$(cat /run/secrets/db_password)"
@@ -10,7 +10,7 @@ export PGPASSWORD
 while true; do
     day="$(date +%F)"
     failed=0
-    for db in bzscraper rauthy; do
+    for db in gigsynchub rauthy; do
         if pg_dump --format=custom --dbname="$db" --file="/backups/$db-$day.dump.part"; then
             mv "/backups/$db-$day.dump.part" "/backups/$db-$day.dump"
             echo "backup: /backups/$db-$day.dump"

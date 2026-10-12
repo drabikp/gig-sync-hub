@@ -32,7 +32,7 @@ export function bandAddress(slug: string, path = '/'): string {
   return `/b/${slug}${path === '/' ? '' : path}`;
 }
 
-const LAST_BAND = 'bzscraper.band';
+const LAST_BAND = 'gigsynchub.band';
 
 /** The band used last on this device (its slug), to start there next time. */
 export function lastBand(): string | null {

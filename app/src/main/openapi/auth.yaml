@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — signing in
+  title: gigsynchub — signing in
   version: "1"
   description: |
     Signing in is Rauthy's (OpenID Connect): the page sends the browser to

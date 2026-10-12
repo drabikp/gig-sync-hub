@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — live updates
+  title: gigsynchub — live updates
   version: "1"
   description: |
     The page's stream of live updates (server-sent events). The first event is `hello`; then each

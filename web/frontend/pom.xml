@@ -4,12 +4,12 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-frontend</artifactId>
-	<name>bzscraper-frontend</name>
+	<artifactId>gigsynchub-frontend</artifactId>
+	<name>gigsynchub-frontend</name>
 	<description>The page (React + Mantine, a PWA): built by Vite into the jar's static/ folder, served by the app.</description>
 	<properties>
 		<node.version>v22.12.0</node.version>

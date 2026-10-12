@@ -4,12 +4,12 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-portal</artifactId>
-	<name>bzscraper-portal</name>
+	<artifactId>gigsynchub-portal</artifactId>
+	<name>gigsynchub-portal</name>
 	<description>Shared Selenium support: a platform's one browser, saved-login profiles, the warm browser.</description>
 	<dependencies>
 		<dependency>

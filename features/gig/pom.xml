@@ -4,12 +4,12 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-gig</artifactId>
-	<name>bzscraper-gig</name>
+	<artifactId>gigsynchub-gig</artifactId>
+	<name>gigsynchub-gig</name>
 	<description>Shared kernel: the gig, the platforms it is published to, their persistence and the database schema (Flyway).</description>
 	<dependencies>
 		<dependency>
@@ -62,7 +62,7 @@
 	<build>
 		<plugins>
 			<plugin>
-				<!-- the API's shared parts: GigFormRequest/Response, CountryValue, EntryTypeValue, ProblemResponse + ProblemCodeValue → sk.drabikp.bzscraper.gig.api -->
+				<!-- the API's shared parts: GigFormRequest/Response, CountryValue, EntryTypeValue, ProblemResponse + ProblemCodeValue → sk.drabikp.gigsynchub.gig.api -->
 				<groupId>org.openapitools</groupId>
 				<artifactId>openapi-generator-maven-plugin</artifactId>
 				<executions>
@@ -70,7 +70,7 @@
 						<id>api</id>
 						<configuration>
 							<inputSpec>${project.basedir}/src/main/openapi/gig.yaml</inputSpec>
-							<modelPackage>sk.drabikp.bzscraper.gig.api</modelPackage>
+							<modelPackage>sk.drabikp.gigsynchub.gig.api</modelPackage>
 							<generateApis>false</generateApis>
 							<!-- here they are made, not mapped to existing classes -->
 							<schemaMappings combine.self="override">
@@ -93,11 +93,11 @@
 							<!-- the shared helpers only: a test application or test class here would be
 							     picked up by the other modules' tests -->
 							<includes>
-								<include>sk/drabikp/bzscraper/gig/domain/TestGigs*</include>
-								<include>sk/drabikp/bzscraper/gig/domain/TestBands*</include>
-								<include>sk/drabikp/bzscraper/gig/domain/platform/TestPlatforms*</include>
-								<include>sk/drabikp/bzscraper/gig/application/port/out/TestLiveUpdates*</include>
-								<include>sk/drabikp/bzscraper/gig/application/port/out/GigPagingContract*</include>
+								<include>sk/drabikp/gigsynchub/gig/domain/TestGigs*</include>
+								<include>sk/drabikp/gigsynchub/gig/domain/TestBands*</include>
+								<include>sk/drabikp/gigsynchub/gig/domain/platform/TestPlatforms*</include>
+								<include>sk/drabikp/gigsynchub/gig/application/port/out/TestLiveUpdates*</include>
+								<include>sk/drabikp/gigsynchub/gig/application/port/out/GigPagingContract*</include>
 							</includes>
 						</configuration>
 					</execution>

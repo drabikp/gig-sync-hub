@@ -4,61 +4,61 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-app</artifactId>
-	<name>bzscraper-app</name>
+	<artifactId>gigsynchub-app</artifactId>
+	<name>gigsynchub-app</name>
 	<description>The runnable application: wiring, configuration, the Vaadin theme.</description>
 	<dependencies>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-accounts</artifactId>
+			<artifactId>gigsynchub-accounts</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-places</artifactId>
+			<artifactId>gigsynchub-places</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-sync</artifactId>
+			<artifactId>gigsynchub-sync</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-catalog</artifactId>
+			<artifactId>gigsynchub-catalog</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-importing</artifactId>
+			<artifactId>gigsynchub-importing</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-check</artifactId>
+			<artifactId>gigsynchub-check</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-calendar</artifactId>
+			<artifactId>gigsynchub-calendar</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-bandzone</artifactId>
+			<artifactId>gigsynchub-bandzone</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-bandsintown</artifactId>
+			<artifactId>gigsynchub-bandsintown</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-live</artifactId>
+			<artifactId>gigsynchub-live</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-frontend</artifactId>
+			<artifactId>gigsynchub-frontend</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -84,7 +84,7 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
@@ -128,7 +128,7 @@
 	<build>
 		<plugins>
 			<plugin>
-				<!-- the API this module serves: src/main/openapi/auth.yaml → sk.drabikp.bzscraper.web.api -->
+				<!-- the API this module serves: src/main/openapi/auth.yaml → sk.drabikp.gigsynchub.web.api -->
 				<groupId>org.openapitools</groupId>
 				<artifactId>openapi-generator-maven-plugin</artifactId>
 				<executions>
@@ -136,20 +136,20 @@
 						<id>api</id>
 						<configuration>
 							<inputSpec>${project.basedir}/src/main/openapi/auth.yaml</inputSpec>
-							<apiPackage>sk.drabikp.bzscraper.web.api</apiPackage>
-							<modelPackage>sk.drabikp.bzscraper.web.api</modelPackage>
+							<apiPackage>sk.drabikp.gigsynchub.web.api</apiPackage>
+							<modelPackage>sk.drabikp.gigsynchub.web.api</modelPackage>
 						</configuration>
 					</execution>
 					<execution>
-						<!-- src/main/openapi/bands.yaml (a band's data as a whole) → sk.drabikp.bzscraper.bands.api -->
+						<!-- src/main/openapi/bands.yaml (a band's data as a whole) → sk.drabikp.gigsynchub.bands.api -->
 						<id>bands-api</id>
 						<goals>
 							<goal>generate</goal>
 						</goals>
 						<configuration>
 							<inputSpec>${project.basedir}/src/main/openapi/bands.yaml</inputSpec>
-							<apiPackage>sk.drabikp.bzscraper.bands.api</apiPackage>
-							<modelPackage>sk.drabikp.bzscraper.bands.api</modelPackage>
+							<apiPackage>sk.drabikp.gigsynchub.bands.api</apiPackage>
+							<modelPackage>sk.drabikp.gigsynchub.bands.api</modelPackage>
 						</configuration>
 					</execution>
 				</executions>

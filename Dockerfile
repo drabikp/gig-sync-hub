@@ -17,7 +17,7 @@ COPY app app
 # the Maven repository and npm's cache survive between builds
 RUN --mount=type=cache,target=/root/.m2 --mount=type=cache,target=/root/.npm \
     ./mvnw -B -q -DskipTests -pl app -am package \
- && cp app/target/bzscraper-app-*.jar /src/app.jar \
+ && cp app/target/gigsynchub-app-*.jar /src/app.jar \
  && java -Djarmode=tools -jar /src/app.jar extract --layers --destination /out
 
 FROM eclipse-temurin:21-jre
@@ -37,19 +37,19 @@ ARG GID=1000
 # them gives way first. Named by id, not by name: the next base image may call its own user anything.
 RUN taken="$(getent passwd "$UID" | cut -d: -f1)"; [ -z "$taken" ] || userdel -r "$taken" 2>/dev/null || userdel "$taken" \
  ; taken="$(getent group "$GID" | cut -d: -f1)"; [ -z "$taken" ] || groupdel "$taken" 2>/dev/null || true \
- ; groupadd -g "$GID" bzscraper \
- && useradd -u "$UID" -g "$GID" -m -d /home/bzscraper -s /usr/sbin/nologin bzscraper \
+ ; groupadd -g "$GID" gigsynchub \
+ && useradd -u "$UID" -g "$GID" -m -d /home/gigsynchub -s /usr/sbin/nologin gigsynchub \
  && mkdir -p /app/data \
- && chown -R bzscraper:bzscraper /app /home/bzscraper
+ && chown -R gigsynchub:gigsynchub /app /home/gigsynchub
 
 WORKDIR /app
 # layers from the least to the most often changed, so a code change ships only the last one
-COPY --from=build --chown=bzscraper:bzscraper /out/dependencies/ ./
-COPY --from=build --chown=bzscraper:bzscraper /out/spring-boot-loader/ ./
-COPY --from=build --chown=bzscraper:bzscraper /out/snapshot-dependencies/ ./
-COPY --from=build --chown=bzscraper:bzscraper /out/application/ ./
+COPY --from=build --chown=gigsynchub:gigsynchub /out/dependencies/ ./
+COPY --from=build --chown=gigsynchub:gigsynchub /out/spring-boot-loader/ ./
+COPY --from=build --chown=gigsynchub:gigsynchub /out/snapshot-dependencies/ ./
+COPY --from=build --chown=gigsynchub:gigsynchub /out/application/ ./
 
-USER bzscraper
+USER gigsynchub
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -fsS http://localhost:8081/actuator/health > /dev/null || exit 1

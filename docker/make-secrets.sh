@@ -11,8 +11,8 @@
 # to rotate, put a new key on the first line (k<date>:<base64 of 32 bytes>) and keep the old one below it
 # until the app has started once (it seals everything again with the new key).
 # The sign-in (Rauthy) gets random secrets: its secrets file, its database password, the app's
-# client secret, and its bootstrap files (the group bzscraper and the app's client, for
-# https://$BZ_DOMAIN from .env) — read by Rauthy only while its database is empty.
+# client secret, and its bootstrap files (the group gigsynchub and the app's client, for
+# https://$GSH_DOMAIN from .env) — read by Rauthy only while its database is empty.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 umask 077
@@ -49,7 +49,7 @@ if [[ -s secrets/db_app_password ]]; then
     echo "kept    secrets/db_app_password"
 else
     head -c 32 /dev/urandom | base64 | tr -d '/+=\n' > secrets/db_app_password
-    echo "made    secrets/db_app_password (random: the app's own database login, bzscraper_app)"
+    echo "made    secrets/db_app_password (random: the app's own database login, gigsynchub_app)"
 fi
 if [[ -s secrets/data_keys ]]; then
     echo "kept    secrets/data_keys"
@@ -93,7 +93,7 @@ else
     random_text 64 > secrets/auth_client_secret
     echo "made    secrets/auth_client_secret (random)"
 fi
-domain="$(sed -n 's/^BZ_DOMAIN=\([^ #]*\).*/\1/p' .env 2>/dev/null | tail -1)"
+domain="$(sed -n 's/^GSH_DOMAIN=\([^ #]*\).*/\1/p' .env 2>/dev/null | tail -1)"
 domain="${domain:-localhost}"
 redirects="\"https://$domain/login/oauth2/code/rauthy\""
 after_logout="\"https://$domain/\""
@@ -105,13 +105,13 @@ fi
 mkdir -p secrets/rauthy-bootstrap
 chmod 700 secrets/rauthy-bootstrap
 cat > secrets/rauthy-bootstrap/groups.json <<JSON
-[ { "name": "bzscraper" } ]
+[ { "name": "gigsynchub" } ]
 JSON
 cat > secrets/rauthy-bootstrap/clients.json <<JSON
 [
   {
-    "id": "bzscraper",
-    "name": "bzscraper",
+    "id": "gigsynchub",
+    "name": "gigsynchub",
     "secret": { "Plain": "$(cat secrets/auth_client_secret)" },
     "redirect_uris": [$redirects],
     "post_logout_redirect_uris": [$after_logout],
@@ -127,10 +127,10 @@ cat > secrets/rauthy-bootstrap/clients.json <<JSON
     "challenges": ["S256"],
     "force_mfa": false,
     "client_uri": "https://$domain/",
-    "restrict_group_prefix": "bzscraper"
+    "restrict_group_prefix": "gigsynchub"
   }
 ]
 JSON
-echo "made    secrets/rauthy-bootstrap (the group bzscraper and the client for https://$domain)"
+echo "made    secrets/rauthy-bootstrap (the group gigsynchub and the client for https://$domain)"
 chmod 600 secrets/* secrets/rauthy-bootstrap/* 2>/dev/null || true
 chmod 700 secrets/rauthy-bootstrap

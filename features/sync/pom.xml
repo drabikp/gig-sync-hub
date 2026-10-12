@@ -4,17 +4,17 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-sync</artifactId>
-	<name>bzscraper-sync</name>
+	<artifactId>gigsynchub-sync</artifactId>
+	<name>gigsynchub-sync</name>
 	<description>Platform sync: the outbox, the workflow engine and its step ports, breakers, pause, the sync log page and the worker.</description>
 	<dependencies>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -26,7 +26,7 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
@@ -45,7 +45,7 @@
 	<build>
 		<plugins>
 			<plugin>
-				<!-- the API this module serves: src/main/openapi/sync.yaml → sk.drabikp.bzscraper.sync.adapter.in.rest.api -->
+				<!-- the API this module serves: src/main/openapi/sync.yaml → sk.drabikp.gigsynchub.sync.adapter.in.rest.api -->
 				<groupId>org.openapitools</groupId>
 				<artifactId>openapi-generator-maven-plugin</artifactId>
 				<executions>
@@ -53,8 +53,8 @@
 						<id>api</id>
 						<configuration>
 							<inputSpec>${project.basedir}/src/main/openapi/sync.yaml</inputSpec>
-							<apiPackage>sk.drabikp.bzscraper.sync.adapter.in.rest.api</apiPackage>
-							<modelPackage>sk.drabikp.bzscraper.sync.adapter.in.rest.api</modelPackage>
+							<apiPackage>sk.drabikp.gigsynchub.sync.adapter.in.rest.api</apiPackage>
+							<modelPackage>sk.drabikp.gigsynchub.sync.adapter.in.rest.api</modelPackage>
 						</configuration>
 					</execution>
 				</executions>

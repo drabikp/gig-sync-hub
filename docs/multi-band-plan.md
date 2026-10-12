@@ -26,7 +26,7 @@ User (a Rauthy login)  ──<  Membership  >──  Band
   per band (separate passwords, MFA and recovery for nothing); a per-band face is the membership's
   optional display name.
 - **Rauthy is identity only**: sign-up, passwords, passkeys, MFA, recovery. Who may do what in which
-  band is the app's (`membership`), not Rauthy's groups — the `bzscraper` group gate goes away.
+  band is the app's (`membership`), not Rauthy's groups — the `gigsynchub` group gate goes away.
 - **The person's** settings (language, 12/24-hour) are the user's; **everything else is the band's**.
 - **One database schema, a `band_id` on every band's row** (not a schema or a database per band:
   heavier to run, nothing gained at this size); PostgreSQL row-level security as the second guard in
@@ -56,9 +56,9 @@ These are my proposals; each is cheap to change now and expensive later.
 ## Phase 1 — bands and memberships
 
 > **Status (2026-10-09): implemented.** As planned, with these choices made on the way: band #1's
-> slug and name come from `bzscraper.accounts.first-band-slug` / `first-band-name` (default: the
+> slug and name come from `gigsynchub.accounts.first-band-slug` / `first-band-name` (default: the
 > Bandzone slug and the Bandsintown artist) at start instead of Flyway placeholders, its owner from
-> `bzscraper.accounts.first-owner-email`; `/api/auth/me` answers the user (`username`, `name`) and
+> `gigsynchub.accounts.first-owner-email`; `/api/auth/me` answers the user (`username`, `name`) and
 > the page asks `/api/bands` for their bands; the module order puts `accounts` beside `places`
 > (`gig ← accounts`; the check and Bandzone's public list use its `BandDirectory`); the platform
 > clients refuse other bands with NEEDS_USER until phase 2; the Rauthy group still decides who may
@@ -116,11 +116,11 @@ Every band's table gets `band_id uuid not null references band` and its keys inc
 | `app_setting` | stays for the app's own settings; a band's (the sync pause) go to `band_setting (band_id, name)` |
 
 The migration creates **band #1** (a fixed UUID; name and slug from the Flyway placeholders
-`first-band-name` / `first-band-slug`, set from `.env` — `BZSCRAPER_BANDZONE_BANDSLUG` by default)
+`first-band-name` / `first-band-slug`, set from `.env` — `GIGSYNCHUB_BANDZONE_BANDSLUG` by default)
 and fills `band_id` of every existing row with it — one transaction, checked by counts in a test
 (288 gigs, 427 publications, 438 calendar events stay 288 / 427 / 438).
 
-**Owner of band #1**: `bzscraper.bootstrap.owner-email` (`.env`); the first sign-in with that e-mail
+**Owner of band #1**: `gigsynchub.bootstrap.owner-email` (`.env`); the first sign-in with that e-mail
 becomes band #1's owner. Without it, the first user to sign in claims the band that has no owner
 (fine locally, a setting online).
 
@@ -225,12 +225,12 @@ it; band #1 runs from the database; no band secret in `./secrets` but the master
 ## Phase 3 — a sync for many bands
 
 > **Status (2026-10-10): implemented.** Lanes (a band's work on a platform) run on several workers
-> (`bzscraper.sync.worker.threads`, 2), the bands in turn (`FairTurns`); breakers per lane and per platform
-> above them; the browser pool (`bzscraper.browser.max`), `max-sessions` per platform, one session per
+> (`gigsynchub.sync.worker.threads`, 2), the bands in turn (`FairTurns`); breakers per lane and per platform
+> above them; the browser pool (`gigsynchub.browser.max`), `max-sessions` per platform, one session per
 > account, the idlest warm browser closed to make room; each band's check result in `band_check`; metrics
 > per band on the operator's management port (8081, this machine only). Load tests with fakes:
 > `ManyBandsSyncTest` (ten bands, a broken account, three workers), `BrowserPoolTest`. Left for later: the
-> operator's global pause (stopping the worker, `bzscraper.sync.worker.enabled=false`, does it for now),
+> operator's global pause (stopping the worker, `gigsynchub.sync.worker.enabled=false`, does it for now),
 > spreading the nightly checks over the night, a second sync lane of one band never waiting on a busy
 > platform session (it is postponed a minute instead).
 
@@ -238,7 +238,7 @@ it; band #1 runs from the database; no band secret in `./secrets` but the master
 
 - **Browsers per account, with a limit**: `PlatformBrowser` per (band, platform) account — one session
   per account at a time, never two bands in one browser — and a pool limit for the server
-  (`bzscraper.browser.max`, ~2–4 on a small server: a Chromium is 300–500 MB). Warm browsers per
+  (`gigsynchub.browser.max`, ~2–4 on a small server: a Chromium is 300–500 MB). Warm browsers per
   account, the idle one closed first when the pool is full.
 - **Fair turns**: the dispatcher takes due work round-robin across bands (not oldest-first across
   everything), batches per (band, platform, step); a band with a hundred tasks doesn't starve others.
@@ -295,7 +295,7 @@ publish — and can't see anything else; the security review passes.
 
 **Status (2026-10-10)** — done, and live on the local stack: invitations (a link, no e-mail yet), roles,
 leave / remove / hand over, delete a band (its slug typed) and one's own account (the Rauthy login
-stays: no admin API key yet); row-level security (V6) — the app's own login `bzscraper_app`, fail-closed
+stays: no admin API key yet); row-level security (V6) — the app's own login `gigsynchub_app`, fail-closed
 (nothing opened = no band's rows), the cross-band reads say so; the audit log (`AuditInterceptor`:
 every change through a band's API, rather than written by each use case); export (one JSON file, no
 secret); rate limits (per user / address, 429), the bands-owned quota, live-stream caps; the public

@@ -4,17 +4,17 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-places</artifactId>
-	<name>bzscraper-places</name>
+	<artifactId>gigsynchub-places</artifactId>
+	<name>gigsynchub-places</name>
 	<description>Towns: the place search (OpenStreetMap Photon) and picking the one town that fits.</description>
 	<dependencies>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -30,7 +30,7 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
@@ -43,7 +43,7 @@
 	<build>
 		<plugins>
 			<plugin>
-				<!-- the API this module serves: src/main/openapi/places.yaml → sk.drabikp.bzscraper.places.adapter.in.rest.api -->
+				<!-- the API this module serves: src/main/openapi/places.yaml → sk.drabikp.gigsynchub.places.adapter.in.rest.api -->
 				<groupId>org.openapitools</groupId>
 				<artifactId>openapi-generator-maven-plugin</artifactId>
 				<executions>
@@ -51,8 +51,8 @@
 						<id>api</id>
 						<configuration>
 							<inputSpec>${project.basedir}/src/main/openapi/places.yaml</inputSpec>
-							<apiPackage>sk.drabikp.bzscraper.places.adapter.in.rest.api</apiPackage>
-							<modelPackage>sk.drabikp.bzscraper.places.adapter.in.rest.api</modelPackage>
+							<apiPackage>sk.drabikp.gigsynchub.places.adapter.in.rest.api</apiPackage>
+							<modelPackage>sk.drabikp.gigsynchub.places.adapter.in.rest.api</modelPackage>
 						</configuration>
 					</execution>
 				</executions>

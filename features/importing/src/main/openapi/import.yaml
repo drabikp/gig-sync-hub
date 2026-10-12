@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — import
+  title: gigsynchub — import
   version: "1"
   description: |
     Bringing the band's existing gigs from the platforms into the catalog, linked to their

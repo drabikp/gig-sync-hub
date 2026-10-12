@@ -4,25 +4,25 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-catalog</artifactId>
-	<name>bzscraper-catalog</name>
+	<artifactId>gigsynchub-catalog</artifactId>
+	<name>gigsynchub-catalog</name>
 	<description>The gig catalog: adding, editing, cancelling and deleting gigs, the catalog page, file downloads, the REST endpoint.</description>
 	<dependencies>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-places</artifactId>
+			<artifactId>gigsynchub-places</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-sync</artifactId>
+			<artifactId>gigsynchub-sync</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -30,13 +30,13 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-sync</artifactId>
+			<artifactId>gigsynchub-sync</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
@@ -49,7 +49,7 @@
 	<build>
 		<plugins>
 			<plugin>
-				<!-- the API this module serves: src/main/openapi/catalog.yaml → sk.drabikp.bzscraper.catalog.adapter.in.rest.api -->
+				<!-- the API this module serves: src/main/openapi/catalog.yaml → sk.drabikp.gigsynchub.catalog.adapter.in.rest.api -->
 				<groupId>org.openapitools</groupId>
 				<artifactId>openapi-generator-maven-plugin</artifactId>
 				<executions>
@@ -57,8 +57,8 @@
 						<id>api</id>
 						<configuration>
 							<inputSpec>${project.basedir}/src/main/openapi/catalog.yaml</inputSpec>
-							<apiPackage>sk.drabikp.bzscraper.catalog.adapter.in.rest.api</apiPackage>
-							<modelPackage>sk.drabikp.bzscraper.catalog.adapter.in.rest.api</modelPackage>
+							<apiPackage>sk.drabikp.gigsynchub.catalog.adapter.in.rest.api</apiPackage>
+							<modelPackage>sk.drabikp.gigsynchub.catalog.adapter.in.rest.api</modelPackage>
 						</configuration>
 					</execution>
 				</executions>

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — platform check
+  title: gigsynchub — platform check
   version: "1"
   description: |
     Reconciliation: what every platform shows (read-only) compared with the catalog. Running a

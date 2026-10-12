@@ -4,25 +4,25 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-importing</artifactId>
-	<name>bzscraper-importing</name>
+	<artifactId>gigsynchub-importing</artifactId>
+	<name>gigsynchub-importing</name>
 	<description>Import: reading the platforms' events and linking them to the catalog.</description>
 	<dependencies>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-sync</artifactId>
+			<artifactId>gigsynchub-sync</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-catalog</artifactId>
+			<artifactId>gigsynchub-catalog</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -30,19 +30,19 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-sync</artifactId>
+			<artifactId>gigsynchub-sync</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-catalog</artifactId>
+			<artifactId>gigsynchub-catalog</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
@@ -55,7 +55,7 @@
 	<build>
 		<plugins>
 			<plugin>
-				<!-- the API this module serves: src/main/openapi/import.yaml → sk.drabikp.bzscraper.importing.adapter.in.rest.api -->
+				<!-- the API this module serves: src/main/openapi/import.yaml → sk.drabikp.gigsynchub.importing.adapter.in.rest.api -->
 				<groupId>org.openapitools</groupId>
 				<artifactId>openapi-generator-maven-plugin</artifactId>
 				<executions>
@@ -63,8 +63,8 @@
 						<id>api</id>
 						<configuration>
 							<inputSpec>${project.basedir}/src/main/openapi/import.yaml</inputSpec>
-							<apiPackage>sk.drabikp.bzscraper.importing.adapter.in.rest.api</apiPackage>
-							<modelPackage>sk.drabikp.bzscraper.importing.adapter.in.rest.api</modelPackage>
+							<apiPackage>sk.drabikp.gigsynchub.importing.adapter.in.rest.api</apiPackage>
+							<modelPackage>sk.drabikp.gigsynchub.importing.adapter.in.rest.api</modelPackage>
 						</configuration>
 					</execution>
 				</executions>

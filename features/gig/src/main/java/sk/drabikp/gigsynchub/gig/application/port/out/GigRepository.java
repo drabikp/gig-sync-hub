@@ -1,0 +1,60 @@
+package sk.drabikp.gigsynchub.gig.application.port.out;
+
+import org.jmolecules.ddd.annotation.Repository;
+import sk.drabikp.gigsynchub.gig.domain.BandId;
+import sk.drabikp.gigsynchub.gig.domain.DateRange;
+import sk.drabikp.gigsynchub.gig.domain.Gig;
+import sk.drabikp.gigsynchub.gig.domain.GigId;
+import sk.drabikp.gigsynchub.gig.domain.GigMatch;
+import sk.drabikp.gigsynchub.gig.domain.GigQuery;
+import sk.drabikp.gigsynchub.gig.domain.GigSlice;
+
+import java.time.LocalDate;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Outbound port for the local gig store — the source of truth, one catalog per band. Speaks only
+ * the domain ({@link Gig} / {@link GigId}, the band's {@link BandId}); the persistence technology
+ * lives entirely behind the implementing adapter. {@code save} is an upsert keyed by the band and
+ * the {@link GigId}, which a gig keeps for life — an edit that moves a gig to another day saves
+ * the same gig, and nothing has to be re-keyed.
+ */
+@Repository
+public interface GigRepository {
+
+    void save(BandId band, Gig gig);
+
+    Optional<Gig> findById(BandId band, GigId id);
+
+    /**
+     * The band's gig on that day at that venue, if it has one — how a copy from a platform or the
+     * calendar, which carries no identity of ours, is recognised as one the catalog already holds.
+     * At most one: a band may not have two gigs with the same {@link GigMatch}, and the store keeps
+     * it that way.
+     */
+    Optional<Gig> findByMatch(BandId band, GigMatch match);
+
+    /**
+     * Every gig of the band. Only for work that is about ALL of them — an export, a reconciliation —
+     * never to answer a page: {@link #page} does that, and it reads a page's worth of rows.
+     */
+    List<Gig> findAll(BandId band);
+
+    /**
+     * One page of the band's list: filtered, ordered and paged by the store. {@code today} is the day
+     * the period is measured against, in the band's own wall clock (its gigs are stored in theirs).
+     */
+    GigSlice page(BandId band, GigQuery query, LocalDate today);
+
+    /**
+     * The band's gigs, earliest first, and at most this many — for a feed that has to stay bounded
+     * however big a catalog grows. Ordered by the store, through the list's own index.
+     */
+    List<Gig> earliestFirst(BandId band, int limit);
+
+    List<Gig> findStartingWithin(BandId band, DateRange range);
+
+    void deleteById(BandId band, GigId id);
+}

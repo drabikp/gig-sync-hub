@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — catalog
+  title: gigsynchub — catalog
   version: "1"
   description: |
     The band's gigs (the source of truth) with their state on every platform: adding, editing,

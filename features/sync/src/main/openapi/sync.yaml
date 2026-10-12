@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — sync
+  title: gigsynchub — sync
   version: "1"
   description: |
     The platform sync: every platform task and its history, Retry and Discard of failed work,

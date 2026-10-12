@@ -4,17 +4,17 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-live</artifactId>
-	<name>bzscraper-live</name>
+	<artifactId>gigsynchub-live</artifactId>
+	<name>gigsynchub-live</name>
 	<description>Live updates to the open pages: the LiveUpdates port delivered as server-sent events.</description>
 	<dependencies>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

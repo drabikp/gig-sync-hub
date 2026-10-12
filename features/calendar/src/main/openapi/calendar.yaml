@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — band calendar
+  title: gigsynchub — band calendar
   version: "1"
   description: |
     The band's calendar (read-only): its events sorted into gigs and the rest and checked

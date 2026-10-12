@@ -11,7 +11,7 @@ band's conventions are **data** — a band profile of weighted rules.
 ## Step 1 — classifier + band profile (implemented)
 
 - **Reading**: `IcsCalendarFeed` fetches the calendar's private iCal address
-  (`bzscraper.calendar.ical-url`, a secret) and `IcsParser` turns it into
+  (`gigsynchub.calendar.ical-url`, a secret) and `IcsParser` turns it into
   `CalendarEvent`s: uid, title, location, notes (HTML → text), start/end in the band's
   zone, all-day, repeating, shown-as-free, the calendar's own status, last modified.
 - **Profile**: a list of `ProfileRule(kind, value, weight, origin, enabled)`. `value`
@@ -30,9 +30,9 @@ band's conventions are **data** — a band profile of weighted rules.
   a strong negative fired (travel on a gig day stays travel). Every fired rule is kept as
   a reason. Status (confirmed / tentative / cancelled) is decided separately.
 - **Where the rules come from**: `classpath:calendar/base.profile` (language-independent
-  weights) and the presets in `bzscraper.calendar.presets` (e.g. `sk-cz`) are re-synced
+  weights) and the presets in `gigsynchub.calendar.presets` (e.g. `sk-cz`) are re-synced
   as `PRESET` rules on every start; the band's own file
-  (`bzscraper.calendar.profile-file`, default `./data/calendar-profile.txt`, never in git
+  (`gigsynchub.calendar.profile-file`, default `./data/calendar-profile.txt`, never in git
   — it holds members' names) is re-synced as `USER` rules. Until the rules editor exists
   (step 3) that file is where a band edits its own rules. Format: one rule per line,
   `KIND weight value`, `#` comments.

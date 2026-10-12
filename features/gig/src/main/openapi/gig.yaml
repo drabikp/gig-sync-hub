@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — shared parts
+  title: gigsynchub — shared parts
   version: "1"
   description: |
     What every part of the API shares: a gig as the form holds it (GigFormRequest when sent,
     GigFormResponse when answered — the same fields), its country and entry type, and how the
     API says no. The features' specs refer to these schemas; the kernel generates them once
-    (sk.drabikp.bzscraper.gig.api) and the features use those classes. Names: …Request for what
+    (sk.drabikp.gigsynchub.gig.api) and the features use those classes. Names: …Request for what
     is sent, …Response for what is answered, …Value for an enum.
 paths: {}
 components:

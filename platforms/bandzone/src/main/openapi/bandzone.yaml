@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — the band's gigs (public)
+  title: gigsynchub — the band's gigs (public)
   version: "1"
   description: |
     The band's gigs as JSON, from the catalog, in the shape this endpoint has always had (it

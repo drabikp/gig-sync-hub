@@ -5,9 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 ```bash
-docker/make-secrets.sh                                 # Once (and after changing BZ_DOMAIN before Rauthy's first start): ./secrets
+docker/make-secrets.sh                                 # Once (and after changing GSH_DOMAIN before Rauthy's first start): ./secrets
 docker compose up -d --build                           # Run everything: PostgreSQL, the app, Rauthy (the sign-in), Caddy
-                                                       #   → https://$BZ_DOMAIN (default https://localhost), daily backups
+                                                       #   → https://$GSH_DOMAIN (default https://localhost), daily backups
 docker compose logs -f app                             # The app's log
 ./mvnw clean install                                   # Build every module (incl. the page: Node is fetched once into web/frontend/node)
 docker compose up -d db && SPRING_DATASOURCE_PASSWORD=$(cat secrets/db_password) \
@@ -20,70 +20,70 @@ cd web/frontend && npm test                            # The page's tests only
 ```
 
 **Sign-in: Rauthy** (OpenID Connect, `ghcr.io/sebadob/rauthy`, compose service `rauthy`), served at
-`https://$BZ_DOMAIN/auth/` by Caddy — the same origin as the app. Who may sign in is Rauthy's: the
-members of its group `bzscraper` (the app's client has `restrict_group_prefix`); every `/api` address
+`https://$GSH_DOMAIN/auth/` by Caddy — the same origin as the app. Who may sign in is Rauthy's: the
+members of its group `gigsynchub` (the app's client has `restrict_group_prefix`); every `/api` address
 needs a sign-in. Which bands a signed-in user sees is the app's: their **memberships** (see **Bands**
 below; a user is made at their first sign-in, `OidcCurrentLogin` → `CurrentLogin`). The page sends the browser to
-`/oauth2/authorization/rauthy` (code flow with PKCE, confidential client `bzscraper`); Rauthy sends
+`/oauth2/authorization/rauthy` (code flow with PKCE, confidential client `gigsynchub`); Rauthy sends
 it back to `/login/oauth2/code/rauthy`, then to `/` (the page goes back where the user was,
 `lib/signIn.ts`). The app's session: 12 h; Rauthy's own session signs the user in again without a
 password. Signing out (`POST /api/auth/logout`) ends both: the answer names Rauthy's end-session
 address and the page goes there. `SecurityConfiguration` builds the client from `AuthProperties`
-(no discovery at start): the browser goes to the issuer (`bzscraper.auth.issuer`,
-`https://$BZ_DOMAIN/auth/v1/`), the app fetches tokens, keys and user info inside the network
-(`bzscraper.auth.internal-url`, `http://rauthy:8080/auth/v1/`); the ID token's issuer is checked.
+(no discovery at start): the browser goes to the issuer (`gigsynchub.auth.issuer`,
+`https://$GSH_DOMAIN/auth/v1/`), the app fetches tokens, keys and user info inside the network
+(`gigsynchub.auth.internal-url`, `http://rauthy:8080/auth/v1/`); the ID token's issuer is checked.
 Rauthy: `docker/rauthy/config.toml` (not secret; each secret is `'$SECRETS'`, from its secrets file
 `secrets/rauthy.toml`), its data in the `rauthy` database on the app's PostgreSQL (made by the
 one-shot service `rauthy-db`, backed up with the app's), its cache in `./auth-data`; it runs as
-`BZ_UID` (it reads the owner-only secrets). **First start**: Rauthy reads `secrets/rauthy-bootstrap`
-(the group and the app's client for `https://$BZ_DOMAIN`, made by `docker/make-secrets.sh`) into its
-EMPTY database, and prints the first admin's (`BZ_ADMIN_EMAIL`) password once in its log. Then, in
-Rauthy's admin (`https://$BZ_DOMAIN/auth/v1/admin` — admins need MFA: register a passkey first, at
+`GSH_UID` (it reads the owner-only secrets). **First start**: Rauthy reads `secrets/rauthy-bootstrap`
+(the group and the app's client for `https://$GSH_DOMAIN`, made by `docker/make-secrets.sh`) into its
+EMPTY database, and prints the first admin's (`GSH_ADMIN_EMAIL`) password once in its log. Then, in
+Rauthy's admin (`https://$GSH_DOMAIN/auth/v1/admin` — admins need MFA: register a passkey first, at
 `/auth/v1/account`, which asks for no MFA itself; a machine that cannot make a passkey takes the
-password alone with `BZ_ADMIN_MFA=false` in its `.env` — `ADMIN_FORCE_MFA`, which is the whole gate
+password alone with `GSH_ADMIN_MFA=false` in its `.env` — `ADMIN_FORCE_MFA`, which is the whole gate
 (`Principal::validate_admin_session`) and is also written onto the `rauthy` client's own `force_mfa`
 on every start, so the switch needs a `docker compose up -d rauthy`; never false on a public server.
-A passkey is bound to `RP_ID` = `BZ_DOMAIN`, so one made against `localhost` is of no use once the
+A passkey is bound to `RP_ID` = `GSH_DOMAIN`, so one made against `localhost` is of no use once the
 server has its real address),
-add yourself and the members to the group `bzscraper`. A later change of `BZ_DOMAIN` = change the
+add yourself and the members to the group `gigsynchub`. A later change of `GSH_DOMAIN` = change the
 client's redirect / post-logout addresses there (the bootstrap is never read again).
 
 **Docker** (`Dockerfile`, `compose.yaml`): the image builds the app from the sources (a Temurin 21 JRE
 and the jar — nothing else: no browser runs on this server, so none is installed; a non-root user whose
-uid/gid match the host's, `BZ_UID`/`BZ_GID`, default 1000); compose runs `db` (PostgreSQL 18, volume `db-data`, on `127.0.0.1:5432` for development),
+uid/gid match the host's, `GSH_UID`/`GSH_GID`, default 1000); compose runs `db` (PostgreSQL 18, volume `db-data`, on `127.0.0.1:5432` for development),
 `app`, `rauthy-db` + `rauthy` (the sign-in), `proxy` (Caddy) and `backup` (`docker/backup.sh`:
 `pg_dump` of the app's and Rauthy's databases on start and daily into `./data/backups`, the newest 14
 of each kept). **Secrets are files** under `./secrets` (git-ignored, `600`; `docker/make-secrets.sh` makes
 them: random ones — the database passwords (`db_password`: the owner, for Flyway; `db_app_password`: the
-app's own login `bzscraper_app`, which row-level security holds), Rauthy's secrets, the app's client secret, **`data_keys`** (the
+app's own login `gigsynchub_app`, which row-level security holds), Rauthy's secrets, the app's client secret, **`data_keys`** (the
 key every band's secrets are sealed with in the database: back it up apart from the database dumps, lose it
 and they can't be read) — and band #1's old logins from `.bz-creds`, `.bit-test-creds`, `calendar`, which
 the app keeps once in the database and doesn't read after),
 given to the app as Docker secrets at `/run/secrets/<property name>` and read by
 `spring.config.import=optional:configtree:/run/secrets/` — never environment variables (Rauthy gets its
 secrets file the same way, `SECRETS_FILE`). Whether this server drives the platforms, band #1's
-old band slug and artist name, and this machine's settings (`BZ_DOMAIN`,
-`BZ_APP_BIND`, `BZ_SUBNET`, `BZ_UID`/`BZ_GID`, `BZ_ADMIN_MFA`) are in the git-ignored `.env`
+old band slug and artist name, and this machine's settings (`GSH_DOMAIN`,
+`GSH_APP_BIND`, `GSH_SUBNET`, `GSH_UID`/`GSH_GID`, `GSH_ADMIN_MFA`) are in the git-ignored `.env`
 (`.env.example`; what weakens a thing is a machine's own business, never git's) —
 compose reads it for its own `${…}` and passes it to the app. `./data` is mounted at `/app/data` (the
 band's calendar profile, backups); a platform's sign-in is kept in the database with the band's account,
 not on disk.
 `.dockerignore` is an allowlist: only the sources reach the build. The containers' network has a
-fixed subnet (`BZ_SUBNET`, default `10.201.0.0/24`): Docker's own 172.x pick collided with a VPN's
+fixed subnet (`GSH_SUBNET`, default `10.201.0.0/24`): Docker's own 172.x pick collided with a VPN's
 routes, and the published port then reset every connection. The app has its own name server
-(`BZ_DNS`, default `1.1.1.1`): Docker's DNS forwarding to a VPN's name servers timed out, so the
+(`GSH_DNS`, default `1.1.1.1`): Docker's DNS forwarding to a VPN's name servers timed out, so the
 platforms, the calendar and the town search couldn't be reached.
 
 **The way in** (compose service `proxy`, always on — signing in needs it): Caddy (`docker/Caddyfile`)
-on 80/443 gets and renews the Let's Encrypt certificate for `BZ_DOMAIN` itself (DNS must point at the
+on 80/443 gets and renews the Let's Encrypt certificate for `GSH_DOMAIN` itself (DNS must point at the
 server), redirects HTTP to HTTPS, sets HSTS, routes `/auth/*` to Rauthy and the rest to `app:8080`,
 compresses everything but the live updates (`/api/bands/*/events`, passed through unbuffered).
-`BZ_DOMAIN=localhost` (the default) runs it locally with Caddy's own certificate (the browser warns
+`GSH_DOMAIN=localhost` (the default) runs it locally with Caddy's own certificate (the browser warns
 once, or trust Caddy's root). The app's own port is published on `127.0.0.1` only (debugging;
-`BZ_APP_BIND=0.0.0.0` opens it to the local network). The operator's endpoints (actuator: health, metrics)
+`GSH_APP_BIND=0.0.0.0` opens it to the local network). The operator's endpoints (actuator: health, metrics)
 answer on the management port 8081, bound to 127.0.0.1 inside the container — never through the proxy or
-the published port: `docker compose exec app curl -s localhost:8081/actuator/metrics/bzscraper.sync.tasks`
-(`bzscraper.sync.tasks` / `.held` per band — `BandMetrics`);
+the published port: `docker compose exec app curl -s localhost:8081/actuator/metrics/gigsynchub.sync.tasks`
+(`gigsynchub.sync.tasks` / `.held` per band — `BandMetrics`);
 the image's health check uses it. `server.forward-headers-strategy=native`: Tomcat
 believes `X-Forwarded-*` only from private addresses, so behind the proxy requests count as HTTPS —
 Rauthy is told to send the user back over HTTPS and the session and CSRF cookies are `Secure`
@@ -91,7 +91,7 @@ Rauthy is told to send the user back over HTTPS and the session and CSRF cookies
 
 **Structure: vertical slices.** One Maven module per feature, each holding its own domain,
 application (use cases + ports) and adapters (persistence, REST API, workers) in packages
-`sk.drabikp.bzscraper.<feature>.{domain, application, application.port.in|out, adapter.in.*,
+`sk.drabikp.gigsynchub.<feature>.{domain, application, application.port.in|out, adapter.in.*,
 adapter.out.*, config}`. `gig` is the shared kernel; platforms plug into the features' ports;
 the page is a separate React app (`web/frontend`) over the features' REST APIs.
 
@@ -122,7 +122,7 @@ features/accounts   users, bands, memberships (User, Band — id, slug, name —
                     AccountField names, last sign-in test): PlatformAccounts (the platforms read them; adopt =
                     band #1's from the configuration, once), PlatformAccountsUseCase (the page: owners connect,
                     members test), port.out PlatformAccountCheck (the platform's sign-in test); SecretBox
-                    (AesGcmSecretBox: AES-256-GCM, keys bzscraper.accounts.data-keys, sealed for its row;
+                    (AesGcmSecretBox: AES-256-GCM, keys gigsynchub.accounts.data-keys, sealed for its row;
                     rotation = a new key first, everything sealed again on start); /api/bands,
                     …/platform-accounts; test-jar: AccountsFakes (+ Accounts: in-memory accounts, TEST_KEYS)
 features/places     Town (coordinates null when only typed), TownChoice, place search (Photon); /api/places
@@ -142,7 +142,7 @@ features/check      Reconciler, platform check service + nightly schedule, each 
 features/calendar   calendar domain (+ domain.event: the calendar's events; + domain.rules: profile
                     and classifier), review service, stores, iCal feed, profile file; /api/calendar;
                     shipped presets (calendar/*.profile)
-platforms/portal    what every platform shares: PlatformClient (`bzscraper.<platform>.client`: off or
+platforms/portal    what every platform shares: PlatformClient (`gigsynchub.<platform>.client`: off or
                     http) + OnPlatformClient (a client bean exists only for its own setting). That is
                     all it is — the human pacing (HumanPacer) sits in the platform that paces, and
                     Bandzone's own waits are in its web client (this module was `platforms/browser`
@@ -161,7 +161,7 @@ web/live            LiveUpdates as server-sent events (SseLiveUpdates, GET /api/
                     SSE; everyone else tells the LiveUpdates port
 web/frontend        the page: React + TypeScript + Vite + Mantine 8, TanStack Query, React Router,
                     i18next (English + Slovak), a PWA (vite-plugin-pwa); built into the jar's static/
-app/                BzscraperApplication; web (security: sign-in through Rauthy (OIDC), session + CSRF
+app/                GigSyncHubApplication; web (security: sign-in through Rauthy (OIDC), session + CSRF
                     for a single-page app; OidcCurrentLogin; BandAccessInterceptor: a band's addresses
                     for its members; ApiErrors; SinglePageApp: the page's own addresses load
                     index.html; RowScopeFilter + BandAccessInterceptor: the database's row-level security scope;
@@ -213,7 +213,7 @@ enum `…Value` (inline enums are made named ones) — the names are the generat
   each module names its spec and package): an interface per tag (`GigsApi`, `SyncApi`, …) and
   the request / response / value classes (POJOs) in `<feature>.adapter.in.rest.api` (target/generated-sources;
   `Instant` for date-time, Bandzone's keeps `OffsetDateTime`). The kernel generates the shared
-  schemas once into `sk.drabikp.bzscraper.gig.api` (plus the shared mappers `GigFormMapper` and `RefMapper` — a gig's token, a platform's id); the
+  schemas once into `sk.drabikp.gigsynchub.gig.api` (plus the shared mappers `GigFormMapper` and `RefMapper` — a gig's token, a platform's id); the
   other modules map them to those classes (`schemaMappings`), never generating them again.
 - **Controllers** (`*Controller`, `@RestController`, implement the generated interface) only
   serve requests — no private methods, no logic: they call a use case and a mapper.
@@ -319,7 +319,7 @@ switcher sits at the top of the desktop menu and on the phone's More.
 - **CSRF**: the `XSRF-TOKEN` cookie → `X-XSRF-TOKEN` header (`api/client.ts`); a 401 from the
   API shows the sign-in page (a button to Rauthy). The PWA's service worker never answers `/oauth2/`, `/login/`, `/auth/` itself.
   `npm run dev` (:5173) signs in too: the dev server passes `/oauth2` and `/login/oauth2` to the app,
-  and the client knows `http://localhost:5173` when `BZ_DOMAIN=localhost`.
+  and the client knows `http://localhost:5173` when `GSH_DOMAIN=localhost`.
 
 ## What This Project Does
 
@@ -349,9 +349,9 @@ rows are keyed `(band_id, …)`.
   exist for you); owner-only actions are checked in the use cases (`ownerOnly`). `BandIsolationTest`
   reads every band path from the specs and checks each is 404 for a non-member, both ways.
 - **Band #1** (`BandId.FIRST`, `…0001`) is the band the app ran for before (migration V2 gave it every
-  row). Its slug and name come from `bzscraper.accounts.first-band-slug` / `first-band-name`
+  row). Its slug and name come from `gigsynchub.accounts.first-band-slug` / `first-band-name`
   (default: the Bandzone slug and the Bandsintown artist) while it still has V2's `first` / `My band`;
-  its owner is the first to sign in with `bzscraper.accounts.first-owner-email` (unset: whoever signs
+  its owner is the first to sign in with `gigsynchub.accounts.first-owner-email` (unset: whoever signs
   in first).
 - **Each band's own connections** (phase 2): its platform accounts (`band_platform_account`) and
   calendar (`band_calendar`), connected on the page; the secrets (the way back in to each platform — a
@@ -365,8 +365,8 @@ rows are keyed `(band_id, …)`.
   band types its Bandzone one once (the server signs in and writes down only the session, which lasts
   years), and signs in to Bandsintown in its OWN browser, pasting what that leaves — so no authenticator
   secret is kept either. When a platform ends a sign-in the band connects again; it is never retried.
-  Band #1's old configuration (`bzscraper.bandzone.login/…`,
-  `bzscraper.bandsintown.login/…`, `bzscraper.calendar.ical-url`, the rules file) is kept once on start
+  Band #1's old configuration (`gigsynchub.bandzone.login/…`,
+  `gigsynchub.bandsintown.login/…`, `gigsynchub.calendar.ical-url`, the rules file) is kept once on start
   while band #1 has none, then unused. The shipped calendar presets are everyone's
   (`calendar_rule.band_id` null); each band's own rules are edited on the page.
 - **Going public** (phase 4): **invitations** — an owner invites an e-mail address as a role and passes
@@ -383,7 +383,7 @@ rows are keyed `(band_id, …)`.
   (`DELETE /api/me`; a band one is alone in goes too; the Rauthy login stays). The **audit log**
   (`audit_event`): every change a member makes through a band's API (`AuditInterceptor`: the operation,
   what it named, how it ended), read by owners. **Row-level security** (V6): the app's connections work
-  as the role `bzscraper_app` — in Docker its own login (`SPRING_DATASOURCE_USERNAME`, the secret
+  as the role `gigsynchub_app` — in Docker its own login (`SPRING_DATASOURCE_USERNAME`, the secret
   `db_app_password`, given its password after each migration by `AppRoleLogin`), not the database's
   superuser; Flyway connects as the owner (`spring.flyway.user/password`); `set role` on each pooled
   connection either way — told at checkout which band's rows they may see (`app.band`: a band's id, ''
@@ -393,9 +393,9 @@ rows are keyed `(band_id, …)`.
   each sync lane, the import, the check and the metrics open theirs (`rows.as(band, …)`); only the
   cross-band reads say so (`rows.acrossBands(…)`: the worker's due work and pauses, the restart's
   recovery; `StartUpRowScope`: start-up, until the app is ready). **Limits**:
-  `bzscraper.limits.requests-per-minute` (600) / `changes-per-minute` (120) per user (per address before
+  `gigsynchub.limits.requests-per-minute` (600) / `changes-per-minute` (120) per user (per address before
   signing in) on `/api`, `/gigs`, `/oauth2`, `/login` → 429 `tooManyRequests`;
-  `bzscraper.accounts.max-bands-owned` (10) → `tooManyBands`; live streams: 100 per band, 2000 in all
+  `gigsynchub.accounts.max-bands-owned` (10) → `tooManyBands`; live streams: 100 per band, 2000 in all
   (the oldest ends), each ends after 30 min (the page reconnects). **Addresses a band gives** (its
   calendar, a gig's poster) are fetched only from the public internet, every redirect checked by hand
   (`PublicAddresses`; a gig's links must be http(s), `links`), at most 10 MB, and a failure says nothing of
@@ -403,7 +403,7 @@ rows are keyed `(band_id, …)`.
   → This band; band #1's on). An e-mail Rauthy hasn't verified is no e-mail to the app (invitations, the
   first owner); a login's e-mail and name are refreshed at each sign-in. Caddy's log never holds a token
   (invitation links, the sign-out's `id_token_hint`).
-- **Many bands on one server** (phase 3): the sync runs `bzscraper.sync.worker.threads` (2) **lanes** at
+- **Many bands on one server** (phase 3): the sync runs `gigsynchub.sync.worker.threads` (2) **lanes** at
   once — a lane is a band's work on a platform (`Lane`), run by one worker at a time — and the bands take
   turns (`FairTurns`: round-robin by band, a band's oldest due task first), so one band's hundred tasks
   or slow platform don't keep the others waiting. Circuit breakers are per lane (a band's broken account
@@ -515,8 +515,8 @@ as when the app stops — again in a minute, no attempt used, not counted by the
 logged ("bulk edit: doesn't take past events → form edit"), and what no step can do ends FAILED with
 every reason it collected on the way. Moot work (gig deleted/cancelled/published meanwhile) ends done
 with a note.
-`SyncWorker` (`bzscraper.sync.worker.threads` threads, 2; woken on enqueue + every
-`bzscraper.sync.poll-seconds`) calls `SyncDispatcher.runNext()` until nothing it may run is due — it
+`SyncWorker` (`gigsynchub.sync.worker.threads` threads, 2; woken on enqueue + every
+`gigsynchub.sync.poll-seconds`) calls `SyncDispatcher.runNext()` until nothing it may run is due — it
 HANDS WORK OUT and drives no workflow: the next due task names the workload to run (the bands in turn,
 `FairTurns`; a lane — a band's work on a platform — never by two workers at once; none of a paused band
 or a lane held back).
@@ -554,7 +554,7 @@ or a lane held back).
 - **Circuit breakers per lane** (`PlatformBreakers`, `PlatformBreakerUseCase`, in memory): a batch
   whose results are ALL temporary failures counts against its lane — the band's account on the platform
   (anything else — done, refused, failed for good — shows the platform answering and resets it);
-  `bzscraper.sync.breaker.failures` (3) in a row → the band's work there is held back for
+  `gigsynchub.sync.breaker.failures` (3) in a row → the band's work there is held back for
   `.cooldown-minutes` (30): its tasks stay queued, the band's other platforms and every other band go
   on; then one trial batch decides. `.platform-bands` (3) bands held back on one platform at once hold
   the platform back for everyone (`Breaker.everyone`) until fewer are. The Inbox, Activity and Settings
@@ -587,7 +587,7 @@ The sync only knows what the app did; the platforms can drift by hand or by thei
 guessing (a same-named town). `CheckPlatformsUseCase` (`PlatformCheckService`) reads every
 platform through its `GigImporter` (read-only, the same reading as Import; a platform held
 back by its breaker is skipped) and `Reconciler` (domain) compares each PUBLISHED gig of the
-upcoming ones and the last `bzscraper.check.past-days` (60) with its copy there: MISSING (the
+upcoming ones and the last `gigsynchub.check.past-days` (60) with its copy there: MISSING (the
 event is gone) or DIFFERENT — day, time (Bandsintown: the band's slot), name, venue (a
 placeholder "-" is none; a longer platform name is fine), town ("Košice I" = Košice),
 country, cancelled state (not on Bandsintown, which has none), and the place: Bandsintown
@@ -596,7 +596,7 @@ search. Gigs with sync work still queued are skipped. Fixes, always the user's c
 Re-sync (`ResyncGigUseCase`) or Forget link (a gone event, through `GigWrites.forgetLink`;
 Publish creates it again; the gig pages follow). Also
 counts platform events no gig is published as (→ Import). Runs nightly
-(`PlatformCheckSchedule`, `bzscraper.check.cron`, default 04:30; `bzscraper.check.enabled`), every
+(`PlatformCheckSchedule`, `gigsynchub.check.cron`, default 04:30; `gigsynchub.check.enabled`), every
 band one after another; each band's latest result is kept (`CheckResultStore`, table `band_check`).
 
 ## Import (`/import`)
@@ -618,7 +618,7 @@ deletes.
 ## Band calendar (`/calendar`)
 
 Read-only: the band's calendar (its private iCal address — a SECRET, set on the page, kept sealed in
-`band_calendar` with its zone; band #1's came from `bzscraper.calendar.ical-url`, its local copy in the
+`band_calendar` with its zone; band #1's came from `gigsynchub.calendar.ical-url`, its local copy in the
 git-ignored `./calendar` file, never in git) mixes gigs
 with rehearsals, travel, absences, calls. `CalendarEventClassifier` sorts each event into
 GIG / UNSURE / NOT_GIG with the band's `BandProfile`: weighted `ProfileRule`s — the code
@@ -629,10 +629,10 @@ decides; `CATALOG_GIG_SAME_DAY` doesn't count after a strong negative. Status
 event id (`calendar_decision`) always wins. Every matched rule is shown as a reason.
 
 Rules: `classpath:calendar/base.profile` (language-independent) + presets
-(`bzscraper.calendar.presets`, `sk-cz`) are re-synced as PRESET on start (everyone's); each band's
+(`gigsynchub.calendar.presets`, `sk-cz`) are re-synced as PRESET on start (everyone's); each band's
 own (USER) rules are edited on the Calendar page (`CalendarSetupUseCase.replaceOwnRules`: replaced
 whole, refused with `invalidRule` and the rule's number when one isn't one). Band #1's came from its
-file (`bzscraper.calendar.profile-file`, default `./data/calendar-profile.txt` — members' names, never
+file (`gigsynchub.calendar.profile-file`, default `./data/calendar-profile.txt` — members' names, never
 in git), read once while it had none. File format: `KIND weight value|alternatives`. Steps 2–3
 (learning the profile from platform history, setup wizard for any band) are planned in
 `docs/calendar-plan.md`. Calendar notes hold fees/phones — never publish them.
@@ -679,13 +679,13 @@ exactly one fits name + country + postal area (`TownChoice`).
 ## Bandzone (no browser needed)
 
 `BandzoneGigProvider`/`BandzoneGigImporter` scrape read-only (`BandzoneHtmlFetcher`, at
-`bzscraper.bandzone.base-url`, the year tabs read at once with a 60 s limit). Writes go through the
+`gigsynchub.bandzone.base-url`, the year tabs read at once with a 60 s limit). Writes go through the
 band-admin pages; off by default (stub). Whether this server drives it is
-`bzscraper.<platform>.client` (`PlatformClient`, `OnPlatformClient`):
+`gigsynchub.<platform>.client` (`PlatformClient`, `OnPlatformClient`):
 
 ```
-bzscraper.bandzone.client=http       # this server drives Bandzone (no browser is involved)
-bzscraper.bandzone.client=off        # the stub (default): it doesn't
+gigsynchub.bandzone.client=http       # this server drives Bandzone (no browser is involved)
+gigsynchub.bandzone.client=off        # the stub (default): it doesn't
 ```
 
 **The client** (`portal.http`): Bandzone's admin is plain server-rendered forms
@@ -705,7 +705,7 @@ accounts' `PlatformSignIn`) and writes down only the **session** Bandzone gives 
 in" it lasts about ten years — so the password is never stored. A band that doesn't sign in is not saved,
 so an account that doesn't work can't be connected. "Test sign-in" reads the band's page with the kept
 session (`BandzoneAccountCheck`); when Bandzone has ended it, the band connects again.
-`bzscraper.bandzone.login / .password / .band-slug` are band #1's old ones (kept once). The real band's
+`gigsynchub.bandzone.login / .password / .band-slug` are band #1's old ones (kept once). The real band's
 login lives in the git-ignored `.bz-creds` (line 1 login, line 2 password, `chmod 600`);
 `.bz-test-creds` is the test band.
 
@@ -758,9 +758,9 @@ Bandsintown has no write API for artists, so the app uses the artist portal's ow
 pages call — over plain HTTP. Off by default (stub):
 
 ```
-bzscraper.bandsintown.client=http          # this server drives Bandsintown
-bzscraper.bandsintown.client=off           # the stub (default): it doesn't
-bzscraper.bandsintown.pacing.min-ms / .max-ms   # human pauses between requests (900 / 2600)
+gigsynchub.bandsintown.client=http          # this server drives Bandsintown
+gigsynchub.bandsintown.client=off           # the stub (default): it doesn't
+gigsynchub.bandsintown.pacing.min-ms / .max-ms   # human pauses between requests (900 / 2600)
 ```
 
 **Connecting a band, and why it is the one thing a browser does.** The portal's identity provider
@@ -893,7 +893,7 @@ collection and no cascade to get wrong here; the costs are elsewhere):
 ## Database
 
 PostgreSQL 18 (`spring.datasource.*`; in Docker the `db` service, user and database
-`bzscraper`, the password a secret). The schema is owned by **Flyway**
+`gigsynchub`, the password a secret). The schema is owned by **Flyway**
 (`features/gig/src/main/resources/db/migration/V<n>__*.sql` — one schema history for all features,
 in the kernel; an applied migration is never rewritten); Hibernate runs with `ddl-auto=validate`, so
 every entity change needs a new migration (the tests run the migrations on a real PostgreSQL and fail
@@ -910,7 +910,7 @@ deletes all its rows. `V3__band_connections.sql`: `band_platform_account (band_i
 JSON, `secrets` sealed + `key_id`, the last sign-in test) and `band_calendar (band_id)` (the sealed
 address, `key_id`, zone). `V4__band_check.sql`: `band_check (band_id)` — the band's latest platform
 check as JSON. `V5__invitations_audit.sql`: `invitation` (the token's hash only), `audit_event`.
-`V6__row_level_security.sql`: the role `bzscraper_app`, `band_visible(band_id)` and a policy on every
+`V6__row_level_security.sql`: the role (`bzscraper_app` as it wrote it — see V11), `band_visible(band_id)` and a policy on every
 band's table (`calendar_rule`'s shipped rows readable by all, written only by '*'; `sync_log` through its
 task); not on `band`, `membership`, `app_user`, `invitation`. `V7__public_list.sql`: `band.public_list`
 (off; band #1's on — it had the list before). `V8__gig_search_and_indexes.sql`: what the LIST reads —
@@ -926,21 +926,27 @@ gig per band per day and venue, which is what the primary key used to say), and 
 `sync_task` and `calendar_link` name that identity instead of the key (every key any row named got
 one identity, including the keys of gigs already gone, whose rows outlive them on purpose). The
 band's last platform check is cleared: its JSON named gigs by the old key and the nightly run
-writes a new one. `V9__sequences_for_batching.sql`: `sync_task`, `sync_log`, `calendar_rule` and `audit_event` take their
+writes a new one.
+`V11__rename_app_role.sql`: the app's database login follows the app's name, `bzscraper_app` →
+`gigsynchub_app` (2026-10-12). It is a migration of its own rather than an edit to V6, which created
+the role, because **an applied migration is never rewritten** — Flyway checksums it, so changing one
+byte of V6, a comment included, stops the app against every database that already ran it. A
+brand-new database therefore makes the old name and renames it a moment later; the grants, the
+policies and the default privileges all follow the role itself, so the rename is the whole of it. `V9__sequences_for_batching.sql`: `sync_task`, `sync_log`, `calendar_rule` and `audit_event` take their
 ids from sequences instead of identity columns, because an identity column cannot be batched (the
 driver must fetch each assigned id back) and all four are written in bulk; drawn 50 at a time
 (`pooled-lo`, so a block's ids are above what the database gave), each sequence owned by its column so
 `pg_get_serial_sequence` still answers the H2 import, and started well above the rows already there.
 
 **From H2** (the database until 2026-10): `H2Import` (a Flyway `afterMigrate` callback in the kernel)
-copies an H2 SQL backup (`SCRIPT TO`, `bzscraper.db.import-h2`) into an EMPTY database right after
+copies an H2 SQL backup (`SCRIPT TO`, `gigsynchub.db.import-h2`) into an EMPTY database right after
 the schema is built — every table's rows (the columns both have), times without zone shifts, the
 id counters moved past the copied ids; one transaction, so a failure leaves nothing and stops the
 start; skipped when the database has data; every row becomes band #1's. H2 stays a dependency only for this (`h2.version` pinned).
 
-**Backups**: the compose service `backup` (`pg_dump --format=custom` of `bzscraper` and `rauthy`, daily,
+**Backups**: the compose service `backup` (`pg_dump --format=custom` of `gigsynchub` and `rauthy`, daily,
 `./data/backups`, 14 of each kept); restore into an empty database with
-`pg_restore -d bzscraper --no-owner bzscraper-<day>.dump` (Rauthy's: `-d rauthy --role=rauthy`).
+`pg_restore -d gigsynchub --no-owner gigsynchub-<day>.dump` (Rauthy's: `-d rauthy --role=rauthy`).
 
 ## Key Dependencies
 
@@ -966,9 +972,9 @@ signed in, band #1 is its owner's and 404 for anyone else, signing in goes to Ra
 signing out names Rauthy's end-session address, changes need the CSRF token, a refusal is a 409 with
 its code, the page's own addresses load `index.html`. `BandIsolationTest`: every band path of every
 spec (read from the YAML) is 404 for a non-member, both ways. The test properties carry a made-up data
-key (`bzscraper.accounts.data-keys`; `AccountsFakes.TEST_KEYS` for module tests); the JPA tests of the
+key (`gigsynchub.accounts.data-keys`; `AccountsFakes.TEST_KEYS` for module tests); the JPA tests of the
 sealed rows check the secret isn't in the row, that a row copied to another band doesn't open, and key
-rotation. The app's tests connect as `bzscraper_app` like production, so every API test runs under
+rotation. The app's tests connect as `gigsynchub_app` like production, so every API test runs under
 row-level security (`BandMembershipApiTest` checks it; `RowLevelSecurityTest` in the kernel checks the
 policies themselves); `BandMembershipApiTest`: an invitation joins whom it's for, once; the audit log;
 the export without a secret; `RateLimitsTest`. `ManyBandsSyncTest` (sync): ten bands queued at once on three workers all finish, a lane is never
@@ -984,7 +990,7 @@ mutable clock, builders for the registry, engine, dispatcher and requests) and `
 (catalog test-jar: the write path and catalog use cases) and `TestPlatforms`
 (two made-up platforms' traits — the core tests never need the real adapters). The fake
 outbox and `JpaSyncOutbox` both pass `SyncOutboxContract` (sync test-jar), so the
-fake can't drift from the real one. `bzscraper.sync.worker.enabled=false` in Spring tests
+fake can't drift from the real one. `gigsynchub.sync.worker.enabled=false` in Spring tests
 (tasks queue, never run). Persistence tests run the migrations on PostgreSQL in Docker (Testcontainers'
 `jdbc:tc:postgresql:18-alpine` URL in each module's test `application.properties`, one container per
 test run — `./mvnw test` needs Docker; `H2ImportTest`: an H2 backup into its own empty database)

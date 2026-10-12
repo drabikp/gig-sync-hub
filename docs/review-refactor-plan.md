@@ -73,7 +73,7 @@ id before recording a result.
 outbox applies a change only from an allowed state (a DONE/DISCARDED task stays so) and
 `sync_task.version` (V11) makes concurrent writes fail instead of overwriting. H2's
 `AUTO_SERVER` (a second process could run a second worker) becomes opt-in
-(`bzscraper.db.options`).
+(`gigsynchub.db.options`).
 
 ## Phase 3 — failure semantics and browsers (review 4, 5, 8, 9)
 
@@ -136,9 +136,9 @@ All five phases are done; the full suite is green. Where the work differs from t
   back to PENDING, but only through the user's Retry.
 - **8.** Busy = a sync step finds the platform's browser held by another operation; a read
   (Import, the check) waits up to 10 minutes (`BitPortalClient.READ_WAIT`).
-- **9.** The Bandsintown profile is per account now (`~/.bzscraper/bandsintown-browser/<hash>`):
+- **9.** The Bandsintown profile is per account now (`~/.gigsynchub/bandsintown-browser/<hash>`):
   the first run after this logs in once with the password and authenticator code.
-- **13.** The legacy REST endpoint keeps reading `bzscraper.bandzone.band-slug` with `@Value`
+- **13.** The legacy REST endpoint keeps reading `gigsynchub.bandzone.band-slug` with `@Value`
   (the rest module must not depend on the Bandzone module).
 - **15.** The contract test found the fake outbox's `advance` ignoring the status guard; fixed.
   Inherited contract tests run against JPA without a rolled-back transaction, so they empty

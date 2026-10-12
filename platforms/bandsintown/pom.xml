@@ -4,37 +4,37 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>sk.drabik</groupId>
-		<artifactId>bzscraper</artifactId>
+		<artifactId>gigsynchub</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
-	<artifactId>bzscraper-bandsintown</artifactId>
-	<name>bzscraper-bandsintown</name>
+	<artifactId>gigsynchub-bandsintown</artifactId>
+	<name>gigsynchub-bandsintown</name>
 	<description>Bandsintown: the artist portal driven in Chromium, the sync steps, the import and the CSV download.</description>
 	<dependencies>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-accounts</artifactId>
+			<artifactId>gigsynchub-accounts</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-sync</artifactId>
+			<artifactId>gigsynchub-sync</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-importing</artifactId>
+			<artifactId>gigsynchub-importing</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-catalog</artifactId>
+			<artifactId>gigsynchub-catalog</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-portal</artifactId>
+			<artifactId>gigsynchub-portal</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -50,19 +50,19 @@
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-accounts</artifactId>
+			<artifactId>gigsynchub-accounts</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-gig</artifactId>
+			<artifactId>gigsynchub-gig</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>sk.drabik</groupId>
-			<artifactId>bzscraper-portal</artifactId>
+			<artifactId>gigsynchub-portal</artifactId>
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>

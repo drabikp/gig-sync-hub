@@ -2,7 +2,7 @@
  * Signing in is Rauthy's: the browser goes there (a page load, not an API call) and comes back to
  * the page's start; the address the user was at is kept for that moment (this tab only).
  */
-const RETURN_TO = 'bzscraper.returnTo';
+const RETURN_TO = 'gigsynchub.returnTo';
 
 export function signIn() {
   try {

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: bzscraper — bands and their members
+  title: gigsynchub — bands and their members
   version: "1"
   description: |
     The bands the signed-in user manages, making a new one (they become its owner) and renaming
