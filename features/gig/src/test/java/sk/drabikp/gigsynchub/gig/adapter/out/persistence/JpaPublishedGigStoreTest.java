@@ -11,6 +11,7 @@ import sk.drabikp.gigsynchub.gig.domain.platform.TestPlatforms;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static sk.drabikp.gigsynchub.gig.domain.TestBands.BAND;
+import static sk.drabikp.gigsynchub.gig.domain.TestBands.OTHER;
 
 @SpringBootTest
 @Transactional
@@ -67,5 +68,37 @@ class JpaPublishedGigStoreTest {
         assertThat(store.all(BAND)).containsExactlyInAnyOrder(
                 new Publication(TestPlatforms.BANDZONE, klub, "100"),
                 new Publication(TestPlatforms.BANDSINTOWN, barrak, null));
+    }
+
+    /**
+     * A publication is one band's. Two bands can hold the same gig identity on the same platform —
+     * nothing stops them, the key is (band, platform, gig) — and neither may see, overwrite or forget
+     * the other's. The same gig id on purpose: it is the hardest case, and the one a predicate that
+     * left the band out would get wrong while every other test still passed.
+     */
+    @Test
+    void a_publication_is_one_bands_even_when_both_bands_hold_the_same_gig_on_the_same_platform() {
+        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
+        store.record(OTHER, TestPlatforms.BANDZONE, klub, "999");
+
+        assertThat(store.externalRef(BAND, TestPlatforms.BANDZONE, klub)).contains("100");
+        assertThat(store.externalRef(OTHER, TestPlatforms.BANDZONE, klub)).contains("999");
+        assertThat(store.all(BAND)).containsExactly(new Publication(TestPlatforms.BANDZONE, klub, "100"));
+        assertThat(store.all(OTHER)).containsExactly(new Publication(TestPlatforms.BANDZONE, klub, "999"));
+
+        store.remove(BAND, TestPlatforms.BANDZONE, klub);
+
+        assertThat(store.isPublished(BAND, TestPlatforms.BANDZONE, klub)).isFalse();
+        assertThat(store.isPublished(OTHER, TestPlatforms.BANDZONE, klub))
+                .as("forgetting one band's copy leaves the other band's alone").isTrue();
+    }
+
+    @Test
+    void one_bands_publication_is_not_visible_to_the_other() {
+        store.record(BAND, TestPlatforms.BANDZONE, klub, "100");
+
+        assertThat(store.isPublished(OTHER, TestPlatforms.BANDZONE, klub)).isFalse();
+        assertThat(store.externalRef(OTHER, TestPlatforms.BANDZONE, klub)).isEmpty();
+        assertThat(store.all(OTHER)).isEmpty();
     }
 }

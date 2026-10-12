@@ -76,4 +76,35 @@ class JpaAccountsStoresTest {
         assertThat(stores.byTokenHash("a".repeat(64))).isEmpty();
         assertThat(stores.recent(band.id(), 10)).isEmpty();
     }
+
+    /**
+     * The audit log is a band's own: who changed what, read by its owners. It is the one table of this
+     * module that holds a band's DATA rather than who belongs to which band, so it is the one that has
+     * to be shown apart — a log that leaked would say what another band did and when.
+     */
+    @Test
+    void the_audit_log_is_one_bands_and_shows_nothing_of_the_other() {
+        Band mine = new Band(new BandId(UUID.randomUUID()), "mine", "Mine");
+        Band theirs = new Band(new BandId(UUID.randomUUID()), "theirs", "Theirs");
+        stores.save(mine);
+        stores.save(theirs);
+        User mineOwner = new User(new UserId(UUID.randomUUID()), "sub-mine", "m@band.test", "M");
+        User theirsOwner = new User(new UserId(UUID.randomUUID()), "sub-theirs", "t@band.test", "T");
+        stores.save(mineOwner);
+        stores.save(theirsOwner);
+        UserId me = mineOwner.id();
+        UserId them = theirsOwner.id();
+        Instant now = Instant.parse("2026-10-12T09:00:00Z");
+
+        stores.add(new AuditEvent(mine.id(), me, "gig.delete", "Klub 007", 200, now));
+        stores.add(new AuditEvent(theirs.id(), them, "band.rename", "Theirs", 200, now.plusSeconds(1)));
+
+        assertThat(stores.recent(mine.id(), 10)).extracting(AuditEvent::action).containsExactly("gig.delete");
+        assertThat(stores.recent(theirs.id(), 10)).extracting(AuditEvent::action).containsExactly("band.rename");
+
+        stores.delete(theirs.id());
+
+        assertThat(stores.recent(mine.id(), 10))
+                .as("deleting a band takes its log and nobody else's").hasSize(1);
+    }
 }
