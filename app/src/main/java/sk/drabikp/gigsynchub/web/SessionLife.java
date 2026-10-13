@@ -118,8 +118,10 @@ class SessionLife extends OncePerRequestFilter {
         }
         OAuth2AccessToken token = client.getAccessToken();
         // asked once and held: two calls to getExpiresAt() are two chances for it to answer
-        // differently, and the second one is the one that would be dereferenced
-        Instant until = token == null ? null : token.getExpiresAt();
+        // differently, and the second one is the one that would be dereferenced. (The token
+        // itself is not checked: an authorized client without one is not a thing this API can
+        // hand back, and a check that can only ever be false reads as though it could be true.)
+        Instant until = token.getExpiresAt();
         if (until == null || !until.isAfter(clock.instant())) {
             return Verdict.CANT_TELL;                     // nothing left to ask with
         }

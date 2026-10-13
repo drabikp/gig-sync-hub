@@ -161,10 +161,12 @@ final class IcsParser {
         }
         String withBreaks = text.replaceAll("(?i)<br\\s*/?>|</?(p|div|li)\\b[^>]*>", "\n");
         return Jsoup.parseBodyFragment(withBreaks).body().wholeText().replace(' ', ' ')
-                // possessive (*+): a run of spaces that turns out not to end in a newline is given up
-                // on at once instead of being retried one space shorter, which on a long line is
-                // quadratic for an answer that was never going to change
-                .replaceAll("[ \\t]++", " ").replaceAll(" *+\\n[ \\n]*+", "\n").strip();
+                // Two passes, and the ORDER is what makes them linear. The first collapses every
+                // run of spaces and tabs to one space; so by the second there can be at most one
+                // space before a newline, and ` ?` is a single character rather than a run to be
+                // tried one shorter at every position along it. Possessive (*+) then stops the
+                // tail backtracking as well.
+                .replaceAll("[ \\t]++", " ").replaceAll(" ?\\n[ \\n]*+", "\n").strip();
     }
 
     /**

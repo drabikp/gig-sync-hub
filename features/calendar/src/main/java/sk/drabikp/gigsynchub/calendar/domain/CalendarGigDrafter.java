@@ -63,7 +63,10 @@ public final class CalendarGigDrafter {
         return letter && digit;
     }
 
-    private static final Pattern POSTAL_CODE_CITY = Pattern.compile("(\\d{3})\\s?(\\d{2})\\s+(\\D.*)");
+    // `\\s+` and `\\D` both match a space, so without the possessive they hand the gap between
+    // the postal code and the city back and forth before agreeing on it
+    private static final Pattern POSTAL_CODE_CITY =
+            Pattern.compile("(\\d{3})\\s?+(\\d{2})\\s++(\\D.*+)");
     /**
      * Postal areas whose map addresses name only the city district ("040 01 Staré Mesto"):
      * the first three digits of the postal code → the city.
