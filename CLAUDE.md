@@ -897,6 +897,18 @@ is the one place the portal's JSON is read.
 - **Human pacing** (user requirement): a short random wait between requests and a longer one between
   upload batches, and one request at a time for an account — the platforms' terms are about people
   using their pages, and a burst is what gets an account flagged.
+- **Where the traffic comes from** (`PlatformEgress`, `gigsynchub.<platform>.proxy.*`): unset, this
+  machine's own address; set, ONE proxy the operator chose — their own machine, a paid static
+  address, an address in the band's own country, which is the signal worth fixing (a datacenter in
+  another country on an account only ever used from Czechia). It covers everything that platform
+  does, the public page scrape included: that one asks for every year tab at once, and a burst is
+  what the pacing exists to avoid, so half the traffic coming from somewhere else would be the
+  worst of both. **Not a rotating list, deliberately** — these are the band's own long-lived
+  sessions (Bandzone's lasts years), and a session arriving from a different address each time is
+  the shape of a stolen one rather than a quieter one; free proxy lists are also compromised hosts
+  carrying other people's blocks, and an unknown party in the middle of the session this app seals
+  everywhere else. The javadoc says it at length, with the two JDK traps (no SOCKS; Basic auth to
+  a proxy is off for tunnels until `jdk.http.auth.tunneling.disabledSchemes` is cleared).
 - Setup problems (nothing connected, a sign-in the band must renew) need the user (NEEDS_USER), not a
   retry.
 
@@ -1057,6 +1069,50 @@ database behind it.
 25** — the version the image runs, not the newest — with Docker for Testcontainers; Dependabot
 (`.github/dependabot.yml`) watches Maven, npm, Docker and the actions themselves, weekly and
 grouped.
+
+## Watching it: metrics, traces and logs
+
+The app always exposes its own numbers and always puts a trace id in every log line; whether
+anything COLLECTS them is a compose profile that is off by default.
+
+- **Metrics** — `/actuator/prometheus` on the management port: the JVM's, the pool's, every HTTP
+  request's, and this app's own (`gigsynchub.sync.tasks` / `.held` per band, `BandMetrics`). Every
+  series carries `application=gigsynchub`.
+- **Traces** — Micrometer Observation bridged to OpenTelemetry, sent as OTLP when
+  `GSH_OTLP_ENABLED=true`. Spring Boot instruments what it owns; the app adds the two spans no
+  framework can see: the **sync workload** (`SyncWorker`, a worker thread is not a request) and
+  each **call to a platform** (`PortalCall`, the JDK's HttpClient is nobody's to instrument). So a
+  publish reads as one span with the platform's own calls inside it, which is where the time goes.
+  Sampling is 1.0 — one band's server, and the trace you want already happened.
+- **Logs** — twice: the console stays the readable line `docker compose logs` shows, and
+  `./data/logs/gigsynchub.json` is the same events as ECS JSON, rolled and capped (10 MB × 7).
+  Both carry `traceId`/`spanId`, so `docker compose logs app | grep <traceId>` is a request's
+  whole story with no stack running at all.
+- **The join** is the trace id, and it is three libraries agreeing on a field name, which is
+  exactly the kind of thing that breaks silently. `ObservabilityTest` writes a line inside a span
+  and asserts the id in the file equals the id in the span — and that the field is `traceId`, not
+  ECS's own `trace.id`, which is what Grafana's Loki datasource is told to look for.
+- **No span per SQL statement**: `datasource-micrometer` is built for Spring Boot 3 and does not
+  load on 4, and wiring a proxy DataSource by hand would put a wrapper under Flyway, Hibernate and
+  the pool's `set role` for a signal this app has two better sources for — statement COUNTS are
+  asserted at build time, and a statement slower than `GSH_SLOW_QUERY_MS` (500) names itself in a
+  log line that already carries the trace id.
+
+**The stack** (`docker compose --profile observability up -d`, ~900 MB, `docker/observability/`):
+Prometheus scrapes the app, Alloy tails the app's log FILE into Loki, Tempo takes the OTLP, and
+Grafana (127.0.0.1:3000 only) shows all three with the links between them provisioned — a log line
+offers its trace, a trace offers its logs, a metric's exemplar offers the request that made it.
+**No Docker socket anywhere**: a container with it can do whatever the daemon can, and a stack for
+watching an app should not be the largest hole in it — the cost is that the other containers' logs
+stay in `docker compose logs`. Not Elasticsearch: one app on one server, where the question is
+"what happened to this request" rather than full-text search over a fleet, and Loki indexes labels
+instead of lines at a quarter of the memory.
+
+**More than one node, later**: nothing about the app changes — it exposes a scrape endpoint and
+speaks OTLP. Loki and Tempo run the same config files in distributed mode (`-target`, and
+`filesystem` → S3/MinIO with `replication_factor` > 1); Prometheus gains targets, or one per node
+behind Mimir/Thanos; Alloy becomes one agent per node pushing to the central Loki; Grafana is
+untouched. The lines that move are the storage blocks and `GSH_OTLP_ENDPOINT`.
 
 ## The operating envelope
 

@@ -25,6 +25,11 @@
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 		<dependency>
+			<!-- a span per workload in the worker (an adapter): the engine itself stays frameworkless -->
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-observation</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>sk.drabik</groupId>
 			<artifactId>gigsynchub-gig</artifactId>
 			<type>test-jar</type>

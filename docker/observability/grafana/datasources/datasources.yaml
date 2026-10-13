@@ -1,0 +1,54 @@
+# The three sources, and — the point of having them in one place — the links between them.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+      # a metric's exemplar carries the trace id of one request that made it, so a spike in the
+      # latency graph is one click from the trace that caused it
+      exemplarTraceIdDestinations:
+        - name: traceId
+          datasourceUid: tempo
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # `traceId`, not ECS's own `trace.id`: Spring Boot's ECS formatter passes the logging
+        # context through under the keys Micrometer puts there, which ObservabilityTest asserts
+        # precisely so that this line and the app cannot drift apart.
+        - name: traceId
+          matcherType: label
+          matcherRegex: '"traceId"\s*:\s*"([a-f0-9]+)"'
+          url: '$${__value.raw}'
+          datasourceUid: tempo
+          urlDisplayLabel: "This request's trace"
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        filterByTraceID: true
+        customQuery: true
+        query: '{job="gigsynchub"} |= "$${__span.traceId}"'
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+      nodeGraph:
+        enabled: true

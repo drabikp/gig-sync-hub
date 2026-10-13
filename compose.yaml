@@ -105,6 +105,15 @@ services:
       # the sign-in: Rauthy as the browser sees it, and as the app reaches it inside the network
       GIGSYNCHUB_AUTH_ISSUER: https://${GSH_DOMAIN:-localhost}/auth/v1/
       GIGSYNCHUB_AUTH_INTERNALURL: http://rauthy:8080/auth/v1/
+      # The operator's port, for the scraper to reach. Nothing publishes 8081, so this opens it to
+      # the containers' network and to nothing else — the boundary the database is already behind.
+      MANAGEMENT_SERVER_ADDRESS: 0.0.0.0
+      # Traces are sent only when there is something to send them to: set GSH_OTLP_ENABLED=true in
+      # .env when running the observability profile. Off, the spans are still made and their ids
+      # are still in every log line, which is most of the value and costs nothing.
+      GSH_OTLP_ENABLED: ${GSH_OTLP_ENABLED:-false}
+      GSH_OTLP_ENDPOINT: http://tempo:4318/v1/traces
+      GSH_LOG_FILE: /app/data/logs/gigsynchub.json
     # each secret appears as /run/secrets/<property name>, read by spring.config.import=configtree
     secrets:
       - source: db_password
@@ -284,6 +293,116 @@ services:
       - ./docker/restore.sh:/restore.sh:ro
     entrypoint: ["/bin/sh", "/backup.sh"]
 
+  # --- Watching it: metrics, logs and traces, and one place to read them ---
+  # None of these says `user:`, while app, rauthy and backup all do. The difference is what they
+  # write to: those three write to BIND mounts this machine owns, so they have to be the host's
+  # user; these write to NAMED volumes, which Docker creates with the ownership the IMAGE declares
+  # — which is the only place that knows which uid the thing inside actually runs as. Setting it
+  # by hand here gets a root-owned volume and a container that cannot write to it, which is a
+  # crash loop with "permission denied" in a language nobody reads until they do.
+  # Off unless asked for: `docker compose --profile observability up -d`. Around 900 MB all told,
+  # which is why it is a choice and not a default. Grafana is on this machine only (127.0.0.1),
+  # like every other operator's door in this file.
+  #
+  # Why not Elasticsearch: this is one app on one server, and the question is "what happened to
+  # this request", not "search the text of a fleet's logs". Loki indexes labels and leaves the
+  # lines alone, which costs a fifth of the memory, and the same Grafana then shows the metric,
+  # the trace and the log line that go together.
+
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    profiles: [observability]
+    restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    mem_limit: ${GSH_PROMETHEUS_MEM:-512m}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # how long a number is kept; traces last a week, metrics a season
+      - --storage.tsdb.retention.time=90d
+      - --web.enable-lifecycle
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  loki:
+    image: grafana/loki:3.5.9
+    profiles: [observability]
+    restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    mem_limit: ${GSH_LOKI_MEM:-512m}
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./docker/observability/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+
+  tempo:
+    image: grafana/tempo:2.9.0
+    profiles: [observability]
+    restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    mem_limit: ${GSH_TEMPO_MEM:-512m}
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./docker/observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+
+  # Reads the app's own log FILE — no Docker socket anywhere in this file. A container with the
+  # socket can do whatever the daemon can, which is root on the host, and a stack for watching an
+  # app should not be the largest hole in it. See docker/observability/alloy.alloy.
+  # The one here that DOES say `user:`, for the same reason app and backup do: it reads a bind
+  # mount this machine owns (the app's log file). Its own state goes to a bind mount too, at a
+  # path of its own — /var/lib/alloy in the image is `drwxrwx--- 473:473`, and this image runs as
+  # root, which with `cap_drop: ALL` is a root without DAC_OVERRIDE and so is held to the
+  # permission bits like anybody else. One uid for both halves is simpler than two that must agree.
+  alloy:
+    image: grafana/alloy:v1.12.1
+    profiles: [observability]
+    restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    mem_limit: ${GSH_ALLOY_MEM:-256m}
+    user: "${GSH_UID:-1000}:${GSH_GID:-1000}"
+    command:
+      - run
+      - --storage.path=/alloy-data
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./docker/observability/alloy.alloy:/etc/alloy/config.alloy:ro
+      - ./data/logs:/app-logs:ro
+      - ./data/alloy:/alloy-data
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:12.3.1
+    profiles: [observability]
+    restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    mem_limit: ${GSH_GRAFANA_MEM:-512m}
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GSH_GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      # this machine only, like the app's own port and the actuator: ssh -L if you want it elsewhere
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./docker/observability/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./docker/observability/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
 secrets:
   db_password:
     file: ./secrets/db_password
@@ -314,6 +433,11 @@ volumes:
   db-data:
   caddy-data:
   caddy-config:
+  # the observability profile's; nothing else touches them, and removing them loses only history
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  grafana-data:
 
 # A fixed subnet: Docker's own pick (172.x) can collide with a VPN's routes, and the page then
 # can't be reached from this machine. Change GSH_SUBNET if this one is taken.

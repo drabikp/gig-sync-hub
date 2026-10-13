@@ -78,6 +78,25 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 		<dependency>
+			<!-- Metrics in the format Prometheus scrapes (/actuator/prometheus). Runtime: nothing
+			     written here names it; it is a format the registry learns, not an API. -->
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<!-- Traces: Micrometer's Observation API (which Spring Boot already instruments: every
+			     HTTP request, every scheduled run) bridged onto OpenTelemetry and sent on as OTLP,
+			     which Tempo, Jaeger and every hosted backend take — the app knows no vendor.
+			     THE STARTER, not the bridge and the exporter by hand: Spring Boot 4 broke the
+			     actuator's autoconfiguration into modules, so picking the libraries yourself gets
+			     you a classpath that looks right, a Tracer bean that is Tracer.NOOP, and not one
+			     word of complaint. The missing piece was spring-boot-micrometer-tracing-opentelemetry,
+			     which this brings along with the rest. -->
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-opentelemetry</artifactId>
+		</dependency>
+		<dependency>
 			<!-- The checks the specs' own limits generate (jakarta.validation annotations on every
 			     generated request class and parameter, pom.xml useBeanValidation). The annotations
 			     come with the kernel; this is the implementation that ENFORCES them, and without it

@@ -1,5 +1,7 @@
 package sk.drabikp.gigsynchub.sync.adapter.in.worker;
 
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +36,7 @@ class SyncWorker {
 
     private final DispatchSyncUseCase dispatcher;
     private final SyncWorkSignal workSignal;
+    private final ObservationRegistry observations;
     private final boolean enabled;
     private final int threads;
     private final long pollSeconds;
@@ -46,9 +49,11 @@ class SyncWorker {
     /** Workers draining right now (at most {@link #threads}). */
     private final AtomicInteger draining = new AtomicInteger();
 
-    public SyncWorker(DispatchSyncUseCase dispatcher, SyncWorkSignal workSignal, SyncProperties properties) {
+    public SyncWorker(DispatchSyncUseCase dispatcher, SyncWorkSignal workSignal, SyncProperties properties,
+                      ObservationRegistry observations) {
         this.dispatcher = dispatcher;
         this.workSignal = workSignal;
+        this.observations = observations;
         this.enabled = properties.worker().enabled();
         this.threads = properties.worker().threads();
         this.pollSeconds = properties.pollSeconds();
@@ -114,7 +119,14 @@ class SyncWorker {
 
     private void drain() {
         try {
-            while (!Thread.currentThread().isInterrupted() && dispatcher.runNext()) {
+            // One span per WORKLOAD, which is the unit this app does work in: a band's work of one
+            // action on one platform, taken through its workflow. Nothing else can make this span —
+            // a worker thread is not a request, so no framework is watching — and without it the
+            // calls to the platform underneath (PortalCall) are spans with no parent, which is a
+            // list of HTTP calls rather than the story of a publish.
+            while (!Thread.currentThread().isInterrupted()
+                    && Boolean.TRUE.equals(Observation.createNotStarted("sync.workload", observations)
+                            .observe(dispatcher::runNext))) {
                 // one workload per round
             }
         } catch (RuntimeException e) {

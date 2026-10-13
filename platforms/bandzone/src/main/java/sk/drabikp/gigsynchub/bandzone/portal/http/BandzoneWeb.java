@@ -3,7 +3,10 @@ package sk.drabikp.gigsynchub.bandzone.portal.http;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import sk.drabikp.gigsynchub.bandzone.BandzonePortalException;
+import io.micrometer.observation.ObservationRegistry;
 import sk.drabikp.gigsynchub.gig.application.PublicAddresses;
+import sk.drabikp.gigsynchub.portal.PlatformEgress;
+import sk.drabikp.gigsynchub.portal.PortalCall;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -48,17 +51,24 @@ final class BandzoneWeb {
     record Page(int status, String url, Document document) {
     }
 
+    private final ObservationRegistry observations;
     private final String baseUrl;
     private final CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ORIGINAL_SERVER);
     private final HttpClient http;
     private final JsonMapper json = JsonMapper.builder().build();
 
+    /** Unobserved and straight out of this machine — a test. */
     BandzoneWeb(String baseUrl) {
+        this(baseUrl, ObservationRegistry.NOOP, PlatformEgress.DIRECT);
+    }
+
+    BandzoneWeb(String baseUrl, ObservationRegistry observations, PlatformEgress egress) {
+        this.observations = observations;
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        this.http = HttpClient.newBuilder()
+        this.http = egress.on(HttpClient.newBuilder()
                 .cookieHandler(cookies)
                 .followRedirects(HttpClient.Redirect.NORMAL)
-                .connectTimeout(CONNECT_TIMEOUT)
+                .connectTimeout(CONNECT_TIMEOUT))
                 .build();
     }
 
@@ -203,11 +213,16 @@ final class BandzoneWeb {
      */
     private Reply exchange(HttpRequest.Builder request) throws BandzonePortalException {
         HttpRequest built = request.header("User-Agent", USER_AGENT).timeout(REQUEST_TIMEOUT).build();
+        return PortalCall.observed(observations, "bandzone", built.method(), path(built.uri()),
+                () -> send(built));
+    }
+
+    private Reply send(HttpRequest built) throws BandzonePortalException {
         try {
             HttpResponse<InputStream> answer = http.send(built, HttpResponse.BodyHandlers.ofInputStream());
             return new Reply(answer.statusCode(), answer.uri(),
                     new String(PublicAddresses.limited(answer.body()), StandardCharsets.UTF_8));
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             throw BandzonePortalException.busy("Interrupted while talking to Bandzone — again later.");
         } catch (IllegalArgumentException e) {

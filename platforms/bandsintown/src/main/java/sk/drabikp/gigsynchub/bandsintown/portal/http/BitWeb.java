@@ -1,7 +1,10 @@
 package sk.drabikp.gigsynchub.bandsintown.portal.http;
 
 import sk.drabikp.gigsynchub.bandsintown.BitPortalException;
+import io.micrometer.observation.ObservationRegistry;
 import sk.drabikp.gigsynchub.gig.application.PublicAddresses;
+import sk.drabikp.gigsynchub.portal.PlatformEgress;
+import sk.drabikp.gigsynchub.portal.PortalCall;
 import sk.drabikp.gigsynchub.bandsintown.portal.HumanPacer;
 import sk.drabikp.gigsynchub.bandsintown.portal.PortalReply;
 import tools.jackson.databind.json.JsonMapper;
@@ -38,23 +41,32 @@ final class BitWeb implements BitApi {
     /** What the portal calls the spreadsheet in its upload — it says so itself if this is wrong. */
     private static final String UPLOAD_FIELD = "upfile";
 
+    private final ObservationRegistry observations;
     private final String baseUrl;
     private final BitCredentials credentials;
     private final HumanPacer pacer;
     private final JsonMapper json = JsonMapper.builder().build();
-    private final HttpClient http = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .connectTimeout(CONNECT_TIMEOUT)
-            .build();
+    private final HttpClient http;
 
+    /** Unobserved — a test, and the sign-in that happens before anything is wired. */
     BitWeb(String baseUrl, BitCredentials credentials) {
         this(baseUrl, credentials, new HumanPacer(0, 0));
     }
 
     BitWeb(String baseUrl, BitCredentials credentials, HumanPacer pacer) {
+        this(baseUrl, credentials, pacer, ObservationRegistry.NOOP, PlatformEgress.DIRECT);
+    }
+
+    BitWeb(String baseUrl, BitCredentials credentials, HumanPacer pacer, ObservationRegistry observations,
+           PlatformEgress egress) {
         this.pacer = pacer;
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.credentials = credentials;
+        this.observations = observations;
+        this.http = egress.on(HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .connectTimeout(CONNECT_TIMEOUT))
+                .build();
     }
 
     @Override
@@ -112,6 +124,12 @@ final class BitWeb implements BitApi {
 
     private PortalReply send(String method, String path, HttpRequest.Builder request, Duration timeout)
             throws BitPortalException {
+        return PortalCall.observed(observations, "bandsintown", method, path,
+                () -> call(method, path, request, timeout));
+    }
+
+    private PortalReply call(String method, String path, HttpRequest.Builder request, Duration timeout)
+            throws BitPortalException {
         pacer.pause();           // a person's pace, never a burst
         HttpResponse<InputStream> response;
         String body;
@@ -120,7 +138,7 @@ final class BitWeb implements BitApi {
             // as much of the answer as we are willing to hold, not however much comes: an answer
             // read whole is the app's heap, and how big it is is the portal's decision, not ours
             body = new String(PublicAddresses.limited(response.body()), StandardCharsets.UTF_8);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             throw BitPortalException.busy("Interrupted while talking to Bandsintown — again later.");
         } catch (IllegalArgumentException e) {
