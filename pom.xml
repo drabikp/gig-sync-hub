@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.8</version>
+		<version>4.1.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>sk.drabik</groupId>
@@ -36,7 +36,7 @@
 	</modules>
 
 	<properties>
-		<java.version>21</java.version>
+		<java.version>25</java.version>
 		<!-- H2 now only reads the old database's SQL backup for the one-time import into
 		     PostgreSQL (gigsynchub.db.import-h2); pinned to the version that wrote it. -->
 		<h2.version>2.4.240</h2.version>

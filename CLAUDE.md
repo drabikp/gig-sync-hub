@@ -55,7 +55,7 @@ server has its real address),
 add yourself and the members to the group `gigsynchub`. A later change of `GSH_DOMAIN` = change the
 client's redirect / post-logout addresses there (the bootstrap is never read again).
 
-**Docker** (`Dockerfile`, `compose.yaml`): the image builds the app from the sources (a Temurin 21 JRE
+**Docker** (`Dockerfile`, `compose.yaml`): the image builds the app from the sources (a Temurin 25 JRE
 and the jar — nothing else: no browser runs on this server, so none is installed; a non-root user whose
 uid/gid match the host's, `GSH_UID`/`GSH_GID`, default 1000); compose runs `db` (PostgreSQL 18, volume `db-data`, on `127.0.0.1:5432` for development),
 `app`, `rauthy-db` + `rauthy` (the sign-in), `proxy` (Caddy) and `backup` (`docker/backup.sh`:
@@ -1054,7 +1054,7 @@ sync step talking to a platform is not cut off mid-create. Flyway runs with
 database behind it.
 
 **CI** (`.github/workflows/build.yml`): every push and pull request runs `./mvnw verify` on **Java
-21** — the version the image runs, not the newest — with Docker for Testcontainers; Dependabot
+25** — the version the image runs, not the newest — with Docker for Testcontainers; Dependabot
 (`.github/dependabot.yml`) watches Maven, npm, Docker and the actions themselves, weekly and
 grouped.
 
@@ -1089,9 +1089,9 @@ source of this app writes SQL" is a rule worth more than this guard.
 
 ## Key Dependencies
 
-- Spring Boot 4.0.8, Java 21; Spring Data JPA + PostgreSQL 18 + Flyway (H2 2.4.240 only for the import);
+- Spring Boot 4.1.1, Java 25; Spring Data JPA + PostgreSQL 18 + Flyway (H2 2.4.240 only for the import);
   Spring Security's OAuth2 client (OIDC) with Rauthy 0.37 (Docker)
-- Docker: the Temurin 21 JRE (nothing else — no browser is installed); Testcontainers 2 for the tests
+- Docker: the Temurin 25 JRE (nothing else — no browser is installed); Testcontainers 2 for the tests
 - OpenAPI: openapi-generator 7.26 (`spring`, Spring Boot 4 + Jackson 3); openapi-typescript 7 + openapi-fetch
 - MapStruct 1.6.3 (every mapper: API ↔ domain and JPA entity ↔ domain)
 - jMolecules (BOM 2025.0.2: `jmolecules-ddd` + `jmolecules-hexagonal-architecture` in every module,

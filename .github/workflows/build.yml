@@ -2,7 +2,7 @@
 # the page, with the migrations run against a real PostgreSQL (Testcontainers), because a schema
 # this app only ever validates against is a schema nobody has checked.
 #
-# On Java 21, which is what the Docker image runs — not on whatever is newest. A suite that passes
+# On Java 25, which is what the Docker image runs — not on whatever is newest. A suite that passes
 # on the JDK a developer happens to have and fails on the one in production is worse than no CI.
 name: build
 
@@ -28,7 +28,7 @@ jobs:
 
       - uses: actions/setup-java@v4
         with:
-          java-version: "21"
+          java-version: "25"
           distribution: temurin
           cache: maven
 
