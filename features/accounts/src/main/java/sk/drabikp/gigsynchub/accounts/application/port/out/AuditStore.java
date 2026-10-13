@@ -2,9 +2,9 @@ package sk.drabikp.gigsynchub.accounts.application.port.out;
 
 import org.jmolecules.ddd.annotation.Repository;
 import sk.drabikp.gigsynchub.accounts.domain.AuditEvent;
-import java.time.Instant;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 
+import java.time.Instant;
 import java.util.List;
 
 /** The bands' audit logs. */

@@ -80,11 +80,26 @@ public class AccountsService implements UsersUseCase, BandsUseCase, BandAccess, 
         }));
     }
 
-    /** The first band without an owner goes to its owner-to-be (or, with none named, to whoever is first). */
+    /**
+     * The first band without an owner goes to the owner the configuration NAMES, and to nobody
+     * otherwise.
+     *
+     * <p>It used to go to whoever signed in first when no e-mail was named — and the property is
+     * commented out by default, so that was the default. Band #1 is the band migration V2 gave
+     * every pre-existing row: its whole gig history, and after adoption the way back in to every
+     * platform it was connected to. Anyone in the sign-in's group who reached the app first
+     * acquired all of it, once, with nothing to undo it (the lastOwner rule then keeps the band
+     * from becoming ownerless again). A one-shot land grab at install time is not a thing to leave
+     * to who clicks first, so with nobody named this does nothing.
+     */
     private void claimFirstBand(User user) {
-        boolean ownerless = bands.byId(BandId.FIRST).isPresent() && !memberships.ofBand(BandId.FIRST).hasOwner();
-        boolean meant = firstOwnerEmail.isEmpty() || firstOwnerEmail.equalsIgnoreCase(user.email());
-        if (ownerless && meant) {
+        if (bands.byId(BandId.FIRST).isEmpty() || memberships.ofBand(BandId.FIRST).hasOwner()) {
+            return;
+        }
+        if (firstOwnerEmail.isEmpty()) {
+            return;        // nobody named, so nobody claims it: set gigsynchub.accounts.first-owner-email
+        }
+        if (firstOwnerEmail.equalsIgnoreCase(user.email())) {
             memberships.save(new Membership(user.id(), BandId.FIRST, Role.OWNER, null));
         }
     }

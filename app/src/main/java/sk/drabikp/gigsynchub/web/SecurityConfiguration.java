@@ -64,8 +64,11 @@ class SecurityConfiguration {
     SecurityFilterChain api(HttpSecurity http, ClientRegistrationRepository registrations, JsonMapper json,
                             LimitsProperties limits) throws Exception {
         http.authorizeHttpRequests(requests -> requests
-                        // the actuator answers on the management port only (this machine, the operator)
-                        .requestMatchers("/api/auth/**", "/actuator/**").permitAll()
+                        // No /actuator/** here. It answers on the management port's own context
+                        // (127.0.0.1:8081, the operator's), which this chain never sees — and while
+                        // the matcher was harmless it meant the only thing keeping health and
+                        // metrics off the public port was one property staying set.
+                        .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .oauth2Login(login -> login

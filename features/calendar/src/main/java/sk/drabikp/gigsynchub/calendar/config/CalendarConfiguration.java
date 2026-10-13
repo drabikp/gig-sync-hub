@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import sk.drabikp.gigsynchub.accounts.application.port.in.BandAccess;
 import sk.drabikp.gigsynchub.calendar.application.CalendarCatalogService;
 import sk.drabikp.gigsynchub.accounts.application.port.in.SecretBox;
 import sk.drabikp.gigsynchub.calendar.application.CalendarReviewService;
@@ -51,8 +52,8 @@ class CalendarConfiguration {
 
     @Bean
     CalendarSetupService calendarSetupService(BandCalendarStore calendars, BandProfileStore profiles,
-                                              LiveUpdates live, CalendarProperties calendar) {
-        return new CalendarSetupService(calendars, profiles, live, ZoneId.of(calendar.zone()));
+                                              LiveUpdates live, BandAccess access, CalendarProperties calendar) {
+        return new CalendarSetupService(calendars, profiles, live, access, ZoneId.of(calendar.zone()));
     }
 
     /**

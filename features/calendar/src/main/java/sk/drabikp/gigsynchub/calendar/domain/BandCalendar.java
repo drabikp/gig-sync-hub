@@ -24,10 +24,17 @@ public record BandCalendar(@Identity BandId band, String address, ZoneId zone) {
         if (!validAddress(address)) {
             throw new IllegalArgumentException("not a calendar address");
         }
-        address = address.strip().replaceFirst("(?i)^webcal://", "https://");
+        address = address.strip().replaceFirst("(?i)^(webcal|http)://", "https://");
     }
 
-    /** An http(s) or webcal address with a host. */
+    /**
+     * An https or webcal address with a host. Plain {@code http} is UPGRADED rather than accepted:
+     * the address is a secret — it is the key to the whole calendar, which is why it is sealed in
+     * the row and never sent to the page — and read over http it goes in the clear on every nightly
+     * read, to anyone between this server and the calendar's host. A band that pastes an http link
+     * gets https; a host that does not answer over https says so plainly, which is better than
+     * quietly broadcasting the band's rehearsals, fees and phone numbers for a year.
+     */
     public static boolean validAddress(String address) {
         if (address == null || address.isBlank()) {
             return false;

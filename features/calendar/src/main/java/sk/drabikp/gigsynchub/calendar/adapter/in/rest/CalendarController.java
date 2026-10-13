@@ -14,6 +14,7 @@ import sk.drabikp.gigsynchub.calendar.adapter.in.rest.api.RuleRequest;
 import sk.drabikp.gigsynchub.calendar.adapter.in.rest.api.RuleResponse;
 import sk.drabikp.gigsynchub.calendar.adapter.in.rest.api.VerdictRequest;
 import sk.drabikp.gigsynchub.calendar.application.port.in.CalendarCatalogUseCase;
+import sk.drabikp.gigsynchub.accounts.application.port.in.UsersUseCase;
 import sk.drabikp.gigsynchub.calendar.application.port.in.CalendarSetupUseCase;
 import sk.drabikp.gigsynchub.calendar.application.port.in.ReviewCalendarUseCase;
 import sk.drabikp.gigsynchub.gig.api.GigFormMapper;
@@ -35,15 +36,17 @@ class CalendarController implements CalendarApi {
     private final ReviewCalendarUseCase review;
     private final CalendarCatalogUseCase catalog;
     private final CalendarSetupUseCase setup;
+    private final UsersUseCase users;
     private final CalendarMapper mapper;
     private final GigFormMapper forms;
     private final RefMapper refs;
 
     CalendarController(ReviewCalendarUseCase review, CalendarCatalogUseCase catalog, CalendarSetupUseCase setup,
-                       CalendarMapper mapper, GigFormMapper forms, RefMapper refs) {
+                       UsersUseCase users, CalendarMapper mapper, GigFormMapper forms, RefMapper refs) {
         this.review = review;
         this.catalog = catalog;
         this.setup = setup;
+        this.users = users;
         this.refs = refs;
         this.mapper = mapper;
         this.forms = forms;
@@ -94,13 +97,13 @@ class CalendarController implements CalendarApi {
 
     @Override
     public ResponseEntity<CalendarConnectionResponse> connectCalendar(UUID bandId, CalendarConnectionRequest request) {
-        return ResponseEntity.ok(mapper.toResponse(setup.connect(refs.toBandId(bandId), request.getAddress(),
-                request.getZone())));
+        return ResponseEntity.ok(mapper.toResponse(setup.connect(users.current().orElseThrow().id(), refs.toBandId(bandId),
+                request.getAddress(), request.getZone())));
     }
 
     @Override
     public ResponseEntity<Void> disconnectCalendar(UUID bandId) {
-        setup.disconnect(refs.toBandId(bandId));
+        setup.disconnect(users.current().orElseThrow().id(), refs.toBandId(bandId));
         return ResponseEntity.noContent().build();
     }
 

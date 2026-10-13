@@ -9,6 +9,11 @@ import sk.drabikp.gigsynchub.calendar.domain.BandCalendar;
 import sk.drabikp.gigsynchub.calendar.domain.rules.ProfileRule;
 import sk.drabikp.gigsynchub.calendar.domain.rules.RuleKind;
 import sk.drabikp.gigsynchub.calendar.domain.rules.RuleOrigin;
+import sk.drabikp.gigsynchub.accounts.application.port.in.AccountsErrorCode;
+import sk.drabikp.gigsynchub.accounts.application.port.in.BandAccess;
+import sk.drabikp.gigsynchub.accounts.domain.Role;
+import sk.drabikp.gigsynchub.accounts.domain.UserId;
+import sk.drabikp.gigsynchub.gig.application.NotFoundException;
 import sk.drabikp.gigsynchub.gig.application.PublicAddresses;
 import sk.drabikp.gigsynchub.gig.application.UserFacingException;
 import sk.drabikp.gigsynchub.gig.application.port.out.LiveUpdates;
@@ -32,14 +37,32 @@ public class CalendarSetupService implements CalendarSetupUseCase {
     private final BandCalendarStore calendars;
     private final BandProfileStore profiles;
     private final LiveUpdates live;
+    private final BandAccess access;
     private final ZoneId defaultZone;
 
     public CalendarSetupService(BandCalendarStore calendars, BandProfileStore profiles, LiveUpdates live,
-                                ZoneId defaultZone) {
+                                BandAccess access, ZoneId defaultZone) {
         this.calendars = calendars;
         this.profiles = profiles;
         this.live = live;
+        this.access = access;
         this.defaultZone = defaultZone;
+    }
+
+    /**
+     * The band's calendar is its owners' to connect and to disconnect, as its platform accounts are
+     * ({@code PlatformAccountService#owner}). A member who is not an owner is told so rather than
+     * found not to exist, because they are a member: the band is theirs to see.
+     */
+    private void ownerOnly(UserId user, BandId band) {
+        Role role = access.role(user, band)
+                .orElseThrow(() -> new NotFoundException("No such band."));
+        if (!role.mayChangeTheBand()) {
+            // the accounts' own code, not a second one of the calendar's: one refusal, one code
+            // (ErrorCodesTest), one line of text in each language
+            throw new UserFacingException(AccountsErrorCode.OWNER_ONLY, Map.of(),
+                    "Only the band's owners may change its calendar.");
+        }
     }
 
     @Override
@@ -49,7 +72,8 @@ public class CalendarSetupService implements CalendarSetupUseCase {
     }
 
     @Override
-    public Connection connect(BandId band, String address, String zone) {
+    public Connection connect(UserId user, BandId band, String address, String zone) {
+        ownerOnly(user, band);
         List<String> wrong = new ArrayList<>();
         if (!BandCalendar.validAddress(address)
                 || !PublicAddresses.fetchable(address.strip().replaceFirst("(?i)^webcal://", "https://"))) {
@@ -73,7 +97,8 @@ public class CalendarSetupService implements CalendarSetupUseCase {
     }
 
     @Override
-    public void disconnect(BandId band) {
+    public void disconnect(UserId user, BandId band) {
+        ownerOnly(user, band);
         calendars.delete(band);
         live.changed(band, LiveUpdates.Topic.CALENDAR);
     }

@@ -1,5 +1,7 @@
 package sk.drabikp.gigsynchub.calendar.adapter.out.ics;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import sk.drabikp.gigsynchub.calendar.application.port.out.BandCalendarStore;
 import sk.drabikp.gigsynchub.calendar.application.port.out.CalendarFeed;
@@ -27,6 +29,8 @@ import java.util.List;
  */
 @Component
 class IcsCalendarFeed implements CalendarFeed {
+
+    private static final Logger log = LoggerFactory.getLogger(IcsCalendarFeed.class);
 
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
     private static final int MAX_REDIRECTS = 5;
@@ -73,7 +77,13 @@ class IcsCalendarFeed implements CalendarFeed {
             Thread.currentThread().interrupt();
             throw new CalendarUnavailableException("Reading the calendar was interrupted", e);
         } catch (IllegalArgumentException e) {
-            throw new CalendarUnavailableException("The calendar address can't be read: " + e.getMessage(), e);
+            // Deliberately WITHOUT e.getMessage(). PublicAddresses says either "the host X is
+            // unknown" or "the host X isn't on the public internet", and handing that back told
+            // whoever typed the address which internal names exist — a private-DNS oracle anyone
+            // with a band could read one name at a time. The reason is in the log, where the
+            // operator can see it and a band cannot.
+            log.info("A band's calendar address was refused", e);
+            throw new CalendarUnavailableException("The calendar address can't be read.", e);
         }
         if (!body.contains("BEGIN:VCALENDAR")) {
             throw new CalendarUnavailableException("The calendar address did not return an iCal calendar");
