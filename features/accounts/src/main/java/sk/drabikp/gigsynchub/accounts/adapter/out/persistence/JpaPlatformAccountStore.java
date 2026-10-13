@@ -3,8 +3,10 @@ package sk.drabikp.gigsynchub.accounts.adapter.out.persistence;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import sk.drabikp.gigsynchub.accounts.application.port.in.SecretBox;
 import sk.drabikp.gigsynchub.accounts.application.port.out.PlatformAccountStore;
 import sk.drabikp.gigsynchub.accounts.domain.AccountCheck;
@@ -40,19 +42,23 @@ class JpaPlatformAccountStore implements PlatformAccountStore {
     private final SecretBox box;
     private final Clock clock;
     private final int resealBatch;
+    private final TransactionTemplate transactions;
     private final JsonMapper json = JsonMapper.builder().build();
 
     @Autowired
-    JpaPlatformAccountStore(PlatformAccountJpaRepository accounts, SecretBox box, Clock clock) {
-        this(accounts, box, clock, RESEAL_BATCH);
+    JpaPlatformAccountStore(PlatformAccountJpaRepository accounts, SecretBox box, Clock clock,
+                            PlatformTransactionManager transactionManager) {
+        this(accounts, box, clock, transactionManager, RESEAL_BATCH);
     }
 
     /** The page size is the test's to set: proving a walk takes more rows than one page. */
-    JpaPlatformAccountStore(PlatformAccountJpaRepository accounts, SecretBox box, Clock clock, int resealBatch) {
+    JpaPlatformAccountStore(PlatformAccountJpaRepository accounts, SecretBox box, Clock clock,
+                            PlatformTransactionManager transactionManager, int resealBatch) {
         this.accounts = accounts;
         this.box = box;
         this.clock = clock;
         this.resealBatch = resealBatch;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     @Override
@@ -106,6 +112,13 @@ class JpaPlatformAccountStore implements PlatformAccountStore {
      *
      * <p>{@code NOT_SUPPORTED} and not "no annotation": the class is {@code readOnly = true}, which
      * a method without one inherits — and a write inside a read-only transaction is not a write.
+     *
+     * <p>And each row is saved through {@code transactions}, not by calling this class's own
+     * {@link #save} — which would be a call on {@code this}, past the proxy, so the
+     * {@code @Transactional} on it would mean nothing and the write would ride on whatever
+     * transaction happened to be open. It worked only because Spring Data's own {@code save} opens
+     * one; that is a fact about a library, not a decision, and it is the kind that holds until it
+     * does not. The template says what is meant.
      */
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -119,7 +132,8 @@ class JpaPlatformAccountStore implements PlatformAccountStore {
             }
             for (PlatformAccountEntity entity : batch) {
                 if (!box.current(new SecretBox.Sealed(entity.getKeyId(), entity.getSecrets()))) {
-                    save(toAccount(entity));
+                    PlatformAccount opened = toAccount(entity);
+                    transactions.executeWithoutResult(status -> save(opened));
                     resealed++;
                 }
             }

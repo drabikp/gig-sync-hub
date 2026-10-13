@@ -112,9 +112,8 @@ class GigListCostsTest {
     void the_second_page_costs_LESS_than_the_first_and_holds_the_rows_that_follow() throws Exception {
         statementsFor("?size=20");
         long first = statementsFor("?size=20");
-        String cursor = mvc.perform(get(GIGS + "?size=20").with(SignedIn.owner()))
-                .andReturn().getResponse().getContentAsString()
-                .replaceAll(".*\"cursor\":\"([^\"]+)\".*", "$1");
+        String cursor = cursorOf(mvc.perform(get(GIGS + "?size=20").with(SignedIn.owner()))
+                .andReturn().getResponse().getContentAsString());
 
         long second = statementsFor("?size=20&after=" + cursor);
 
@@ -190,6 +189,14 @@ class GigListCostsTest {
         assertThat(twenty - three).as("three gigs cost %d statements and twenty cost %d: the READING of "
                         + "them must not follow their number", three, twenty)
                 .isLessThan(20 - 3);
+    }
+
+    /** The cursor out of a list's answer — found, not matched: ".*x.*" over a page of JSON is
+     * three greedy runs handing characters back to one another. */
+    private static String cursorOf(String body) {
+        Matcher cursor = Pattern.compile("\"cursor\":\"([^\"]+)\"").matcher(body);
+        assertThat(cursor.find()).as("the page says where to read on from").isTrue();
+        return cursor.group(1);
     }
 
     private List<String> tokensOfTheFirst(int howMany) throws Exception {

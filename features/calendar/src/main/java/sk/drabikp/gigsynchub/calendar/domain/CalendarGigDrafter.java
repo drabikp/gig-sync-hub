@@ -40,10 +40,29 @@ import java.util.stream.Collectors;
 public final class CalendarGigDrafter {
 
     private static final LocalTime EARLY_MORNING = LocalTime.of(6, 0);
-    private static final Pattern COORDINATES =
-            Pattern.compile("-?\\d{1,3}\\.\\d+\\s*[NSns]?\\s*,\\s*-?\\d{1,3}\\.\\d+\\s*[EWew]?");
+    // Two \\s* either side of an optional letter is two ways to match the same spaces, so a near
+    // miss is retried every way round before it is given up on; possessive (*+) says there is only
+    // one way and means it. The text these read is a band's own calendar entry, which this server
+    // fetches, so "a pathological line" is somebody else's to write.
+    private static final Pattern COORDINATES = Pattern.compile(
+            "-?\\d{1,3}\\.\\d++\\s*+[NSns]?\\s*+,\\s*+-?\\d{1,3}\\.\\d++\\s*+[EWew]?");
     private static final Pattern PLUS_CODE =
-            Pattern.compile("(?i)[23456789CFGHJMPQRVWX]{4,8}\\+[23456789CFGHJMPQRVWX]{2,3}");
+            Pattern.compile("(?i)[23456789CFGHJMPQRVWX]{4,8}+\\+[23456789CFGHJMPQRVWX]{2,3}+");
+    /**
+     * A street with a house number in it: a letter somewhere and a digit somewhere. Two passes over
+     * a short string, where {@code matches(".*\\p{L}.*\\d.*")} is three greedy {@code .*} taking
+     * turns giving characters back to each other.
+     */
+    private static boolean looksLikeAnAddress(String part) {
+        boolean letter = false;
+        boolean digit = false;
+        for (int i = 0; i < part.length(); i++) {
+            letter |= Character.isLetter(part.charAt(i));
+            digit |= Character.isDigit(part.charAt(i));
+        }
+        return letter && digit;
+    }
+
     private static final Pattern POSTAL_CODE_CITY = Pattern.compile("(\\d{3})\\s?(\\d{2})\\s+(\\D.*)");
     /**
      * Postal areas whose map addresses name only the city district ("040 01 Staré Mesto"):
@@ -144,7 +163,7 @@ public final class CalendarGigDrafter {
             }
         }
         // the part before the postal code, when it has a house number: "Hlavná 12"
-        String street = postalCode != null && cityAt > 1 && parts.get(cityAt - 1).matches(".*\\p{L}.*\\d.*")
+        String street = postalCode != null && cityAt > 1 && looksLikeAnAddress(parts.get(cityAt - 1))
                 ? parts.get(cityAt - 1) : null;
         return new Place(venue, city.isEmpty() ? null : city, country, street, postalCode);
     }

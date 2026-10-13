@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.gigsynchub.accounts.application.AccountsFakes;
 import sk.drabikp.gigsynchub.accounts.application.AesGcmSecretBox;
@@ -37,6 +38,8 @@ class JpaPlatformAccountStoreTest {
     private PlatformAccountJpaRepository repository;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private final BandId other = new BandId(UUID.randomUUID());
 
@@ -79,14 +82,15 @@ class JpaPlatformAccountStoreTest {
         store.save(account(BandId.FIRST));
         String newKey = "next:" + Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
         JpaPlatformAccountStore rotated = new JpaPlatformAccountStore(repository,
-                new AesGcmSecretBox(newKey + "\n" + AccountsFakes.TEST_KEYS), Clock.systemUTC());
+                new AesGcmSecretBox(newKey + "\n" + AccountsFakes.TEST_KEYS), Clock.systemUTC(), transactionManager);
 
         assertThat(rotated.reseal()).isEqualTo(1);
         repository.flush();
         assertThat(rotated.reseal()).isZero();
         assertThat(jdbc.queryForObject("select key_id from band_platform_account where band_id = ?", String.class,
                 BandId.FIRST.value())).isEqualTo("next");
-        assertThat(new JpaPlatformAccountStore(repository, new AesGcmSecretBox(newKey), Clock.systemUTC())
+        assertThat(new JpaPlatformAccountStore(repository, new AesGcmSecretBox(newKey), Clock.systemUTC(),
+                transactionManager)
                 .of(BandId.FIRST, ALPHA).orElseThrow().secret("password")).isEqualTo("hunter2");
     }
 
@@ -105,7 +109,8 @@ class JpaPlatformAccountStoreTest {
         repository.flush();
         String newKey = "next:" + Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
         JpaPlatformAccountStore rotated = new JpaPlatformAccountStore(repository,
-                new AesGcmSecretBox(newKey + "\n" + AccountsFakes.TEST_KEYS), Clock.systemUTC(), 2);
+                new AesGcmSecretBox(newKey + "\n" + AccountsFakes.TEST_KEYS), Clock.systemUTC(),
+                transactionManager, 2);
 
         assertThat(rotated.reseal()).as("all five, in pages of two").isEqualTo(5);
         repository.flush();

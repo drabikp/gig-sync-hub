@@ -16,6 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Clock;
+import java.time.Instant;
 
 /**
  * How long a sign-in lasts, and how soon the app notices one that Rauthy has ended.
@@ -116,7 +117,10 @@ class SessionLife extends OncePerRequestFilter {
             return Verdict.CANT_TELL;
         }
         OAuth2AccessToken token = client.getAccessToken();
-        if (token == null || token.getExpiresAt() == null || !token.getExpiresAt().isAfter(clock.instant())) {
+        // asked once and held: two calls to getExpiresAt() are two chances for it to answer
+        // differently, and the second one is the one that would be dereferenced
+        Instant until = token == null ? null : token.getExpiresAt();
+        if (until == null || !until.isAfter(clock.instant())) {
             return Verdict.CANT_TELL;                     // nothing left to ask with
         }
         return check.ask(token.getTokenValue());

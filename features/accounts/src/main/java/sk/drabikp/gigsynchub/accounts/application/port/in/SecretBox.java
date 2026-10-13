@@ -1,5 +1,7 @@
 package sk.drabikp.gigsynchub.accounts.application.port.in;
 
+import java.util.Arrays;
+
 /**
  * Keeps the bands' secrets (platform passwords, authenticator secrets, a calendar's private address)
  * encrypted at rest with keys kept outside the database. Each secret is sealed for one place
@@ -15,6 +17,30 @@ public interface SecretBox {
             if (keyId == null || keyId.isBlank() || data == null) {
                 throw new IllegalArgumentException("sealed data names its key");
             }
+        }
+
+        /**
+         * By content, not by which array object it is — the three a record would have generated
+         * compare {@code data} by identity, so two Sealed holding the same bytes are unequal, hash
+         * differently, and print as {@code [B@1f2a3b}. None of that is what anyone means by two
+         * sealed values being the same, and it is the kind of thing that is only ever discovered
+         * by a set quietly holding two of something.
+         */
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Sealed(String id, byte[] bytes)
+                    && keyId.equals(id) && Arrays.equals(data, bytes);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * keyId.hashCode() + Arrays.hashCode(data);
+        }
+
+        /** The key's name and how much there is — never the ciphertext itself. */
+        @Override
+        public String toString() {
+            return "Sealed[keyId=" + keyId + ", data=" + data.length + " bytes]";
         }
     }
 

@@ -18,7 +18,8 @@ import java.util.regex.Pattern;
 public record Invitation(@Identity UUID id, BandId band, String email, Role role, UserId invitedBy, Instant createdAt,
                          Instant expiresAt, Instant acceptedAt) {
 
-    private static final Pattern EMAIL = Pattern.compile("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
+    /** Possessive: a run with no dot in it is given up on once, not once per character. */
+    private static final Pattern EMAIL_FORMAT = Pattern.compile("[^@\\s]++@[^@.\\s]++(?:\\.[^@.\\s]++)++");
 
     public Invitation {
         Objects.requireNonNull(id, "the invitation's id");
@@ -31,7 +32,7 @@ public record Invitation(@Identity UUID id, BandId band, String email, Role role
     }
 
     public static boolean validEmail(String email) {
-        return email != null && email.strip().length() <= 320 && EMAIL.matcher(email.strip()).matches();
+        return email != null && email.strip().length() <= 320 && EMAIL_FORMAT.matcher(email.strip()).matches();
     }
 
     public static String normalized(String email) {

@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 @AggregateRoot
 public record Band(@Identity BandId id, String slug, String name, boolean publicList) {
 
-    private static final Pattern SLUG = Pattern.compile("[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])");
+    private static final Pattern SLUG_FORMAT = Pattern.compile("[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])");
 
     public Band {
         Objects.requireNonNull(id, "a band's id");
@@ -30,7 +30,7 @@ public record Band(@Identity BandId id, String slug, String name, boolean public
     }
 
     public static boolean validSlug(String slug) {
-        return slug != null && SLUG.matcher(slug).matches();
+        return slug != null && SLUG_FORMAT.matcher(slug).matches();
     }
 
     public static boolean validName(String name) {

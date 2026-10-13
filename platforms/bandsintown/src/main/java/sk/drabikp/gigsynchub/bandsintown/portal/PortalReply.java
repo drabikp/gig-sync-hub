@@ -20,7 +20,7 @@ import java.util.Optional;
 public record PortalReply(String method, String url, int status, Map<String, Object> json, String text, String next) {
 
     private static final int FIRST_DATA_ROW = 2;
-    private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private static final TypeReference<Map<String, Object>> OBJECT = new TypeReference<>() { };
 
     /**
@@ -30,8 +30,8 @@ public record PortalReply(String method, String url, int status, Map<String, Obj
     public static PortalReply of(String method, String url, int status, String body, String nextPage) {
         Map<String, Object> json;
         try {
-            json = JSON.readValue(body, OBJECT);
-        } catch (JacksonException e) {
+            json = MAPPER.readValue(body, OBJECT);
+        } catch (JacksonException _) {
             json = null;
         }
         return new PortalReply(method, url, status, json, body, nextPage);

@@ -102,7 +102,7 @@ final class IcsParser {
                             : has(props, "STATUS", "TENTATIVE") ? CalendarEventStatus.TENTATIVE
                             : CalendarEventStatus.CONFIRMED,
                     lastModified(props.get("LAST-MODIFIED"))));
-        } catch (DateTimeException e) {
+        } catch (DateTimeException _) {
             return Optional.empty();      // an event the calendar wrote oddly is left out, not fatal
         }
     }
@@ -131,7 +131,7 @@ final class IcsParser {
         }
         try {
             return LocalDateTime.parse(p.value().strip().substring(0, 15), DATE_TIME).toInstant(ZoneOffset.UTC);
-        } catch (DateTimeParseException | StringIndexOutOfBoundsException e) {
+        } catch (DateTimeParseException | StringIndexOutOfBoundsException _) {
             return null;
         }
     }
@@ -144,7 +144,7 @@ final class IcsParser {
     private static ZoneId zoneOr(String id, ZoneId fallback) {
         try {
             return ZoneId.of(id.strip().replace("\"", ""));
-        } catch (DateTimeException e) {
+        } catch (DateTimeException _) {
             return fallback;
         }
     }
@@ -161,7 +161,40 @@ final class IcsParser {
         }
         String withBreaks = text.replaceAll("(?i)<br\\s*/?>|</?(p|div|li)\\b[^>]*>", "\n");
         return Jsoup.parseBodyFragment(withBreaks).body().wholeText().replace(' ', ' ')
-                .replaceAll("[ \\t]+", " ").replaceAll(" *\\n[ \\n]*", "\n").strip();
+                // possessive (*+): a run of spaces that turns out not to end in a newline is given up
+                // on at once instead of being retried one space shorter, which on a long line is
+                // quadratic for an answer that was never going to change
+                .replaceAll("[ \\t]++", " ").replaceAll(" *+\\n[ \\n]*+", "\n").strip();
+    }
+
+    /**
+     * The property name and its parameters, split on the semicolons that are not inside a quoted
+     * value ({@code DTSTART;TZID="Europe/Prague";VALUE=DATE-TIME}).
+     *
+     * <p>A loop and not a lookahead. This was
+     * {@code split(";(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)")} — "a semicolon with an even number of
+     * quotes after it" — which is a quantifier inside a quantifier, and those do not fail
+     * gracefully: on a long line the matcher tries every way of pairing the quotes before giving
+     * up, which is exponential time and, in {@code java.util.regex}, a recursion deep enough to
+     * overflow the stack. The line comes from a band's own calendar, which this server fetches
+     * and which may be ten megabytes, so "a long line" is not hypothetical. Reading it once,
+     * left to right, is both obvious and linear.
+     */
+    private static List<String> splitOutsideQuotes(String head) {
+        List<String> parts = new ArrayList<>();
+        boolean quoted = false;
+        int from = 0;
+        for (int i = 0; i < head.length(); i++) {
+            char c = head.charAt(i);
+            if (c == '"') {
+                quoted = !quoted;
+            } else if (c == ';' && !quoted) {
+                parts.add(head.substring(from, i));
+                from = i + 1;
+            }
+        }
+        parts.add(head.substring(from));
+        return parts;
     }
 
     private static String unescape(String value) {
@@ -200,14 +233,14 @@ final class IcsParser {
         if (colon <= 0) {
             return null;
         }
-        String[] head = line.substring(0, colon).split(";(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
+        List<String> head = splitOutsideQuotes(line.substring(0, colon));
         Map<String, String> params = new HashMap<>();
-        for (int i = 1; i < head.length; i++) {
-            int eq = head[i].indexOf('=');
+        for (int i = 1; i < head.size(); i++) {
+            int eq = head.get(i).indexOf('=');
             if (eq > 0) {
-                params.put(head[i].substring(0, eq).toUpperCase(Locale.ROOT), head[i].substring(eq + 1));
+                params.put(head.get(i).substring(0, eq).toUpperCase(Locale.ROOT), head.get(i).substring(eq + 1));
             }
         }
-        return new Property(head[0].toUpperCase(Locale.ROOT).strip(), params, line.substring(colon + 1));
+        return new Property(head.getFirst().toUpperCase(Locale.ROOT).strip(), params, line.substring(colon + 1));
     }
 }

@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 @ValueObject
 public record AccountField(String name, Kind kind, boolean required, String label, String help, ReadAt readAt) {
 
-    private static final Pattern NAME = Pattern.compile("[a-z][a-zA-Z0-9]*");
+    private static final Pattern NAME_FORMAT = Pattern.compile("[a-z][a-zA-Z0-9]*");
 
     /** What a field holds. */
     public enum Kind {
@@ -53,7 +53,7 @@ public record AccountField(String name, Kind kind, boolean required, String labe
     }
 
     public AccountField {
-        if (name == null || !NAME.matcher(name).matches()) {
+        if (name == null || !NAME_FORMAT.matcher(name).matches()) {
             throw new IllegalArgumentException("an account field's name is letters and digits: " + name);
         }
         if (kind == null || label == null || label.isBlank()) {
