@@ -49,9 +49,6 @@ public interface SyncTaskQueries {
 
     List<SyncLogEntry> log(BandId band, long taskId);
 
-    /** The oldest PENDING task that is due, of any band. */
-    Optional<SyncTask> nextDue(Instant now);
-
     /** Every due task of any band, oldest first. */
     List<SyncTask> due(Instant now);
 

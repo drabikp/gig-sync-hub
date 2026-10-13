@@ -82,12 +82,16 @@ public final class PublicAddresses {
         Security.setProperty("networkaddress.cache.negative.ttl", "10");
     }
 
-    /** The most a band's address may answer with (a calendar, a poster). */
+    /** The most anything outside this server may answer with: a band's address, and a platform's. */
     public static final int MAX_BODY_BYTES = 10 * 1024 * 1024;
 
     /**
-     * Reads at most {@link #MAX_BODY_BYTES}; {@link IllegalArgumentException} for more — a band's address
-     * can't fill the server's memory or disk.
+     * Reads at most {@link #MAX_BODY_BYTES}; {@link IllegalArgumentException} for more — nothing the
+     * server fetches can fill its memory or its disk, whoever answered. The platforms' own clients
+     * read their answers through this too: a page that goes wrong is still a page this app holds.
+     *
+     * <p>The stream is closed either way, which is what makes it safe to ask an {@code HttpClient}
+     * for {@code BodyHandlers.ofInputStream()} — a body nobody reads or closes keeps its connection.
      */
     public static byte[] limited(InputStream body) throws IOException {
         try (body) {

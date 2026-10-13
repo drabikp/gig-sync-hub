@@ -117,7 +117,7 @@ public abstract class SyncOutboxContract {
         SyncTask task = queue(gig, SyncAction.UPDATE);
 
         assertThat(task.status()).isEqualTo(SyncStatus.PENDING);
-        assertThat(outbox().nextDue(NOW)).contains(task);
+        assertThat(outbox().due(NOW)).containsExactly(task);
         assertThat(outbox().openFor(BAND, gig.id())).containsExactly(task);
         assertThat(outbox().due(BAND, BANDZONE, SyncAction.UPDATE, NOW)).containsExactly(task);
         assertThat(outbox().due(BAND, BANDSINTOWN, SyncAction.UPDATE, NOW)).isEmpty();
@@ -228,8 +228,8 @@ public abstract class SyncOutboxContract {
 
         assertThat(get(task).status()).isEqualTo(SyncStatus.PENDING);
         assertThat(get(task).attempts()).isEqualTo(1);
-        assertThat(outbox().nextDue(NOW)).isEmpty();
-        assertThat(outbox().nextDue(NOW.plus(Duration.ofMinutes(1)))).isPresent();
+        assertThat(outbox().due(NOW)).isEmpty();
+        assertThat(outbox().due(NOW.plus(Duration.ofMinutes(1)))).isNotEmpty();
     }
 
     @Test
@@ -287,7 +287,7 @@ public abstract class SyncOutboxContract {
 
         assertThat(get(task).status()).isEqualTo(SyncStatus.PENDING);
         assertThat(get(task).step()).isEqualTo(StepType.FORM_EDIT);
-        assertThat(outbox().nextDue(NOW)).contains(get(task));
+        assertThat(outbox().due(NOW)).containsExactly(get(task));
     }
 
     @Test

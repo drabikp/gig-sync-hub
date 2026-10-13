@@ -42,7 +42,7 @@ class JpaSyncOutboxTest {
 
         assertThat(task.status()).isEqualTo(SyncStatus.PENDING);
         assertThat(task.gigId()).isEqualTo(gig.id());
-        assertThat(outbox.nextDue(NOW)).contains(task);
+        assertThat(outbox.due(NOW)).containsExactly(task);
         assertThat(outbox.openFor(BAND, gig.id())).containsExactly(task);
         assertThat(outbox.log(task.band(), task.id())).extracting(SyncLogEntry::message).containsExactly("queued");
     }
@@ -62,8 +62,8 @@ class JpaSyncOutboxTest {
         assertThat(outbox.markRunning(task.band(), task.id(), NOW)).isTrue();
         assertThat(outbox.markRunning(task.band(), task.id(), NOW)).as("already running").isFalse();
         outbox.markRetry(task.band(), task.id(), "timeout", NOW.plus(Duration.ofMinutes(1)), NOW);
-        assertThat(outbox.nextDue(NOW)).as("not due before the retry time").isEmpty();
-        assertThat(outbox.nextDue(NOW.plus(Duration.ofMinutes(1)))).isPresent();
+        assertThat(outbox.due(NOW)).as("not due before the retry time").isEmpty();
+        assertThat(outbox.due(NOW.plus(Duration.ofMinutes(1)))).isNotEmpty();
         outbox.markRunning(task.band(), task.id(), NOW.plus(Duration.ofMinutes(1)));
         outbox.markDone(task.band(), task.id(), null, NOW.plus(Duration.ofMinutes(2)));
 

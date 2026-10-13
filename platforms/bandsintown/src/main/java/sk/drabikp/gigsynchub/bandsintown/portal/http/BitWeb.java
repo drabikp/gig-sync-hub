@@ -1,12 +1,14 @@
 package sk.drabikp.gigsynchub.bandsintown.portal.http;
 
 import sk.drabikp.gigsynchub.bandsintown.BitPortalException;
+import sk.drabikp.gigsynchub.gig.application.PublicAddresses;
 import sk.drabikp.gigsynchub.bandsintown.portal.HumanPacer;
 import sk.drabikp.gigsynchub.bandsintown.portal.PortalReply;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -111,13 +113,19 @@ final class BitWeb implements BitApi {
     private PortalReply send(String method, String path, HttpRequest.Builder request, Duration timeout)
             throws BitPortalException {
         pacer.pause();           // a person's pace, never a burst
-        HttpResponse<String> response;
+        HttpResponse<InputStream> response;
+        String body;
         try {
-            response = http.send(request.timeout(timeout).build(), HttpResponse.BodyHandlers.ofString(
-                    StandardCharsets.UTF_8));
+            response = http.send(request.timeout(timeout).build(), HttpResponse.BodyHandlers.ofInputStream());
+            // as much of the answer as we are willing to hold, not however much comes: an answer
+            // read whole is the app's heap, and how big it is is the portal's decision, not ours
+            body = new String(PublicAddresses.limited(response.body()), StandardCharsets.UTF_8);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw BitPortalException.busy("Interrupted while talking to Bandsintown — again later.");
+        } catch (IllegalArgumentException e) {
+            throw BitPortalException.temporary("Bandsintown's answer to " + path
+                    + " was larger than this server will read.", e);
         } catch (IOException e) {
             throw BitPortalException.temporary("Could not reach Bandsintown (" + path + "): "
                     + e.getClass().getSimpleName(), e);
@@ -126,7 +134,7 @@ final class BitWeb implements BitApi {
             throw BitPortalException.needsUser("Bandsintown no longer accepts this band's sign-in — sign in there "
                     + "again and connect it in Settings.");
         }
-        return PortalReply.of(method, path, response.statusCode(), response.body(),
+        return PortalReply.of(method, path, response.statusCode(), body,
                 response.headers().firstValue("x-next-page").orElse(null));
     }
 }

@@ -137,12 +137,6 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
-    public Optional<SyncTask> nextDue(Instant now) {
-        return tasks.findFirstByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(SyncStatus.PENDING.name(), now)
-                .map(mapper::toTask);
-    }
-
-    @Override
     public List<SyncTask> due(Instant now) {
         return mapper.toTasks(tasks.findByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(SyncStatus.PENDING.name(), now));
     }

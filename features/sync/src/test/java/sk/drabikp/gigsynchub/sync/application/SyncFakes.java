@@ -172,11 +172,6 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized Optional<SyncTask> nextDue(Instant now) {
-            return tasks.values().stream().filter(t -> due(t, now)).findFirst();
-        }
-
-        @Override
         public synchronized List<SyncTask> due(Instant now) {
             return tasks.values().stream().filter(t -> due(t, now)).toList();
         }

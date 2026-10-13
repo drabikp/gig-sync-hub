@@ -72,7 +72,7 @@ class WorkflowEngineTest {
     /** What the worker does: the next due task names a workload, over and over until none is due. */
     private void runAll(WorkflowEngine engine) {
         Optional<SyncTask> next;
-        while ((next = outbox.nextDue(clock.instant())).isPresent()) {
+        while ((next = outbox.due(clock.instant()).stream().findFirst()).isPresent()) {
             engine.run(Workload.of(next.get()));
         }
     }

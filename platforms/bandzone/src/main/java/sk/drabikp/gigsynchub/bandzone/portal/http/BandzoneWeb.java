@@ -3,11 +3,13 @@ package sk.drabikp.gigsynchub.bandzone.portal.http;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import sk.drabikp.gigsynchub.bandzone.BandzonePortalException;
+import sk.drabikp.gigsynchub.gig.application.PublicAddresses;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.CookieManager;
 import java.net.HttpCookie;
 import java.net.CookiePolicy;
@@ -151,7 +153,7 @@ final class BandzoneWeb {
         } catch (IOException e) {
             throw BandzonePortalException.temporary("Could not read the poster to upload.", e);
         }
-        HttpResponse<String> response = exchange(HttpRequest.newBuilder(uri(address))
+        Reply response = exchange(HttpRequest.newBuilder(uri(address))
                 .timeout(UPLOAD_TIMEOUT)
                 .header("X-Requested-With", "XMLHttpRequest")
                 .header("Accept", "application/json, text/javascript, */*; q=0.01")
@@ -164,7 +166,7 @@ final class BandzoneWeb {
     }
 
     private Answer answer(HttpRequest.Builder request) throws BandzonePortalException {
-        HttpResponse<String> response = exchange(request
+        Reply response = exchange(request
                 .header("X-Requested-With", "XMLHttpRequest")
                 .header("Accept", "application/json, text/javascript, */*; q=0.01"));
         if (response.statusCode() != 200) {
@@ -180,7 +182,7 @@ final class BandzoneWeb {
     }
 
     private Page send(HttpRequest.Builder request) throws BandzonePortalException {
-        HttpResponse<String> response = exchange(request);
+        Reply response = exchange(request);
         if (response.statusCode() >= 500) {
             throw BandzonePortalException.temporary("Bandzone answered " + response.statusCode() + " to "
                     + path(response.uri()) + ".");
@@ -189,13 +191,28 @@ final class BandzoneWeb {
                 Jsoup.parse(response.body(), response.uri().toString()));
     }
 
-    private HttpResponse<String> exchange(HttpRequest.Builder request) throws BandzonePortalException {
+    /** What a page answered: as much of it as we are willing to hold, and where it came from. */
+    private record Reply(int statusCode, URI uri, String body) {
+    }
+
+    /**
+     * One exchange, with the answer read into memory UP TO a limit rather than however much comes.
+     * {@code BodyHandlers.ofString} reads whatever arrives: a page that goes wrong — an error page
+     * built in a loop, a redirect to something enormous — is then the app's heap, and the only
+     * thing between it and the server is how big the platform's mistake was.
+     */
+    private Reply exchange(HttpRequest.Builder request) throws BandzonePortalException {
         HttpRequest built = request.header("User-Agent", USER_AGENT).timeout(REQUEST_TIMEOUT).build();
         try {
-            return http.send(built, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<InputStream> answer = http.send(built, HttpResponse.BodyHandlers.ofInputStream());
+            return new Reply(answer.statusCode(), answer.uri(),
+                    new String(PublicAddresses.limited(answer.body()), StandardCharsets.UTF_8));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw BandzonePortalException.busy("Interrupted while talking to Bandzone — again later.");
+        } catch (IllegalArgumentException e) {
+            throw BandzonePortalException.temporary("Bandzone's answer to " + path(built.uri())
+                    + " was larger than this server will read.", e);
         } catch (IOException e) {
             throw BandzonePortalException.temporary("Could not reach Bandzone (" + path(built.uri()) + "): "
                     + e.getClass().getSimpleName(), e);
