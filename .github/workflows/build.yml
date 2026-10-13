@@ -1,0 +1,70 @@
+# Every push and every pull request builds what `./mvnw test` builds here: the Java modules and
+# the page, with the migrations run against a real PostgreSQL (Testcontainers), because a schema
+# this app only ever validates against is a schema nobody has checked.
+#
+# On Java 21, which is what the Docker image runs — not on whatever is newest. A suite that passes
+# on the JDK a developer happens to have and fails on the one in production is worse than no CI.
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  # a second push to the same branch stops the first: the answer to the older commit is of no use
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      # The page's Node is fetched into web/frontend/node by the build itself (frontend-maven-plugin),
+      # so there is no setup-node here; this only keeps it and npm's cache between runs.
+      - name: Cache the page's Node and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            web/frontend/node
+            web/frontend/node_modules
+          key: node-${{ runner.os }}-${{ hashFiles('web/frontend/package-lock.json') }}
+          restore-keys: node-${{ runner.os }}-
+
+      # Docker is already running on this runner; Testcontainers finds it by itself. The image is
+      # pulled here so a slow pull is not counted against the first test's own timeout.
+      - name: Pull the database image the tests use
+        run: docker pull postgres:18-alpine
+
+      - run: ./mvnw --batch-mode --no-transfer-progress verify
+
+      # Here and not in the Maven build: an audit needs the network (the offline `./mvnw -o test`
+      # this repository is built with would fail), and an advisory in a dev-only dependency is not
+      # a reason to stop a build. Production dependencies only, high and critical only — what is
+      # actually shipped to a browser and actually worth waking up for.
+      - name: Advisories in what the page ships
+        if: always()
+        working-directory: web/frontend
+        # ./node/npm is the npm the build fetched (it finds its own node beside it), so this audits
+        # with the same versions the build used and needs no setup-node of its own.
+        run: ./node/npm audit --omit=dev --audit-level=high
+
+      - name: Keep the reports of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: "**/target/surefire-reports/**"
+          retention-days: 7

@@ -1,0 +1,54 @@
+# What this repository depends on, watched. Weekly rather than daily: this is one band's tool with
+# one person reading the pull requests, and a flood of them is the same as none.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Spring Boot's own artifacts move together (the BOM decides the rest), so they arrive as one
+      # pull request and are read once.
+      spring:
+        patterns:
+          - "org.springframework*:*"
+      test:
+        patterns:
+          - "org.junit*:*"
+          - "org.mockito:*"
+          - "org.assertj:*"
+          - "org.testcontainers:*"
+          - "com.tngtech.archunit:*"
+
+  - package-ecosystem: npm
+    directory: "/web/frontend"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+      mantine:
+        patterns:
+          - "@mantine/*"
+      build:
+        patterns:
+          - "vite"
+          - "vitest"
+          - "@vitejs/*"
+          - "typescript"
+          - "vite-plugin-pwa"
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

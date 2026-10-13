@@ -8,14 +8,53 @@
 # ./auth-data Rauthy's cache.
 name: gigsynchub
 
+# Every container's log is capped, because the default is not. Docker's json-file driver keeps
+# writing until the disk is full, and the first thing a full disk stops is PostgreSQL — the one
+# service whose failure is not recoverable by restarting it. Three files of 10 MB is a few days of
+# this app's chatter and 30 MB a service at worst.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# What every container of ours gives up. None of them needs to add a capability, change its own
+# privileges, or write outside its volumes — saying so costs nothing and takes a whole class of
+# escape off the table. (`no-new-privileges` is what stops a setuid binary inside an image from
+# mattering at all.)
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
 services:
   db:
     image: postgres:18-alpine
     restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    # No cap_drop here, deliberately, while every other service has one. PostgreSQL's image starts
+    # as root to prepare and own the data directory and then drops to the postgres user itself, and
+    # the exact set it needs for that is the image's business and changes with it. This is the one
+    # container whose failure to start is not fixed by starting it again, and a capability list
+    # that turns out to be one short is exactly that failure — a trade this app does not need to
+    # make, since `no-new-privileges` already shuts the way that matters.
+
+    # A database is stopped, never killed: ten seconds is not enough for a checkpoint on a busy
+    # one, and what follows a kill is crash recovery on the next start.
+    stop_grace_period: 2m
+    mem_limit: ${GSH_DB_MEM:-2g}
+    cpus: ${GSH_DB_CPUS:-2}
     environment:
       POSTGRES_DB: gigsynchub
       POSTGRES_USER: gigsynchub
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      # Pinned because the volume is mounted at /var/lib/postgresql (not .../data) and the image's
+      # default has moved between major versions: a default that changes under a mounted volume is
+      # an empty database on a machine that had one.
+      PGDATA: /var/lib/postgresql/data
     secrets:
       - db_password
     volumes:
@@ -37,6 +76,17 @@ services:
         GID: ${GSH_GID:-1000}
     image: gigsynchub:latest
     restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    # The JVM gets its heap from the container's limit (-XX:MaxRAMPercentage=75 in the Dockerfile),
+    # so this number is what the app may have, not a guess at what it will take.
+    mem_limit: ${GSH_APP_MEM:-1g}
+    cpus: ${GSH_APP_CPUS:-2}
+    # Spring's graceful shutdown lets the request in flight finish; a sync step talking to a
+    # platform is a few HTTP calls and wants longer than the default ten seconds to end tidily
+    # (what it cannot finish is postponed, not lost — but a postponed create is a create nobody is
+    # sure about).
+    stop_grace_period: 45s
     depends_on:
       db:
         condition: service_healthy
@@ -92,6 +142,8 @@ services:
   # makes the `rauthy` database and role on db when they're missing (then exits)
   rauthy-db:
     image: postgres:18-alpine
+    logging: *logging
+    <<: *hardening
     depends_on:
       db:
         condition: service_healthy
@@ -125,7 +177,16 @@ services:
   rauthy:
     image: ghcr.io/sebadob/rauthy:0.37.1
     restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    mem_limit: ${GSH_AUTH_MEM:-512m}
+    cpus: ${GSH_AUTH_CPUS:-1}
     user: "${GSH_UID:-1000}:${GSH_GID:-1000}"
+    # No healthcheck, and not for want of trying: this image is the binary and nothing else — no
+    # shell, no wget — and the binary has no `health` command of its own (`rauthy --help`:
+    # serve, bootstrap, generate-config, validate-config, generate-enc-key, generate-secrets,
+    # hash-password). A check would have to be invented from outside the container, which is not
+    # what a container healthcheck is. Whether signing in works is the proxy's `/auth/` route.
     depends_on:
       rauthy-db:
         condition: service_completed_successfully
@@ -152,6 +213,23 @@ services:
   proxy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    # Caddy binds 80 and 443, which is all it needs the capability for.
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    mem_limit: ${GSH_PROXY_MEM:-256m}
+    healthcheck:
+      # Caddy's own admin API, which it serves on localhost:2019 inside the container. A GET
+      # (-O /dev/null), not --spider: that sends a HEAD, which the admin API need not answer. By
+      # address and not by name: localhost reaches ::1 first in this image and nothing answers there.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     depends_on:
       - app
       - rauthy
@@ -172,7 +250,19 @@ services:
   backup:
     image: postgres:18-alpine
     restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    mem_limit: ${GSH_BACKUP_MEM:-256m}
     user: "${GSH_UID:-1000}:${GSH_GID:-1000}"
+    # Not "is the container running" — that is the failure this is here to catch. The stamp is
+    # written only when a WHOLE round came through, so a backup container that is up and failing
+    # every dump goes unhealthy within a day and a half (docker/backup.sh, docs/disaster-recovery.md).
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /backups/LAST_OK && test $$(find /backups/LAST_OK -mmin +2160 | wc -l) -eq 0"]
+      interval: 1h
+      timeout: 10s
+      retries: 2
+      start_period: 5m
     depends_on:
       db:
         condition: service_healthy
@@ -186,6 +276,8 @@ services:
     volumes:
       - ./data/backups:/backups
       - ./docker/backup.sh:/backup.sh:ro
+      # not run by this service: `docker compose run --rm backup /restore.sh` uses it
+      - ./docker/restore.sh:/restore.sh:ro
     entrypoint: ["/bin/sh", "/backup.sh"]
 
 secrets:
