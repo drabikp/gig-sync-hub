@@ -1,6 +1,7 @@
 package sk.drabikp.gigsynchub.bandsintown.portal.http;
 
 import sk.drabikp.gigsynchub.bandsintown.BitPortalException;
+import sk.drabikp.gigsynchub.portal.PlatformEgress;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -43,19 +44,25 @@ final class BitSignIn implements BitCredentials {
     private final BitConnection connection;
     private final Clock clock;
     private final JsonMapper json = JsonMapper.builder().build();
-    private final HttpClient http = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+    private final HttpClient http;
     private String session;
     private Instant staleAt = Instant.EPOCH;
     /** The manager the portal's own sign-in named, when the band's connection didn't carry one. */
     private String managerFromPortal = "";
 
+    /** Straight out of this machine — a test, and anything that has no properties to hand. */
     BitSignIn(String baseUrl, BitConnection connection, Clock clock) {
+        this(baseUrl, connection, clock, PlatformEgress.DIRECT);
+    }
+
+    BitSignIn(String baseUrl, BitConnection connection, Clock clock, PlatformEgress egress) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.connection = connection;
         this.clock = clock;
+        this.http = egress.on(HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .connectTimeout(Duration.ofSeconds(10)))
+                .build();
     }
 
     @Override
@@ -154,7 +161,7 @@ final class BitSignIn implements BitCredentials {
         try {
             response = http.send(request.timeout(TIMEOUT).build(),
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             throw BitPortalException.busy("Interrupted while " + what + " — again later.");
         } catch (IOException e) {

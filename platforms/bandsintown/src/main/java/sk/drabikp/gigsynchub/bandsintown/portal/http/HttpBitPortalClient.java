@@ -3,6 +3,8 @@ package sk.drabikp.gigsynchub.bandsintown.portal.http;
 import org.springframework.stereotype.Component;
 import sk.drabikp.gigsynchub.accounts.application.port.in.PlatformAccounts;
 import sk.drabikp.gigsynchub.bandsintown.BandsintownAccount;
+import io.micrometer.observation.ObservationRegistry;
+import sk.drabikp.gigsynchub.portal.PlatformEgress;
 import sk.drabikp.gigsynchub.bandsintown.BandsintownProperties;
 import sk.drabikp.gigsynchub.bandsintown.BitPortalException;
 import sk.drabikp.gigsynchub.bandsintown.portal.BitPortalClient;
@@ -29,15 +31,20 @@ import java.time.Duration;
 @OnPlatformClient(platform = "bandsintown", value = PlatformClient.HTTP)
 class HttpBitPortalClient implements BitPortalClient {
 
+    private final ObservationRegistry observations;
+    private final PlatformEgress egress;
     private final String baseUrl;
     private final PlatformAccounts accounts;
     private final Clock clock;
     private final HumanPacer pacer;
 
-    HttpBitPortalClient(BandsintownProperties properties, PlatformAccounts accounts, Clock clock) {
+    HttpBitPortalClient(BandsintownProperties properties, PlatformAccounts accounts, Clock clock,
+                        ObservationRegistry observations) {
         this.baseUrl = properties.baseUrl();
         this.accounts = accounts;
         this.clock = clock;
+        this.observations = observations;
+        this.egress = properties.egress();
         this.pacer = new HumanPacer(properties.pacing().minMs(), properties.pacing().maxMs());
     }
 
@@ -46,7 +53,8 @@ class HttpBitPortalClient implements BitPortalClient {
         BandsintownAccount account = BandsintownAccount.of(accounts, band);
         BitConnection connection = new BitConnection(account.refreshToken(), account.managerId(),
                 account.actorId(), account.fingerprint());
-        BitWeb web = new BitWeb(baseUrl, new BitSignIn(baseUrl, connection, clock), pacer);
+        BitWeb web = new BitWeb(baseUrl, new BitSignIn(baseUrl, connection, clock, egress), pacer,
+                observations, egress);
         return new HttpBitSession(web, account.artistName(), clock, pacer);
     }
 }
