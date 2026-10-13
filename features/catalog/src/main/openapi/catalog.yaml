@@ -404,6 +404,7 @@ components:
         rev:
           description: The revision the edit was made on (Gig.rev).
           type: string
+          maxLength: 100
         gig:
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/schemas/GigFormRequest'
     GigEditedResponse:
@@ -419,15 +420,24 @@ components:
       required: [gigs]
       properties:
         gigs:
-          description: The gigs' tokens.
+          description: |
+            The gigs' tokens. The bound is five full pages of the list (which answers at most 200
+            rows), because the page selects the rows it has LOADED and "Show more" keeps adding
+            them — so it is above any real "select all" and still a number, which an unbounded
+            array is not: one task per gig per platform is written for each of these, in one
+            transaction.
           type: array
           items:
             type: string
+            maxLength: 100
+          maxItems: 1000
         platforms:
           description: Where to publish (publish only).
           type: array
           items:
             type: string
+            maxLength: 40
+          maxItems: 20
     QueuedTaskResponse:
       type: object
       required: [taskId, platform, action]

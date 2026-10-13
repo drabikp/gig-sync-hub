@@ -263,7 +263,12 @@
 							<openApiNullable>false</openApiNullable>
 							<documentationProvider>none</documentationProvider>
 							<annotationLibrary>none</annotationLibrary>
-							<useBeanValidation>false</useBeanValidation>
+							<!-- The limits the specs carry become jakarta.validation annotations on the
+							     generated classes and parameters, which spring-boot-starter-validation
+							     (app) then enforces: a maxLength or maxItems in a spec is a 400, not a
+							     comment. Off until October 2026, which is why some specs had limits
+							     nothing checked. -->
+							<useBeanValidation>true</useBeanValidation>
 							<hideGenerationTimestamp>true</hideGenerationTimestamp>
 							<generateJsonIncludeAnnotations>false</generateJsonIncludeAnnotations>
 							<generateJsonSetterNullsAnnotations>false</generateJsonSetterNullsAnnotations>

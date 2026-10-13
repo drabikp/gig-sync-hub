@@ -1,5 +1,6 @@
 package sk.drabikp.gigsynchub.web;
 
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.TypeMismatchException;
@@ -9,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.ErrorResponse;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
@@ -49,11 +51,21 @@ class ApiErrors {
 
     /**
      * What the request itself got wrong: a check of its input, a reference that names nothing, a body
-     * or parameter that can't be read. Any other {@link IllegalArgumentException} is the app's own
-     * fault ({@link #fault}), logged in full.
+     * or parameter that can't be read, or one of the limits the specs carry. Any other
+     * {@link IllegalArgumentException} is the app's own fault ({@link #fault}), logged in full.
+     *
+     * <p>The two validation exceptions are the same refusal reached two ways, which is worth
+     * knowing before anyone deletes one of them: a BODY that breaks a constraint is Spring MVC's
+     * own {@link MethodArgumentNotValidException}, while a PARAMETER that does comes from the
+     * {@code @Validated} the generator puts on every API interface — an AOP interceptor around the
+     * controller, which throws jakarta's {@link ConstraintViolationException} and knows nothing of
+     * HTTP. Without this line that one is a 500: the app looks broken for a request that was
+     * simply too long. Nothing else in this app validates a bean, so the exception can only mean
+     * what it means here.
      */
     @ExceptionHandler({BadRequestException.class, UnknownReferenceException.class,
-            HttpMessageNotReadableException.class, TypeMismatchException.class})
+            HttpMessageNotReadableException.class, TypeMismatchException.class,
+            MethodArgumentNotValidException.class, ConstraintViolationException.class})
     ResponseEntity<ProblemResponse> badRequest(Exception e) {
         log.debug("Bad request", e);
         return ResponseEntity.badRequest().body(Problems.of(GigErrorCode.BAD_REQUEST, e.getMessage()));

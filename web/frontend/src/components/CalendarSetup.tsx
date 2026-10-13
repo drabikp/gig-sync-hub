@@ -44,7 +44,7 @@ export function CalendarConnection() {
         </Group>
         <PasswordInput label={t('calendarSetup.address')} description={t('calendarSetup.addressHelp')}
           autoComplete="off" placeholder={current?.connected ? t('calendarSetup.addressKept') : 'https://…/basic.ics'}
-          value={address} onChange={(e) => setAddress(e.currentTarget.value)} />
+          maxLength={2000} value={address} onChange={(e) => setAddress(e.currentTarget.value)} />
         <Select label={t('calendarSetup.zone')} description={t('calendarSetup.zoneHelp')} searchable allowDeselect={false}
           data={ZONES.includes(chosenZone) ? ZONES : [chosenZone, ...ZONES]} value={chosenZone} onChange={(v) => v && setZone(v)} />
         <Group justify="flex-end" gap="xs">
@@ -98,7 +98,7 @@ function RuleRow({ rule, kinds, onChange, onRemove }: {
     <>
       <TextInput style={{ flex: 1, minWidth: 0 }} aria-label={t('calendar.value')} disabled={kind?.value === 'NONE'}
         placeholder={kind && kind.value !== 'NONE' ? t(`rules.value.${kind.value}`) : undefined}
-        value={kind?.value === 'NONE' ? '' : rule.value ?? ''} onChange={(e) => onChange({ ...rule, value: e.currentTarget.value })} />
+        maxLength={1000} value={kind?.value === 'NONE' ? '' : rule.value ?? ''} onChange={(e) => onChange({ ...rule, value: e.currentTarget.value })} />
       <NumberInput w={84} aria-label={t('calendar.weight')} allowDecimal={false} disabled={kind?.weighted === false}
         value={kind?.weighted === false ? '' : rule.weight}
         onChange={(v) => onChange({ ...rule, weight: typeof v === 'number' ? v : Number(v) || 0 })} />

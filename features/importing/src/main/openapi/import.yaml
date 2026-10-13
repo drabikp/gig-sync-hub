@@ -164,6 +164,8 @@ components:
           type: array
           items:
             type: string
+            maxLength: 40
+          maxItems: 20
     ImportDecisionRequest:
       description: "`version` — the index into the proposal's versions whose details to keep."
       type: object
@@ -185,6 +187,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ImportDecisionRequest'
+          maxItems: 5000
     ImportResultResponse:
       type: object
       required: [added, updated, linked, skipped]

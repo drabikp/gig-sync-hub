@@ -26,9 +26,16 @@ needs a sign-in. Which bands a signed-in user sees is the app's: their **members
 below; a user is made at their first sign-in, `OidcCurrentLogin` → `CurrentLogin`). The page sends the browser to
 `/oauth2/authorization/rauthy` (code flow with PKCE, confidential client `gigsynchub`); Rauthy sends
 it back to `/login/oauth2/code/rauthy`, then to `/` (the page goes back where the user was,
-`lib/signIn.ts`). The app's session: 12 h; Rauthy's own session signs the user in again without a
-password. Signing out (`POST /api/auth/logout`) ends both: the answer names Rauthy's end-session
-address and the page goes there. `SecurityConfiguration` builds the client from `AuthProperties`
+`lib/signIn.ts`). **The app's session: 12 h idle AND 12 h in all** (`SessionLife`) — the first is
+`server.servlet.session.timeout`, the second `gigsynchub.auth.session-max-age`, counted from when
+the session was made, because an idle timeout alone never fires for a page that keeps asking; and
+every `gigsynchub.auth.revalidate-every` (5 min) the first request to arrive asks Rauthy's user
+info whether the sign-in still stands (gone, disabled, or out of the group `gigsynchub.auth.group-prefix`
+→ the session ends at once; Rauthy unreachable keeps it — an outage must not sign everyone out).
+That asking needs the access token the sign-in left, which lasts half an hour, so it is sharp for
+the first half hour of a session and the cap carries the rest. Rauthy's own session signs the user
+in again without a password. Signing out (`POST /api/auth/logout`) ends both: the answer names
+Rauthy's end-session address and the page goes there. `SecurityConfiguration` builds the client from `AuthProperties`
 (no discovery at start): the browser goes to the issuer (`gigsynchub.auth.issuer`,
 `https://$GSH_DOMAIN/auth/v1/`), the app fetches tokens, keys and user info inside the network
 (`gigsynchub.auth.internal-url`, `http://rauthy:8080/auth/v1/`); the ID token's issuer is checked.
@@ -253,6 +260,14 @@ enum `…Value` (inline enums are made named ones) — the names are the generat
   runs before dev, build and test) → `src/api/generated/*.ts` (git-ignored); `api/types.ts` only
   names those types; `api/client.ts` is an `openapi-fetch` client over every spec's paths, so a
   path, parameter, body or answer that doesn't match the spec doesn't compile.
+- **The specs' limits are CHECKS**: the generator runs with `useBeanValidation=true`, so a
+  `maxLength`, `maxItems` or `maximum` in a spec becomes a jakarta.validation annotation on the
+  generated class or parameter and `spring-boot-starter-validation` (app) enforces it — a request
+  that breaks one is a 400 `badRequest` (`ApiErrors`, which catches both shapes: Spring's own for a
+  body, jakarta's `ConstraintViolationException` for a parameter, since the generator's `@Validated`
+  routes those through AOP). The gig form's lengths are its COLUMNS' (V1__schema.sql), so what the
+  API refuses and what the database would refuse are the same number. `ApiSecurityTest`'s
+  `the_limits_the_specs_carry_are_checked` fails the moment that switch goes back.
 - **A band's paths**: everything a band has is under `/api/bands/{bandId}/…` (the shared
   `components/parameters/BandId` of gig.yaml; the generated interfaces take `UUID bandId`, the
   controllers pass `new BandId(…)` / `RefMapper.toBandId` on); `/api/platforms`, `/api/places`,
@@ -407,8 +422,12 @@ rows are keyed `(band_id, …)`.
   (the oldest ends), each ends after 30 min (the page reconnects). **Addresses a band gives** (its
   calendar, a gig's poster) are fetched only from the public internet, every redirect checked by hand
   (`PublicAddresses`; a gig's links must be http(s), `links`), at most 10 MB, and a failure says nothing of
-  what answered. **The public list** (`/gigs/<slug>`) is a band's choice (`band.public_list`, V7, Settings
-  → This band; band #1's on). An e-mail Rauthy hasn't verified is no e-mail to the app (invitations, the
+  what answered — and the address CHECKED is the address connected to, because the app fixes the
+  platform's cache of successful lookups (`PublicAddresses.holdResolvedNamesStill`, from the app
+  class's initializer: the JDK reads that policy once, at the first name the process resolves) rather
+  than leaving the two lookups free to disagree. An `InetAddressResolverProvider` would say it better
+  and does nothing in a Spring Boot jar — the javadoc says why. **The public list** (`/gigs/<slug>`)
+  is a band's choice (`band.public_list`, V7, Settings → This band; band #1's on). An e-mail Rauthy hasn't verified is no e-mail to the app (invitations, the
   first owner); a login's e-mail and name are refreshed at each sign-in. Caddy's log never holds a token
   (invitation links, the sign-out's `id_token_hint`).
 - **Many bands on one server** (phase 3): the sync runs `gigsynchub.sync.worker.threads` (2) **lanes** at

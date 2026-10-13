@@ -96,6 +96,7 @@ paths:
           application/json:
             schema:
               type: array
+              maxItems: 500
               items:
                 $ref: '#/components/schemas/RuleRequest'
       responses:
@@ -520,6 +521,7 @@ components:
         gig:
           description: The gig's token.
           type: string
+          maxLength: 100
     LinkedResponse:
       type: object
       required: [linked]
@@ -533,9 +535,11 @@ components:
       properties:
         kind:
           type: string
+          maxLength: 40
         value:
           type: string
           nullable: true
+          maxLength: 1000
         weight:
           type: integer
         enabled:
@@ -562,10 +566,12 @@ components:
         address:
           description: The calendar's private iCal address (https:// or webcal://) — a secret.
           type: string
+          maxLength: 2000
         zone:
           description: The zone of its times without one (blank — the server's default).
           type: string
           nullable: true
+          maxLength: 60
     CalendarConnectionResponse:
       type: object
       required: [connected, host, zone]

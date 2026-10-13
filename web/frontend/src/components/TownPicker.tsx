@@ -40,6 +40,7 @@ export function TownPicker({ city, district, country, error, onType, onPick }: {
             value={city}
             error={error}
             autoComplete="off"
+            maxLength={255}
             onChange={(e) => {
               onType(e.currentTarget.value);
               combobox.openDropdown();

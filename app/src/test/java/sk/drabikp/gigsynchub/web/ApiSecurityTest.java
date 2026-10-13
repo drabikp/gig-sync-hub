@@ -11,6 +11,8 @@ import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 
+import java.security.Security;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
@@ -136,16 +138,65 @@ class ApiSecurityTest {
                 .andExpect(status().isForbidden());
     }
 
+    /** A gig form the SPEC is happy with: everything required is there, the content is what is wrong. */
+    private static String aGigWith(String title) {
+        return """
+                {"title": "%s", "date": null, "time": null, "endDate": null, "endTime": null,
+                 "slotDate": null, "slotTime": null, "slotEndTime": null, "venue": null,
+                 "city": "Košice", "country": "SLOVAKIA", "street": null, "postalCode": null,
+                 "district": null, "region": null, "latitude": null, "longitude": null,
+                 "lineup": [], "entry": "FREE", "price": null, "description": null,
+                 "facebookUrl": null, "ticketUrl": null, "posterUrl": null, "cancelled": false}
+                """.formatted(title);
+    }
+
     @Test
     void a_refused_change_is_a_409_with_its_code() throws Exception {
         mvc.perform(post(BAND + "/gigs").with(owner()).with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\"\",\"city\":\"Košice\",\"country\":\"SLOVAKIA\"}"))
+                        .content(aGigWith("")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("invalidGig"))
                 .andExpect(jsonPath("$.args.fields").value("title,date,time"));
         mvc.perform(post("/api/bands").with(owner()).with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Taken\",\"slug\":\"Not An Address\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("invalidBand"));
+    }
+
+    /**
+     * The limits written in the specs are CHECKS, not documentation. Until October 2026 the
+     * generator ran with {@code useBeanValidation=false}, so {@code maxLength: 100} on the list's
+     * search and {@code maximum: 200} on its page size generated nothing at all and the only thing
+     * bounding a request was the proxy's 2 MB on the whole body — behind which a bulk publish could
+     * name a hundred thousand gigs, and a title of a megabyte reached the database to be refused
+     * there as a 500. Each of these fails the moment that switch goes back.
+     */
+    @Test
+    void the_limits_the_specs_carry_are_checked() throws Exception {
+        mvc.perform(get(BAND + "/gigs").param("q", "x".repeat(101)).with(owner()))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get(BAND + "/gigs").param("size", "500").with(owner()))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post(BAND + "/gigs").with(owner()).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(aGigWith("x".repeat(256))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("badRequest"));
+        mvc.perform(post(BAND + "/gigs/publish").with(owner()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"gigs\": [" + "\"a\",".repeat(1000) + "\"a\"]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("badRequest"));
+    }
+
+    /**
+     * A band's own address is fetched at the address it was CHECKED at. The two lookups — the check's
+     * and the HTTP client's — agree only because the platform answers the second out of the first,
+     * and that is a default until someone says otherwise, which is what the app's class initializer
+     * does ({@code PublicAddresses.holdResolvedNamesStill}). Nothing else would notice it going:
+     * every test would stay green while a band's calendar address could be made to reach the
+     * database.
+     */
+    @Test
+    void the_app_says_how_long_a_resolved_name_stands() {
+        assertThat(Security.getProperty("networkaddress.cache.ttl")).isEqualTo("30");
+        assertThat(Security.getProperty("networkaddress.cache.negative.ttl")).isEqualTo("10");
     }
 
     @Test

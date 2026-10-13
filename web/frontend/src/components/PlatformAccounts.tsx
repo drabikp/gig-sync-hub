@@ -28,10 +28,17 @@ function useFieldText() {
  *
  * The line is escaped whole (`encodeURIComponent`, not `encodeURI`): what a platform sends is code, and
  * a per cent sign or an ampersand in it would otherwise leave an address the browser can't decode.
+ *
+ * The site is checked HERE as well as on the server, and nothing is offered when it doesn't hold: this
+ * block turns what the API said into a link the band is invited to run on another site, which is the one
+ * place where trusting an answer blindly would be handing someone else's code a band's session there.
+ * `new URL` also throws on anything that isn't an address, which would otherwise take the page down.
  */
 function ReadAtSite({ readAt, platform }: { readAt: NonNullable<AccountField['readAt']>; platform: string }) {
   const { t } = useTranslation();
-  const site = new URL(readAt.site).host;
+  const where = ((): URL | null => { try { return new URL(readAt.site); } catch { return null; } })();
+  if (!where || where.protocol !== 'https:') return null;
+  const site = where.host;
   return (
     <Stack gap={4} p="xs" style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 8 }}>
       <Text size="sm" fw={500}>{t('account.readAt.how', { platform })}</Text>
@@ -92,12 +99,12 @@ function AccountSheet({ platform, account, opened, onClose }: {
               {f.readAt ? <ReadAtSite readAt={f.readAt} platform={platform.name} /> : null}
               <PasswordInput label={text.label(f)} description={text.help(f)} withAsterisk={f.required}
                 autoComplete="new-password" placeholder={kept.has(f.name) ? t('account.kept') : undefined}
-                value={secrets[f.name] ?? ''}
+                maxLength={8000} value={secrets[f.name] ?? ''}
                 onChange={(e) => { const v = e.currentTarget.value; setSecrets((s) => ({ ...s, [f.name]: v })); }} />
             </Stack>
           ) : (
             <TextInput key={f.name} label={text.label(f)} description={text.help(f)} withAsterisk={f.required}
-              autoComplete="off" value={settings[f.name] ?? ''}
+              autoComplete="off" maxLength={2000} value={settings[f.name] ?? ''}
               onChange={(e) => { const v = e.currentTarget.value; setSettings((s) => ({ ...s, [f.name]: v })); }} />
           ))}
           <Text size="xs" c="dimmed">{t('account.secretsHelp')}</Text>

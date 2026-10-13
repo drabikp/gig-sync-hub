@@ -101,7 +101,7 @@ export function Invitations() {
         }}>
           <Group gap="xs" align="flex-end" wrap="wrap">
             <TextInput style={{ flex: '1 1 220px' }} type="email" label={t('members.inviteEmail')} required value={email}
-              onChange={(e) => setEmail(e.currentTarget.value)} />
+              maxLength={320} onChange={(e) => setEmail(e.currentTarget.value)} />
             <Select w={140} label={t('members.role')} allowDeselect={false} value={role}
               data={(['MANAGER', 'OWNER'] as Role[]).map((r) => ({ value: r, label: t(`band.role.${r}`) }))}
               onChange={(r) => r && setRole(r as Role)} />
