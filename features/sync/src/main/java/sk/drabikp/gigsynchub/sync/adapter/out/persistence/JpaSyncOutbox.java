@@ -52,8 +52,8 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
-    public Optional<SyncTask> find(long id) {
-        return tasks.findById(id).map(mapper::toTask);
+    public Optional<SyncTask> find(BandId band, long id) {
+        return tasks.findById(id).filter(task -> task.getBandId().equals(band.value())).map(mapper::toTask);
     }
 
     @Override
@@ -141,8 +141,8 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     @Transactional
-    public boolean markRunning(long id, Instant now) {
-        SyncTaskEntity task = get(id);
+    public boolean markRunning(BandId band, long id, Instant now) {
+        SyncTaskEntity task = get(band, id);
         if (task.status() != SyncStatus.PENDING) {
             return false;
         }
@@ -153,8 +153,8 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     @Transactional
-    public void markDone(long id, String message, Instant now) {
-        SyncTaskEntity task = get(id);
+    public void markDone(BandId band, long id, String message, Instant now) {
+        SyncTaskEntity task = get(band, id);
         if (task.change(SyncStatus.DONE, null, message, now)) {
             write(task, now, message == null || message.isBlank() ? "done" : "done — " + message);
         }
@@ -162,8 +162,8 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     @Transactional
-    public void markRetry(long id, String error, Instant nextAttempt, Instant now) {
-        SyncTaskEntity task = get(id);
+    public void markRetry(BandId band, long id, String error, Instant nextAttempt, Instant now) {
+        SyncTaskEntity task = get(band, id);
         if (task.change(SyncStatus.PENDING, nextAttempt, error, now)) {
             write(task, now, "failed: " + error + " — will retry at " + nextAttempt);
         }
@@ -171,8 +171,8 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     @Transactional
-    public void markFailed(long id, String error, Instant now) {
-        SyncTaskEntity task = get(id);
+    public void markFailed(BandId band, long id, String error, Instant now) {
+        SyncTaskEntity task = get(band, id);
         if (task.change(SyncStatus.FAILED, null, error, now)) {
             write(task, now, "failed: " + error + " — waiting for you to Retry or Discard");
         }
@@ -180,8 +180,8 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     @Transactional
-    public void postpone(long id, String why, Instant nextAttempt, Instant now) {
-        SyncTaskEntity task = get(id);
+    public void postpone(BandId band, long id, String why, Instant nextAttempt, Instant now) {
+        SyncTaskEntity task = get(band, id);
         if (task.status() == SyncStatus.RUNNING && task.change(SyncStatus.PENDING, nextAttempt, why, now)) {
             task.undoAttempt();
             write(task, now, "postponed: " + why + " — again at " + nextAttempt);
@@ -190,8 +190,8 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     @Transactional
-    public void advance(long id, StepType next, String why, Instant now) {
-        SyncTaskEntity task = get(id);
+    public void advance(BandId band, long id, StepType next, String why, Instant now) {
+        SyncTaskEntity task = get(band, id);
         if (task.advance(next, now)) {
             write(task, now, why + " → " + next.label());
         }
@@ -199,8 +199,8 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     @Transactional
-    public void requeue(long id, Instant now) {
-        SyncTaskEntity task = get(id);
+    public void requeue(BandId band, long id, Instant now) {
+        SyncTaskEntity task = get(band, id);
         if (task.change(SyncStatus.PENDING, now, null, now)) {
             task.resetAttempts();
             write(task, now, "retried by you");
@@ -209,16 +209,34 @@ class JpaSyncOutbox implements SyncOutbox {
 
     @Override
     @Transactional
-    public void discard(long id, Instant now) {
-        SyncTaskEntity task = get(id);
+    public void discard(BandId band, long id, Instant now) {
+        SyncTaskEntity task = get(band, id);
         if (task.change(SyncStatus.DISCARDED, null, "discarded by you", now)) {
             write(task, now, "discarded by you");
         }
     }
 
-    private SyncTaskEntity get(long id) {
-        // the engine and the log service ask only for tasks they have seen; tasks are never deleted
-        return tasks.findById(id).orElseThrow(() -> new IllegalStateException("no sync task " + id));
+    /**
+     * The band's task. The BAND IS PART OF THE ASKING — a task's id comes from a sequence every band
+     * draws on, so an id by itself says nothing about whose work it is, and every method above takes
+     * the band for that reason. Tasks are never deleted, so a miss here means the id was not this
+     * band's, which can only be a bug in the caller: it is loud, and {@code SyncOutboxContract}
+     * holds the in-memory outbox to the same.
+     *
+     * <p>Fetched by primary key and then checked, rather than asked for by band and id together.
+     * That is not the obvious way round and it is deliberate: a derived query is JPQL, JPQL
+     * auto-flushes, and {@code sync_log.task_id} is a plain column with no mapped association (this
+     * schema has none, on purpose), so Hibernate cannot see that a log row depends on its task. With
+     * {@code order_inserts} it batches the log rows first, and a flush in the middle of a
+     * transaction that has queued tasks fails on the foreign key. A primary-key lookup is served
+     * from the session without flushing, so the batching V9 exists for is left alone. The row never
+     * leaves this method unchecked.
+     */
+    private SyncTaskEntity get(BandId band, long id) {
+        SyncTaskEntity task = tasks.findById(id)
+                .filter(found -> found.getBandId().equals(band.value()))
+                .orElseThrow(() -> new IllegalStateException("no sync task " + id + " for this band"));
+        return task;
     }
 
     private void write(SyncTaskEntity task, Instant at, String message) {

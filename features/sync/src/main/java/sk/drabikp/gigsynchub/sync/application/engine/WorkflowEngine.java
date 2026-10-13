@@ -1,6 +1,7 @@
 package sk.drabikp.gigsynchub.sync.application.engine;
 
 import org.jmolecules.architecture.hexagonal.Application;
+import sk.drabikp.gigsynchub.gig.domain.BandId;
 import sk.drabikp.gigsynchub.gig.domain.platform.Platforms;
 import sk.drabikp.gigsynchub.sync.application.port.in.PauseSyncUseCase;
 import sk.drabikp.gigsynchub.sync.application.port.out.SyncFaults;
@@ -151,8 +152,8 @@ public class WorkflowEngine {
                         taken.add(run);
                         items.add(item);
                     }
-                    case Intake.Moot(String why) -> outbox.markDone(run.id(), why, clock.instant());
-                    case Intake.ByHand(String message) -> outbox.markFailed(run.id(), message, clock.instant());
+                    case Intake.Moot(String why) -> outbox.markDone(run.band(), run.id(), why, clock.instant());
+                    case Intake.ByHand(String message) -> outbox.markFailed(run.band(), run.id(), message, clock.instant());
                     case Intake.PassedOn(String why) -> onward(run, type, why, waiting);
                 }
             }
@@ -172,7 +173,7 @@ public class WorkflowEngine {
         List<Enrolled> started = new ArrayList<>();
         List<SyncStep.Item> startedItems = new ArrayList<>();
         for (int i = 0; i < batch.size(); i++) {
-            if (outbox.markRunning(batch.get(i).id(), clock.instant())) {
+            if (outbox.markRunning(batch.get(i).band(), batch.get(i).id(), clock.instant())) {
                 started.add(batch.get(i));
                 startedItems.add(items.get(i));
             }
@@ -205,11 +206,11 @@ public class WorkflowEngine {
         Instant now = clock.instant();
         Optional<StepType> next = Workflows.after(from);
         if (next.isEmpty()) {
-            outbox.markFailed(run.id(), steps.byHand(run.run().platform(), reasons), now);
+            outbox.markFailed(run.band(), run.id(), steps.byHand(run.run().platform(), reasons), now);
             return;
         }
-        outbox.advance(run.id(), next.get(), said, now);
-        outbox.find(run.id())           // moving on begins the attempts afresh: take the run as it now is
+        outbox.advance(run.band(), run.id(), next.get(), said, now);
+        outbox.find(run.band(), run.id())           // moving on begins the attempts afresh: take the run as it now is
                 .ifPresent(moved -> waiting.computeIfAbsent(next.get(), step -> new ArrayList<>())
                         .add(new Enrolled(moved, reasons)));
     }
@@ -283,6 +284,11 @@ public class WorkflowEngine {
 
         long id() {
             return run.id();
+        }
+
+        /** Whose work this is — asked for with the id at every write, the id alone naming no band. */
+        BandId band() {
+            return run.band();
         }
     }
 }

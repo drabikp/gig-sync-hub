@@ -61,7 +61,7 @@ class OneOpenTaskPerGigTest {
      */
     @AfterEach
     void settleWhatWasQueued() {
-        transactions.inTransaction(() -> made.forEach(id -> outbox.markDone(id, "the test is over", NOW)));
+        transactions.inTransaction(() -> made.forEach(id -> outbox.markDone(BAND, id, "the test is over", NOW)));
     }
 
     private Platform somewhere() {
@@ -106,7 +106,7 @@ class OneOpenTaskPerGigTest {
     @Test
     void an_update_may_wait_behind_one_that_is_already_running() {
         SyncTask running = queue(SyncAction.UPDATE);
-        transactions.inTransaction(() -> assertThat(outbox.markRunning(running.id(), NOW)).isTrue());
+        transactions.inTransaction(() -> assertThat(outbox.markRunning(running.band(), running.id(), NOW)).isTrue());
 
         assertThatCode(() -> queue(SyncAction.UPDATE))
                 .as("an edit while the update runs queues a fresh one behind it")

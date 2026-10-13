@@ -79,12 +79,12 @@ class SyncRequestsTest {
         Gig fresh = TestGigs.gig("SNP", "Secret Garden");
         gigs.save(BAND, fresh);
         SyncTask failed = publishing.publish(BAND, Set.of(BANDZONE), List.of(fresh)).queued().getFirst();
-        outbox.markRunning(failed.id(), clock.instant());
-        outbox.markFailed(failed.id(), "Bandzone doesn't know the city", clock.instant());
+        outbox.markRunning(failed.band(), failed.id(), clock.instant());
+        outbox.markFailed(failed.band(), failed.id(), "Bandzone doesn't know the city", clock.instant());
 
         SyncTask again = publishing.publish(BAND, Set.of(BANDZONE), List.of(fresh)).queued().getFirst();
 
-        assertThat(outbox.find(failed.id())).get().satisfies(t -> {
+        assertThat(outbox.find(failed.band(), failed.id())).get().satisfies(t -> {
             assertThat(t.status()).isEqualTo(SyncStatus.DISCARDED);
             assertThat(t.message()).contains("replaced", "#" + again.id());
         });
@@ -130,7 +130,7 @@ class SyncRequestsTest {
             // run everything due
         }
 
-        assertThat(outbox.find(update.id())).get().satisfies(t -> {
+        assertThat(outbox.find(update.band(), update.id())).get().satisfies(t -> {
             assertThat(t.status()).isEqualTo(SyncStatus.FAILED);
             assertThat(t.message()).contains("by hand", "doesn't take past events");
         });

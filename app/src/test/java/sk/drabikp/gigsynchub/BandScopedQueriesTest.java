@@ -139,12 +139,16 @@ class BandScopedQueriesTest {
     @DisplayName("a row is fetched by an id that carries its band, or the caller is named here")
     void a_row_is_fetched_by_an_id_that_carries_its_band_or_the_caller_is_named_here() {
         Set<String> allowed = Set.of(
-                // Both ask the outbox for a task by id and then refuse it unless it is this band's:
-                // SyncLogService#task filters on t.band().equals(band) before the log, a retry or a
-                // discard; the engine only ever passes ids that came out of a band-scoped read.
+                // Every method of the outbox port now TAKES the band (October 2026), so no caller can
+                // leave it out; inside, the row is fetched by primary key and refused unless its band
+                // matches — JpaSyncOutbox#get, which says why it is that way round rather than a
+                // query naming both. SyncOutboxContract proves the refusal, for this outbox and the
+                // in-memory one alike.
                 "JpaSyncOutbox",
-                // The audit log is written for the band whose request it describes; the read is
-                // findByBandIdOrderByIdDesc, which this test's first case already covers.
+                // Invitations, not the audit log: save(Invitation) re-reads the invitation it was
+                // handed to stamp acceptedAt, and delete(UUID) is reached only after
+                // MembershipService#revoke has proved the invitation is this band's with of(band,
+                // id). An invitation id is a random UUID, not a number from a shared sequence.
                 "JpaAccountsStores");
 
         List<String> byBareId = new ArrayList<>();

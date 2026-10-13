@@ -59,15 +59,15 @@ class JpaSyncOutboxTest {
     void a_task_runs_once_and_every_step_is_logged() {
         SyncTask task = queue(gig, BANDZONE, SyncAction.DELETE);
 
-        assertThat(outbox.markRunning(task.id(), NOW)).isTrue();
-        assertThat(outbox.markRunning(task.id(), NOW)).as("already running").isFalse();
-        outbox.markRetry(task.id(), "timeout", NOW.plus(Duration.ofMinutes(1)), NOW);
+        assertThat(outbox.markRunning(task.band(), task.id(), NOW)).isTrue();
+        assertThat(outbox.markRunning(task.band(), task.id(), NOW)).as("already running").isFalse();
+        outbox.markRetry(task.band(), task.id(), "timeout", NOW.plus(Duration.ofMinutes(1)), NOW);
         assertThat(outbox.nextDue(NOW)).as("not due before the retry time").isEmpty();
         assertThat(outbox.nextDue(NOW.plus(Duration.ofMinutes(1)))).isPresent();
-        outbox.markRunning(task.id(), NOW.plus(Duration.ofMinutes(1)));
-        outbox.markDone(task.id(), null, NOW.plus(Duration.ofMinutes(2)));
+        outbox.markRunning(task.band(), task.id(), NOW.plus(Duration.ofMinutes(1)));
+        outbox.markDone(task.band(), task.id(), null, NOW.plus(Duration.ofMinutes(2)));
 
-        SyncTask done = outbox.find(task.id()).orElseThrow();
+        SyncTask done = outbox.find(task.band(), task.id()).orElseThrow();
         assertThat(done.status()).isEqualTo(SyncStatus.DONE);
         assertThat(done.attempts()).isEqualTo(2);
         assertThat(outbox.log(task.id())).extracting(SyncLogEntry::message).containsExactly(
@@ -78,15 +78,15 @@ class JpaSyncOutboxTest {
     @Test
     void a_discarded_task_cannot_be_started_and_a_retry_starts_it_afresh() {
         SyncTask task = queue(gig, BANDZONE, SyncAction.PUBLISH);
-        outbox.markRunning(task.id(), NOW);
-        outbox.markFailed(task.id(), "wizard broke", NOW);
+        outbox.markRunning(task.band(), task.id(), NOW);
+        outbox.markFailed(task.band(), task.id(), "wizard broke", NOW);
         assertThat(outbox.unfinished(BAND)).extracting(SyncTask::id).contains(task.id());
 
-        outbox.discard(task.id(), NOW);
-        assertThat(outbox.markRunning(task.id(), NOW)).isFalse();
-        outbox.requeue(task.id(), NOW);
+        outbox.discard(task.band(), task.id(), NOW);
+        assertThat(outbox.markRunning(task.band(), task.id(), NOW)).isFalse();
+        outbox.requeue(task.band(), task.id(), NOW);
 
-        SyncTask again = outbox.find(task.id()).orElseThrow();
+        SyncTask again = outbox.find(task.band(), task.id()).orElseThrow();
         assertThat(again.status()).isEqualTo(SyncStatus.PENDING);
         assertThat(again.attempts()).isZero();
     }
@@ -94,15 +94,15 @@ class JpaSyncOutboxTest {
     @Test
     void a_finished_task_stays_finished_whoever_writes_it_late() {
         SyncTask task = queue(gig, BANDZONE, SyncAction.UPDATE);
-        outbox.markRunning(task.id(), NOW);
-        outbox.markDone(task.id(), "updated", NOW);
+        outbox.markRunning(task.band(), task.id(), NOW);
+        outbox.markDone(task.band(), task.id(), "updated", NOW);
 
-        outbox.markFailed(task.id(), "a late failure", NOW);
-        outbox.markRetry(task.id(), "a late retry", NOW, NOW);
-        outbox.discard(task.id(), NOW);
-        outbox.requeue(task.id(), NOW);
+        outbox.markFailed(task.band(), task.id(), "a late failure", NOW);
+        outbox.markRetry(task.band(), task.id(), "a late retry", NOW, NOW);
+        outbox.discard(task.band(), task.id(), NOW);
+        outbox.requeue(task.band(), task.id(), NOW);
 
-        assertThat(outbox.find(task.id()).orElseThrow().status()).isEqualTo(SyncStatus.DONE);
+        assertThat(outbox.find(task.band(), task.id()).orElseThrow().status()).isEqualTo(SyncStatus.DONE);
         assertThat(outbox.log(task.id())).extracting(SyncLogEntry::message)
                 .containsExactly("queued", "attempt 1 started", "done — updated");
     }
@@ -121,14 +121,14 @@ class JpaSyncOutboxTest {
     void superseding_discards_only_the_pending_tasks_of_that_gig_on_that_platform() {
         SyncTask pending = queue(gig, BANDZONE, SyncAction.UPDATE);
         SyncTask running = queue(gig, BANDZONE, SyncAction.CANCEL);
-        outbox.markRunning(running.id(), NOW);
+        outbox.markRunning(running.band(), running.id(), NOW);
         SyncTask elsewhere = queue(gig, BANDSINTOWN, SyncAction.UPDATE);
 
         assertThat(outbox.supersede(BAND, gig.id(), BANDZONE, "the gig was deleted", NOW)).extracting(SyncTask::id)
                 .containsExactly(pending.id());
-        assertThat(outbox.find(pending.id()).orElseThrow().status()).isEqualTo(SyncStatus.DISCARDED);
-        assertThat(outbox.find(running.id()).orElseThrow().status()).isEqualTo(SyncStatus.RUNNING);
-        assertThat(outbox.find(elsewhere.id()).orElseThrow().status()).isEqualTo(SyncStatus.PENDING);
+        assertThat(outbox.find(pending.band(), pending.id()).orElseThrow().status()).isEqualTo(SyncStatus.DISCARDED);
+        assertThat(outbox.find(running.band(), running.id()).orElseThrow().status()).isEqualTo(SyncStatus.RUNNING);
+        assertThat(outbox.find(elsewhere.band(), elsewhere.id()).orElseThrow().status()).isEqualTo(SyncStatus.PENDING);
     }
 
     @Test

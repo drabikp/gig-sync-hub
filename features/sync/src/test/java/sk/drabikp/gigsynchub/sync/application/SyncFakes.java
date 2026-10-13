@@ -91,8 +91,8 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized Optional<SyncTask> find(long id) {
-            return Optional.ofNullable(tasks.get(id));
+        public synchronized Optional<SyncTask> find(BandId band, long id) {
+            return Optional.ofNullable(mineOrNothing(band, id));
         }
 
         @Override
@@ -174,8 +174,8 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized boolean markRunning(long id, Instant now) {
-            SyncTask t = tasks.get(id);
+        public synchronized boolean markRunning(BandId band, long id, Instant now) {
+            SyncTask t = mine(band, id);
             if (t.status() != SyncStatus.PENDING) {
                 return false;
             }
@@ -184,31 +184,34 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized void markDone(long id, String message, Instant now) {
-            change(id, SyncStatus.DONE, tasks.get(id).attempts(), null, message, now);
+        public synchronized void markDone(BandId band, long id, String message, Instant now) {
+            SyncTask t = mine(band, id);
+            change(id, SyncStatus.DONE, t.attempts(), null, message, now);
         }
 
         @Override
-        public synchronized void markRetry(long id, String error, Instant nextAttempt, Instant now) {
-            change(id, SyncStatus.PENDING, tasks.get(id).attempts(), nextAttempt, error, now);
+        public synchronized void markRetry(BandId band, long id, String error, Instant nextAttempt, Instant now) {
+            SyncTask t = mine(band, id);
+            change(id, SyncStatus.PENDING, t.attempts(), nextAttempt, error, now);
         }
 
         @Override
-        public synchronized void postpone(long id, String why, Instant nextAttempt, Instant now) {
-            SyncTask t = tasks.get(id);
+        public synchronized void postpone(BandId band, long id, String why, Instant nextAttempt, Instant now) {
+            SyncTask t = mine(band, id);
             if (t.status() == SyncStatus.RUNNING) {
                 change(id, SyncStatus.PENDING, Math.max(0, t.attempts() - 1), nextAttempt, why, now);
             }
         }
 
         @Override
-        public synchronized void markFailed(long id, String error, Instant now) {
-            change(id, SyncStatus.FAILED, tasks.get(id).attempts(), null, error, now);
+        public synchronized void markFailed(BandId band, long id, String error, Instant now) {
+            SyncTask t = mine(band, id);
+            change(id, SyncStatus.FAILED, t.attempts(), null, error, now);
         }
 
         @Override
-        public synchronized void advance(long id, StepType next, String why, Instant now) {
-            SyncTask t = tasks.get(id);
+        public synchronized void advance(BandId band, long id, StepType next, String why, Instant now) {
+            SyncTask t = mine(band, id);
             if (!t.status().canBecome(SyncStatus.PENDING)) {
                 return;                                 // as the real outbox: a finished task stays so
             }
@@ -218,13 +221,36 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized void requeue(long id, Instant now) {
+        public synchronized void requeue(BandId band, long id, Instant now) {
+            mine(band, id);
             change(id, SyncStatus.PENDING, 0, now, null, now);
         }
 
         @Override
-        public synchronized void discard(long id, Instant now) {
-            change(id, SyncStatus.DISCARDED, tasks.get(id).attempts(), null, "discarded by you", now);
+        public synchronized void discard(BandId band, long id, Instant now) {
+            SyncTask t = mine(band, id);
+            change(id, SyncStatus.DISCARDED, t.attempts(), null, "discarded by you", now);
+        }
+
+        /**
+         * The band's task to WRITE to. A task id is a number from a sequence every band draws on,
+         * so asking with the wrong band is a bug in the caller, not a race: the real outbox cannot
+         * find the row and says so, and this says so the same way — a fake that quietly did nothing
+         * would let such a bug through every service test. {@code SyncOutboxContract} holds both to
+         * it.
+         */
+        private SyncTask mine(BandId band, long id) {
+            SyncTask t = tasks.get(id);
+            if (t == null || !t.band().equals(band)) {
+                throw new IllegalStateException("no sync task " + id + " for this band");
+            }
+            return t;
+        }
+
+        /** The band's task to READ, or nothing — asking about another band's is simply "not there". */
+        private SyncTask mineOrNothing(BandId band, long id) {
+            SyncTask t = tasks.get(id);
+            return t != null && t.band().equals(band) ? t : null;
         }
 
         private static boolean due(SyncTask t, Instant now) {

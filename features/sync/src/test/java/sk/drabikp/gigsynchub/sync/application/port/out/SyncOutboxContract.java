@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static sk.drabikp.gigsynchub.gig.domain.TestBands.BAND;
 import static sk.drabikp.gigsynchub.gig.domain.TestBands.OTHER;
 import static sk.drabikp.gigsynchub.gig.domain.platform.TestPlatforms.BANDSINTOWN;
@@ -37,7 +38,41 @@ public abstract class SyncOutboxContract {
     }
 
     private SyncTask get(SyncTask task) {
-        return outbox().find(task.id()).orElseThrow();
+        return outbox().find(task.band(), task.id()).orElseThrow();
+    }
+
+    /**
+     * A task id is a number from a sequence every band draws on, so it says nothing about whose
+     * work it is. Asking with the wrong band must find nothing and change nothing — the real outbox
+     * asks the database by band and id together, and the fake has to answer the same way or the
+     * service tests would be passing on a question the database refuses.
+     */
+    @Test
+    void another_bands_task_is_not_found_by_its_id_and_cannot_be_written_to() {
+        SyncTask mine = queue(gig, SyncAction.UPDATE);
+
+        assertThat(outbox().find(OTHER, mine.id())).as("not another band's to read").isEmpty();
+
+        // A write is louder than a read on purpose: reading another band's id is simply "not there",
+        // but WRITING to one can only be a bug in the caller, and a bug that quietly does nothing is
+        // the kind that is found months later.
+        assertThatThrownBy(() -> outbox().markRunning(OTHER, mine.id(), NOW)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> outbox().markFailed(OTHER, mine.id(), "no", NOW)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> outbox().markDone(OTHER, mine.id(), "no", NOW)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> outbox().discard(OTHER, mine.id(), NOW)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> outbox().advance(OTHER, mine.id(), StepType.FORM_EDIT, "no", NOW))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> outbox().markRetry(OTHER, mine.id(), "no", NOW, NOW)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> outbox().requeue(OTHER, mine.id(), NOW)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> outbox().postpone(OTHER, mine.id(), "no", NOW, NOW)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(get(mine)).as("the task is exactly as it was left")
+                .satisfies(task -> {
+                    assertThat(task.status()).isEqualTo(SyncStatus.PENDING);
+                    assertThat(task.message()).isNull();
+                    assertThat(task.attempts()).isZero();
+                    assertThat(task.step()).isEqualTo(mine.step());
+                });
     }
 
     @Test
@@ -85,8 +120,8 @@ public abstract class SyncOutboxContract {
         assertThat(outbox().history(BAND, gig.id(), 10)).extracting(SyncTask::id).containsExactly(second.id(), first.id());
         assertThat(outbox().history(BAND, gig.id(), 1)).extracting(SyncTask::id).containsExactly(second.id());
 
-        outbox().markRunning(first.id(), NOW);
-        outbox().markDone(first.id(), "published", NOW.plus(Duration.ofMinutes(5)));
+        outbox().markRunning(first.band(), first.id(), NOW);
+        outbox().markDone(first.band(), first.id(), "published", NOW.plus(Duration.ofMinutes(5)));
 
         assertThat(outbox().history(BAND, gig.id(), 10)).extracting(SyncTask::id)
                 .as("the gig's page shows each entry's time, so the one that moved last comes first")
@@ -102,10 +137,10 @@ public abstract class SyncOutboxContract {
     void the_recent_list_is_a_log_of_activity_whatever_order_the_work_was_asked_in() {
         SyncTask asked_first = queue(gig, SyncAction.PUBLISH);
         SyncTask asked_second = queue(other, SyncAction.PUBLISH);
-        outbox().markRunning(asked_second.id(), NOW);
-        outbox().markDone(asked_second.id(), "published", NOW.plus(Duration.ofMinutes(1)));
-        outbox().markRunning(asked_first.id(), NOW);
-        outbox().markDone(asked_first.id(), "published", NOW.plus(Duration.ofMinutes(5)));
+        outbox().markRunning(asked_second.band(), asked_second.id(), NOW);
+        outbox().markDone(asked_second.band(), asked_second.id(), "published", NOW.plus(Duration.ofMinutes(1)));
+        outbox().markRunning(asked_first.band(), asked_first.id(), NOW);
+        outbox().markDone(asked_first.band(), asked_first.id(), "published", NOW.plus(Duration.ofMinutes(5)));
 
         assertThat(outbox().recent(BAND, 10)).extracting(SyncTask::id)
                 .as("what happened last comes first")
@@ -119,10 +154,10 @@ public abstract class SyncOutboxContract {
     void a_task_starts_once_each_start_is_an_attempt_and_a_retry_waits() {
         SyncTask task = queue(gig, SyncAction.DELETE);
 
-        assertThat(outbox().markRunning(task.id(), NOW)).isTrue();
-        assertThat(outbox().markRunning(task.id(), NOW)).isFalse();
+        assertThat(outbox().markRunning(task.band(), task.id(), NOW)).isTrue();
+        assertThat(outbox().markRunning(task.band(), task.id(), NOW)).isFalse();
         assertThat(outbox().running()).extracting(SyncTask::id).containsExactly(task.id());
-        outbox().markRetry(task.id(), "timeout", NOW.plus(Duration.ofMinutes(1)), NOW);
+        outbox().markRetry(task.band(), task.id(), "timeout", NOW.plus(Duration.ofMinutes(1)), NOW);
 
         assertThat(get(task).status()).isEqualTo(SyncStatus.PENDING);
         assertThat(get(task).attempts()).isEqualTo(1);
@@ -133,9 +168,9 @@ public abstract class SyncOutboxContract {
     @Test
     void a_postponed_task_did_not_use_an_attempt() {
         SyncTask task = queue(gig, SyncAction.UPDATE);
-        outbox().markRunning(task.id(), NOW);
+        outbox().markRunning(task.band(), task.id(), NOW);
 
-        outbox().postpone(task.id(), "browser busy", NOW.plus(Duration.ofMinutes(1)), NOW);
+        outbox().postpone(task.band(), task.id(), "browser busy", NOW.plus(Duration.ofMinutes(1)), NOW);
 
         assertThat(get(task).status()).isEqualTo(SyncStatus.PENDING);
         assertThat(get(task).attempts()).isZero();
@@ -145,15 +180,15 @@ public abstract class SyncOutboxContract {
     @Test
     void a_finished_task_stays_finished() {
         SyncTask task = queue(gig, SyncAction.UPDATE);
-        outbox().markRunning(task.id(), NOW);
-        outbox().markDone(task.id(), null, NOW);
+        outbox().markRunning(task.band(), task.id(), NOW);
+        outbox().markDone(task.band(), task.id(), null, NOW);
 
-        outbox().markFailed(task.id(), "late", NOW);
-        outbox().markRetry(task.id(), "late", NOW, NOW);
-        outbox().postpone(task.id(), "late", NOW, NOW);
-        outbox().advance(task.id(), StepType.FORM_EDIT, "late", NOW);
-        outbox().discard(task.id(), NOW);
-        outbox().requeue(task.id(), NOW);
+        outbox().markFailed(task.band(), task.id(), "late", NOW);
+        outbox().markRetry(task.band(), task.id(), "late", NOW, NOW);
+        outbox().postpone(task.band(), task.id(), "late", NOW, NOW);
+        outbox().advance(task.band(), task.id(), StepType.FORM_EDIT, "late", NOW);
+        outbox().discard(task.band(), task.id(), NOW);
+        outbox().requeue(task.band(), task.id(), NOW);
 
         assertThat(get(task).status()).isEqualTo(SyncStatus.DONE);
         assertThat(get(task).step()).isNull();
@@ -162,16 +197,16 @@ public abstract class SyncOutboxContract {
     @Test
     void the_user_retries_a_failed_or_discarded_task_afresh_and_discards_only_waiting_or_failed_ones() {
         SyncTask task = queue(gig, SyncAction.PUBLISH);
-        outbox().markRunning(task.id(), NOW);
-        outbox().discard(task.id(), NOW);
+        outbox().markRunning(task.band(), task.id(), NOW);
+        outbox().discard(task.band(), task.id(), NOW);
         assertThat(get(task).status()).as("not while it runs").isEqualTo(SyncStatus.RUNNING);
 
-        outbox().markFailed(task.id(), "wizard broke", NOW);
-        outbox().discard(task.id(), NOW);
+        outbox().markFailed(task.band(), task.id(), "wizard broke", NOW);
+        outbox().discard(task.band(), task.id(), NOW);
         assertThat(get(task).status()).isEqualTo(SyncStatus.DISCARDED);
-        assertThat(outbox().markRunning(task.id(), NOW)).isFalse();
+        assertThat(outbox().markRunning(task.band(), task.id(), NOW)).isFalse();
 
-        outbox().requeue(task.id(), NOW);
+        outbox().requeue(task.band(), task.id(), NOW);
         assertThat(get(task).status()).isEqualTo(SyncStatus.PENDING);
         assertThat(get(task).attempts()).isZero();
     }
@@ -179,9 +214,9 @@ public abstract class SyncOutboxContract {
     @Test
     void a_run_moves_on_to_another_step() {
         SyncTask task = queue(gig, SyncAction.UPDATE);
-        outbox().markRunning(task.id(), NOW);
+        outbox().markRunning(task.band(), task.id(), NOW);
 
-        outbox().advance(task.id(), StepType.FORM_EDIT, "refused", NOW);
+        outbox().advance(task.band(), task.id(), StepType.FORM_EDIT, "refused", NOW);
 
         assertThat(get(task).status()).isEqualTo(SyncStatus.PENDING);
         assertThat(get(task).step()).isEqualTo(StepType.FORM_EDIT);
@@ -192,8 +227,8 @@ public abstract class SyncOutboxContract {
     void superseding_and_replacing_touch_only_that_gigs_tasks_in_that_state() {
         SyncTask pending = queue(gig, SyncAction.UPDATE);
         SyncTask failed = queue(gig, SyncAction.CANCEL);
-        outbox().markRunning(failed.id(), NOW);
-        outbox().markFailed(failed.id(), "x", NOW);
+        outbox().markRunning(failed.band(), failed.id(), NOW);
+        outbox().markFailed(failed.band(), failed.id(), "x", NOW);
         SyncTask othersPending = queue(other, SyncAction.UPDATE);
 
         assertThat(outbox().supersede(BAND, gig.id(), BANDZONE, "deleted", NOW)).extracting(SyncTask::id)
@@ -216,8 +251,8 @@ public abstract class SyncOutboxContract {
     void the_waiting_work_says_how_the_gig_reads_now_and_the_log_keeps_what_it_said() {
         SyncTask waiting = queue(gig, SyncAction.UPDATE);
         SyncTask settled = queue(gig, SyncAction.CANCEL);
-        outbox().markRunning(settled.id(), NOW);
-        outbox().markDone(settled.id(), "cancelled there", NOW);
+        outbox().markRunning(settled.band(), settled.id(), NOW);
+        outbox().markDone(settled.band(), settled.id(), "cancelled there", NOW);
         String asItWas = get(settled).gigLabel();
 
         outbox().relabel(BAND, gig.id(), "2026-12-24 · Fest, Brno");

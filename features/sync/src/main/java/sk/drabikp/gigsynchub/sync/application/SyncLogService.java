@@ -78,7 +78,7 @@ public class SyncLogService implements SyncLogUseCase {
         if (task.status() != SyncStatus.FAILED && task.status() != SyncStatus.DISCARDED) {
             throw movedOn(task, "Only a failed or discarded task can be retried — it has moved on meanwhile.");
         }
-        outbox.requeue(taskId, clock.instant());
+        outbox.requeue(band, taskId, clock.instant());
         trigger.wake();
         notifier.changed(band);
     }
@@ -89,13 +89,18 @@ public class SyncLogService implements SyncLogUseCase {
         if (task.status() != SyncStatus.FAILED && task.status() != SyncStatus.PENDING) {
             throw movedOn(task, "Only a waiting or failed task can be discarded — it has moved on meanwhile.");
         }
-        outbox.discard(taskId, clock.instant());
+        outbox.discard(band, taskId, clock.instant());
         notifier.changed(band);
     }
 
-    /** The band's task — another band's is "not there" for it. */
+    /**
+     * The band's task — another band's is "not there" for it. The band is part of the ASKING now;
+     * it used to be a filter applied to whatever came back by id, which worked but was a check the
+     * build could not see, and the only one standing between a crafted task id and another band's
+     * work.
+     */
     private SyncTask task(BandId band, long taskId) {
-        return outbox.find(taskId).filter(t -> t.band().equals(band))
+        return outbox.find(band, taskId)
                 .orElseThrow(() -> new NotFoundException("no sync task " + taskId));
     }
 

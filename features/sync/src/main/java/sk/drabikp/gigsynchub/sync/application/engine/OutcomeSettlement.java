@@ -73,11 +73,11 @@ public class OutcomeSettlement {
                 yield Settled.ENDED;
             }
             case FAILED_FOR_GOOD -> {
-                outbox.markFailed(run.id(), label + ": " + outcome.note(), now);
+                outbox.markFailed(run.band(), run.id(), label + ": " + outcome.note(), now);
                 yield Settled.ENDED;
             }
             case POSTPONED -> {
-                outbox.postpone(run.id(), label + ": " + outcome.note(), now.plus(SyncRetryPolicy.POSTPONE), now);
+                outbox.postpone(run.band(), run.id(), label + ": " + outcome.note(), now.plus(SyncRetryPolicy.POSTPONE), now);
                 yield Settled.WAITING;
             }
             case FAILED -> failed(run, label, outcome, now);
@@ -94,7 +94,7 @@ public class OutcomeSettlement {
             if (run.action() == SyncAction.DELETE) {
                 publishedGigStore.remove(run.band(), run.platform(), gigId);
             }
-            outbox.markDone(run.id(),
+            outbox.markDone(run.band(), run.id(),
                     label + (outcome.note() == null || outcome.note().isBlank() ? "" : ": " + outcome.note()), now);
         });
     }
@@ -102,10 +102,10 @@ public class OutcomeSettlement {
     private Settled failed(SyncTask run, String label, StepOutcome outcome, Instant now) {
         Optional<Instant> retryAt = SyncRetryPolicy.nextAttempt(run.action(), run.attempts() + 1, now);
         if (retryAt.isPresent()) {
-            outbox.markRetry(run.id(), label + ": " + outcome.note(), retryAt.get(), now);
+            outbox.markRetry(run.band(), run.id(), label + ": " + outcome.note(), retryAt.get(), now);
             return Settled.WAITING;
         }
-        outbox.markFailed(run.id(), label + ": " + outcome.note()
+        outbox.markFailed(run.band(), run.id(), label + ": " + outcome.note()
                 + (run.action().repeatable() ? "" : " — check " + platforms.name(run.platform())
                 + ", then Retry or Discard"), now);
         return Settled.ENDED;

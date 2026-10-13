@@ -66,7 +66,7 @@ class WorkflowEngineTest {
     }
 
     private SyncTask after(SyncTask task) {
-        return outbox.find(task.id()).orElseThrow();
+        return outbox.find(task.band(), task.id()).orElseThrow();
     }
 
     /** What the worker does: the next due task names a workload, over and over until none is due. */

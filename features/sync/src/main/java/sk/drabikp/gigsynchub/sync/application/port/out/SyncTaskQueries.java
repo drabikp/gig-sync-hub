@@ -19,7 +19,7 @@ import java.util.Optional;
 @Repository
 public interface SyncTaskQueries {
 
-    Optional<SyncTask> find(long id);
+    Optional<SyncTask> find(BandId band, long id);
 
     /** PENDING and RUNNING tasks of the band's gig. */
     List<SyncTask> openFor(BandId band, GigId gigId);

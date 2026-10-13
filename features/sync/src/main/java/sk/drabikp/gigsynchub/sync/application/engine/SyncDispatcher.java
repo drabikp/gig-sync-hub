@@ -105,9 +105,9 @@ public class SyncDispatcher implements DispatchSyncUseCase {
      */
     private void settleStuck(SyncTask task, String why, Instant now) {
         if (task.action().repeatable()) {
-            outbox.markRetry(task.id(), why + " — running it again", now, now);
+            outbox.markRetry(task.band(), task.id(), why + " — running it again", now, now);
         } else {
-            outbox.markFailed(task.id(), why + " — it may or may not have happened on "
+            outbox.markFailed(task.band(), task.id(), why + " — it may or may not have happened on "
                     + platforms.name(task.platform()) + "; check there, then Retry or Discard", now);
         }
         notifier.changed(task.band());

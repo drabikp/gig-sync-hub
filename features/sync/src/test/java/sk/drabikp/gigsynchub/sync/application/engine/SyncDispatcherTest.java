@@ -47,7 +47,7 @@ class SyncDispatcherTest {
         assertThat(dispatcher.runNext()).isTrue();
         assertThat(dispatcher.runNext()).isFalse();
 
-        assertThat(outbox.find(delete.id()).orElseThrow().status()).isEqualTo(SyncStatus.DONE);
+        assertThat(outbox.find(delete.band(), delete.id()).orElseThrow().status()).isEqualTo(SyncStatus.DONE);
         assertThat(bzRemove.ran()).singleElement().satisfies(i -> assertThat(i.externalRef()).isEqualTo("100"));
     }
 
@@ -72,7 +72,7 @@ class SyncDispatcherTest {
         }
 
         assertThat(bitRemove.ran()).as("held back after two failures in a row").hasSize(2);
-        assertThat(outbox.find(onBandzone.id()).orElseThrow().status()).isEqualTo(SyncStatus.DONE);
+        assertThat(outbox.find(onBandzone.band(), onBandzone.id()).orElseThrow().status()).isEqualTo(SyncStatus.DONE);
         assertThat(breakers.breakers(BAND)).singleElement().satisfies(b -> {
             assertThat(b.platform()).isEqualTo(BANDSINTOWN);
             assertThat(b.held(clock.instant())).isTrue();
@@ -98,7 +98,7 @@ class SyncDispatcherTest {
     void a_discarded_task_is_not_run() {
         published.record(BAND, BANDZONE, gig.id(), "100");
         SyncTask task = queue(gig, BANDZONE, SyncAction.DELETE);
-        outbox.discard(task.id(), clock.instant());
+        outbox.discard(task.band(), task.id(), clock.instant());
 
         assertThat(dispatcher.runNext()).isFalse();
         assertThat(bzRemove.calls).isEmpty();
@@ -108,14 +108,14 @@ class SyncDispatcherTest {
     void after_a_restart_interrupted_safe_work_runs_again_and_an_interrupted_publish_waits_for_the_user() {
         SyncTask delete = queue(gig, BANDSINTOWN, SyncAction.DELETE);
         SyncTask publish = queue(TestGigs.gig("Other", "Barrák"), BANDZONE, SyncAction.PUBLISH);
-        outbox.markRunning(delete.id(), clock.instant());
-        outbox.markRunning(publish.id(), clock.instant());
+        outbox.markRunning(delete.band(), delete.id(), clock.instant());
+        outbox.markRunning(publish.band(), publish.id(), clock.instant());
 
         dispatcher.recoverInterrupted();
 
-        assertThat(outbox.find(delete.id()).orElseThrow().status()).isEqualTo(SyncStatus.PENDING);
-        assertThat(outbox.find(publish.id()).orElseThrow().status()).isEqualTo(SyncStatus.FAILED);
-        assertThat(outbox.find(publish.id()).orElseThrow().message()).contains("check there, then Retry or Discard");
+        assertThat(outbox.find(delete.band(), delete.id()).orElseThrow().status()).isEqualTo(SyncStatus.PENDING);
+        assertThat(outbox.find(publish.band(), publish.id()).orElseThrow().status()).isEqualTo(SyncStatus.FAILED);
+        assertThat(outbox.find(publish.band(), publish.id()).orElseThrow().message()).contains("check there, then Retry or Discard");
     }
 
     @Test
