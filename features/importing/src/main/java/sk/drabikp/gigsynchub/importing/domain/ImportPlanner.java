@@ -69,7 +69,7 @@ public final class ImportPlanner {
                 if (p.hasExternalRef()) {
                     refs.add(new PlatformRef(p.platform(), p.externalRef()));
                 }
-                platformsByGig.computeIfAbsent(p.gigId(), id -> new HashSet<>()).add(p.platform());
+                platformsByGig.computeIfAbsent(p.gigId(), _ -> new HashSet<>()).add(p.platform());
             }
             return new Links(refs, platformsByGig);
         }
@@ -123,7 +123,7 @@ public final class ImportPlanner {
                         + " event already has this date and venue");
                 return;
             }
-            groups.computeIfAbsent(match, k -> new Group(local)).copies.put(copy.platform(), copy);
+            groups.computeIfAbsent(match, _ -> new Group(local)).copies.put(copy.platform(), copy);
         }
 
         /** Newest first. */
@@ -160,7 +160,7 @@ public final class ImportPlanner {
                     .toList();
             if (localCandidates.size() == 1) {
                 Gig local = localCandidates.getFirst();
-                Group target = withLocal.computeIfAbsent(local.match(), k -> new Group(local));
+                Group target = withLocal.computeIfAbsent(local.match(), _ -> new Group(local));
                 target.copies.put(platform, copy);
                 target.suggested = true;
                 withoutLocal.remove(match);

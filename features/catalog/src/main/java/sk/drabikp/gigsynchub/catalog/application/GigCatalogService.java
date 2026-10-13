@@ -129,7 +129,7 @@ public class GigCatalogService
     private static Map<GigId, Map<Platform, Publication>> byGig(List<Publication> publications) {
         Map<GigId, Map<Platform, Publication>> byGig = new HashMap<>();
         for (Publication p : publications) {
-            byGig.computeIfAbsent(p.gigId(), id -> new TreeMap<>()).put(p.platform(), p);
+            byGig.computeIfAbsent(p.gigId(), _ -> new TreeMap<>()).put(p.platform(), p);
         }
         return byGig;
     }

@@ -61,7 +61,7 @@ class PhotonPlaceSearch implements PlaceSearch {
                     .timeout(Duration.ofSeconds(6))
                     .header("User-Agent", "gigsynchub-gig-sync/1.0 (a band's gig tool)")
                     .GET().build(), HttpResponse.BodyHandlers.ofString());
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             return List.of();
         } catch (IOException e) {

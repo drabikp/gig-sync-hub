@@ -103,7 +103,7 @@ class BandzoneHtmlParser {
         }
         try {
             return ZonedDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME);
-        } catch (DateTimeParseException e) {
+        } catch (DateTimeParseException _) {
             logger.debug("Unreadable Bandzone date '{}'", value);
             return null;
         }

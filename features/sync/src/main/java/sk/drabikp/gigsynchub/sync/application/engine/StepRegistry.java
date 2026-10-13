@@ -42,7 +42,7 @@ public class StepRegistry implements SyncAdmission {
 
     public StepRegistry(List<SyncStep> steps, Platforms platforms, Recreator recreator) {
         for (SyncStep step : steps) {
-            if (this.steps.computeIfAbsent(step.platform(), p -> new EnumMap<>(StepType.class))
+            if (this.steps.computeIfAbsent(step.platform(), _ -> new EnumMap<>(StepType.class))
                     .put(step.type(), step) != null) {
                 throw new IllegalStateException("Two " + step.type() + " steps registered for " + step.platform());
             }

@@ -38,7 +38,7 @@ public final class PublicAddresses {
         InetAddress[] addresses;
         try {
             addresses = InetAddress.getAllByName(host);
-        } catch (UnknownHostException e) {
+        } catch (UnknownHostException _) {
             throw new IllegalArgumentException("the host " + host + " is unknown");
         }
         for (InetAddress address : addresses) {
@@ -108,7 +108,7 @@ public final class PublicAddresses {
         try {
             checked(URI.create(address.strip()));
             return true;
-        } catch (IllegalArgumentException | NullPointerException e) {
+        } catch (IllegalArgumentException | NullPointerException _) {
             return false;
         }
     }
@@ -147,7 +147,7 @@ public final class PublicAddresses {
             if (mapped && (b[10] & 0xff) == 0xff && (b[11] & 0xff) == 0xff) {
                 try {
                     return isPublic(InetAddress.getByAddress(new byte[] {b[12], b[13], b[14], b[15]}));
-                } catch (UnknownHostException e) {
+                } catch (UnknownHostException _) {
                     return false;
                 }
             }

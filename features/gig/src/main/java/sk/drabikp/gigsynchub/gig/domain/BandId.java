@@ -27,7 +27,7 @@ public record BandId(UUID value) {
     public static BandId of(String text) {
         try {
             return new BandId(UUID.fromString(text));
-        } catch (IllegalArgumentException | NullPointerException e) {
+        } catch (IllegalArgumentException | NullPointerException _) {
             throw new UnknownReferenceException("not a band: " + text);
         }
     }

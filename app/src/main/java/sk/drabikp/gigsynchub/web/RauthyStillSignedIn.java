@@ -63,10 +63,10 @@ class RauthyStillSignedIn implements SessionLife.Check {
                 return SessionLife.Verdict.CANT_TELL;
             }
             return stillOneOfUs(answer.body()) ? SessionLife.Verdict.STILL_GOOD : SessionLife.Verdict.OVER;
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             return SessionLife.Verdict.CANT_TELL;
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException _) {
             return SessionLife.Verdict.CANT_TELL;
         }
     }

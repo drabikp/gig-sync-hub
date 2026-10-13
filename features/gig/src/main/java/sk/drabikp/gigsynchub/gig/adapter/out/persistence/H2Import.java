@@ -133,7 +133,7 @@ class H2Import implements Callback {
 
     /** The identity of the gig this key names — the same one wherever the key turns up again. */
     private UUID identityOf(String gigKey) {
-        return identities.computeIfAbsent(gigKey, key -> UUID.randomUUID());
+        return identities.computeIfAbsent(gigKey, _ -> UUID.randomUUID());
     }
 
     /** Columns that named a gig by its day and venue, and now name its identity. */

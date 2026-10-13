@@ -44,7 +44,7 @@ public record BandCalendar(@Identity BandId band, String address, ZoneId zone) {
             String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
             return (scheme.equals("https") || scheme.equals("http") || scheme.equals("webcal"))
                     && uri.getHost() != null && !uri.getHost().isBlank();
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             return false;
         }
     }

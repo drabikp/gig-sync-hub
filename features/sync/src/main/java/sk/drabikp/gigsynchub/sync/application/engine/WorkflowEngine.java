@@ -115,7 +115,7 @@ public class WorkflowEngine {
     private Map<StepType, List<Enrolled>> whatIsDue(Workload workload) {
         Map<StepType, List<Enrolled>> waiting = new EnumMap<>(StepType.class);
         for (SyncTask run : outbox.due(workload.band(), workload.platform(), workload.action(), clock.instant())) {
-            waiting.computeIfAbsent(run.waitingAt(), step -> new ArrayList<>()).add(new Enrolled(run, List.of()));
+            waiting.computeIfAbsent(run.waitingAt(), _ -> new ArrayList<>()).add(new Enrolled(run, List.of()));
         }
         return waiting;
     }
@@ -211,7 +211,7 @@ public class WorkflowEngine {
         }
         outbox.advance(run.band(), run.id(), next.get(), said, now);
         outbox.find(run.band(), run.id())           // moving on begins the attempts afresh: take the run as it now is
-                .ifPresent(moved -> waiting.computeIfAbsent(next.get(), step -> new ArrayList<>())
+                .ifPresent(moved -> waiting.computeIfAbsent(next.get(), _ -> new ArrayList<>())
                         .add(new Enrolled(moved, reasons)));
     }
 

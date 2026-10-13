@@ -181,7 +181,7 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
             log.debug("A page's live stream is gone", e);
             streams.remove(stream);
             stream.emitter().completeWithError(e);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();                 // the server is stopping
         }
     }

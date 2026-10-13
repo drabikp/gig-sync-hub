@@ -83,7 +83,7 @@ public class CalendarSetupService implements CalendarSetupUseCase {
         if (zone != null && !zone.isBlank()) {
             try {
                 zoneId = ZoneId.of(zone.strip());
-            } catch (DateTimeException e) {
+            } catch (DateTimeException _) {
                 wrong.add("zone");
             }
         }

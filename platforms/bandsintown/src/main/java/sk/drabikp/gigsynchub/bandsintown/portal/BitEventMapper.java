@@ -91,7 +91,7 @@ public final class BitEventMapper {
         }
         try {
             return ZoneId.of(event.venueTimezone());
-        } catch (DateTimeException e) {
+        } catch (DateTimeException _) {
             logger.warn("Bandsintown event {} has an unknown time zone '{}' — read in {}", event.id(),
                     event.venueTimezone(), countryZone);
             return countryZone;

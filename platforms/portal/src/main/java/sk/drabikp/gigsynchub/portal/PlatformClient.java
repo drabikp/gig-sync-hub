@@ -26,7 +26,7 @@ public enum PlatformClient {
         }
         try {
             return valueOf(chosen.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw new IllegalStateException(prefix + ".client must be off or http, not '" + chosen + "'");
         }
     }
