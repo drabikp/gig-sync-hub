@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.gigsynchub.gig.application.port.out.GigPagingContract;
 import sk.drabikp.gigsynchub.gig.application.port.out.GigRepository;
+import sk.drabikp.gigsynchub.gig.application.port.out.PublishedGigStore;
 import sk.drabikp.gigsynchub.gig.domain.GigQuery;
 import sk.drabikp.gigsynchub.gig.domain.TestBands;
 import sk.drabikp.gigsynchub.gig.domain.TestGigs;
@@ -30,6 +31,9 @@ class JpaGigPagingTest extends GigPagingContract {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private PublishedGigStore publications;
+
     /** The contract asks about a second band, so this one has to exist (band #1 comes with the schema). */
     @BeforeEach
     void anotherBand() {
@@ -39,6 +43,11 @@ class JpaGigPagingTest extends GigPagingContract {
     @Override
     protected GigRepository repository() {
         return repository;
+    }
+
+    @Override
+    protected PublishedGigStore publications() {
+        return publications;
     }
 
     @Test

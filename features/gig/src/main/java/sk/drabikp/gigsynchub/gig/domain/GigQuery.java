@@ -16,10 +16,16 @@ import java.util.Set;
  * {@code onlyIds} matches no gig at all (never "everything", which would show a band the opposite of
  * what it asked for). Which way round depends on which side is ENUMERABLE: the gigs a platform failed
  * on are few and name themselves; the gigs missing from a platform are "all but these".
+ *
+ * <p>{@code notOnAllOf} is the one filter that is neither. "The gigs not on every platform yet" was
+ * written as {@code exceptIds} of the gigs that ARE on all of them, which meant reading the band's
+ * whole publication table to build a set and sending it back as a {@code not in} of however many
+ * thousand ids. It is a question about a COUNT per gig, so it travels as the number of platforms
+ * there are and the store does the counting; null asks nothing.
  */
 @ValueObject
 public record GigQuery(Period period, String text, Set<GigId> onlyIds, Set<GigId> exceptIds, Boolean cancelled,
-                       GigCursor after, int size) {
+                       Integer notOnAllOf, GigCursor after, int size) {
 
     /** Which side of the band's show day a page reads. */
     public enum Period { UPCOMING, PAST }
@@ -37,42 +43,52 @@ public record GigQuery(Period period, String text, Set<GigId> onlyIds, Set<GigId
 
     /** The first page of what is to come. */
     public static GigQuery upcoming() {
-        return new GigQuery(Period.UPCOMING, "", null, null, null, null, DEFAULT_SIZE);
+        return new GigQuery(Period.UPCOMING, "", null, null, null, null, null, DEFAULT_SIZE);
     }
 
     public GigQuery of(Period wanted) {
-        return new GigQuery(wanted, text, onlyIds, exceptIds, cancelled, after, size);
+        return new GigQuery(wanted, text, onlyIds, exceptIds, cancelled, notOnAllOf, after, size);
     }
 
     public GigQuery matching(String words) {
-        return new GigQuery(period, words, onlyIds, exceptIds, cancelled, after, size);
+        return new GigQuery(period, words, onlyIds, exceptIds, cancelled, notOnAllOf, after, size);
     }
 
     /** Narrowed to these gigs, and to nothing when the set is empty. */
     public GigQuery onlyIn(Set<GigId> ids) {
-        return new GigQuery(period, text, ids, exceptIds, cancelled, after, size);
+        return new GigQuery(period, text, ids, exceptIds, cancelled, notOnAllOf, after, size);
     }
 
     /** Everything but these gigs (an empty set leaves every gig in). */
     public GigQuery excluding(Set<GigId> ids) {
-        return new GigQuery(period, text, onlyIds, ids, cancelled, after, size);
+        return new GigQuery(period, text, onlyIds, ids, cancelled, notOnAllOf, after, size);
+    }
+
+    /** Only the gigs that are not published on all {@code platforms} platforms yet. */
+    public GigQuery missingFromSome(int platforms) {
+        return new GigQuery(period, text, onlyIds, exceptIds, cancelled, platforms, after, size);
     }
 
     /** Only the gigs still on, or only the cancelled ones. */
     public GigQuery cancelled(Boolean wanted) {
-        return new GigQuery(period, text, onlyIds, exceptIds, wanted, after, size);
+        return new GigQuery(period, text, onlyIds, exceptIds, wanted, notOnAllOf, after, size);
     }
 
     public GigQuery from(GigCursor cursor) {
-        return new GigQuery(period, text, onlyIds, exceptIds, cancelled, cursor, size);
+        return new GigQuery(period, text, onlyIds, exceptIds, cancelled, notOnAllOf, cursor, size);
     }
 
     public GigQuery sized(int rows) {
-        return new GigQuery(period, text, onlyIds, exceptIds, cancelled, after, rows);
+        return new GigQuery(period, text, onlyIds, exceptIds, cancelled, notOnAllOf, after, rows);
     }
 
     public boolean searching() {
         return !text.isBlank();
+    }
+
+    /** Whether the list is narrowed to the gigs that are not published everywhere yet. */
+    public boolean missingFromSome() {
+        return notOnAllOf != null;
     }
 
     public boolean excludingAny() {

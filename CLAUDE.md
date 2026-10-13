@@ -130,7 +130,8 @@ features/accounts   users, bands, memberships (User, Band — id, slug, name —
                     band #1's from the configuration, once), PlatformAccountsUseCase (the page: owners connect,
                     members test), port.out PlatformAccountCheck (the platform's sign-in test); SecretBox
                     (AesGcmSecretBox: AES-256-GCM, keys gigsynchub.accounts.data-keys, sealed for its row;
-                    rotation = a new key first, everything sealed again on start); /api/bands,
+                    rotation = a new key first, everything sealed again on start, a page of rows at a time —
+                    a half-rotated table is a good one, every row saying which key sealed it); /api/bands,
                     …/platform-accounts; test-jar: AccountsFakes (+ Accounts: in-memory accounts, TEST_KEYS)
 features/places     Town (coordinates null when only typed), TownChoice, place search (Photon); /api/places
 features/sync       outbox (SyncOutbox = SyncTaskQueries + the writes; SyncTask…, PlatformState: a gig's
@@ -418,8 +419,12 @@ rows are keyed `(band_id, …)`.
   **Limits**:
   `gigsynchub.limits.requests-per-minute` (600) / `changes-per-minute` (120) per user (per address before
   signing in) on `/api`, `/gigs`, `/oauth2`, `/login` → 429 `tooManyRequests`;
-  `gigsynchub.accounts.max-bands-owned` (10) → `tooManyBands`; live streams: 100 per band, 2000 in all
-  (the oldest ends), each ends after 30 min (the page reconnects). **Addresses a band gives** (its
+  `gigsynchub.accounts.max-bands-owned` (10) → `tooManyBands` — and what COUNTS the requests is itself
+  bounded (`gigsynchub.limits.tracked-callers`, 50 000: the least recently seen caller is forgotten,
+  never the one flooding); live streams: 100 per band, 2000 in all
+  (the oldest ends), each ends after 30 min (the page reconnects). The background work a request
+  starts (Import's read, a check on demand) runs on a bounded pool (`spring.task.execution.*`, 8
+  threads and 50 waiting) and a refusal is a 429, not a queue nobody is watching. **Addresses a band gives** (its
   calendar, a gig's poster) are fetched only from the public internet, every redirect checked by hand
   (`PublicAddresses`; a gig's links must be http(s), `links`), at most 10 MB, and a failure says nothing of
   what answered — and the address CHECKED is the address connected to, because the app fixes the
@@ -624,7 +629,11 @@ Re-sync (`ResyncGigUseCase`) or Forget link (a gone event, through `GigWrites.fo
 Publish creates it again; the gig pages follow). Also
 counts platform events no gig is published as (→ Import). Runs nightly
 (`PlatformCheckSchedule`, `gigsynchub.check.cron`, default 04:30; `gigsynchub.check.enabled`), every
-band one after another; each band's latest result is kept (`CheckResultStore`, table `band_check`).
+band one after another **within a budget** (`gigsynchub.check.budget`, 3 h): the next run is
+scheduled from the cron before the walk starts, so the cadence never drifts, and a walk that spends
+its budget carries on tomorrow at the band it stopped at — so the bands take turns rather than the
+first few being checked for ever. Each band's latest result is kept (`CheckResultStore`, table
+`band_check`).
 
 ## Import (`/import`)
 
@@ -669,6 +678,11 @@ included — local DB only) and compared with the last one (`CalendarChanges`): 
 (title, time, place, notes, status; plus what the rules said before, when the change made
 them say something else) / REMOVED / RETURNED, kept until the user marks them seen. The very
 first read is the baseline. The page shows the saved copy; "Read calendar" reads again.
+
+The review reads the gigs **around the calendar's own days** (`GigRepository.findCovering`, a day
+either side) and not the band's whole catalog — everything it asks the catalog is about an event's
+day, so the answer is the same by construction; a gig an event is LINKED to is fetched by its id
+whatever its day, so moving a gig out of the window never makes the page say the link is gone.
 
 **Into the catalog**: `CalendarCatalogUseCase` (`CalendarCatalogService`, through `GigWrites`: a gig
 the catalog already has is `gigIdentityTaken`, a link to a gone gig `notFound`).
@@ -900,8 +914,17 @@ collection and no cascade to get wrong here; the costs are elsewhere):
   are for writing, where the dirty checking earns its keep.
 - **Nothing per row.** A page's platform states are read for the page's gigs
   (`publicationsOf(band, ids)`, `published_gig_band_gig`), never one query per row and never the
-  band's whole catalog. `GigListCostsTest` counts the statements and fails if the cost starts to
+  band's whole catalog; a bulk action reads the gigs it was given with one `findAllByIds` and not a
+  `findById` each. `GigListCostsTest` counts the statements and fails if the cost starts to
   follow the rows — the cheapest N+1 alarm there is.
+- **A number is counted where the rows are.** The Activity heading's and the operator's four
+  numbers are one `group by` (`SyncTaskQueries.openWork`), not every open row counted in Java; "not
+  on every platform yet" is a count per gig inside the list's own query (`GigQuery.notOnAllOf`),
+  not a `not in` of every gig that already is. `CountingOpenWorkCostsTest` fails if either starts
+  loading what it counts.
+- **The count that a page shows is the FIRST page's.** `GigSlice.total` is null on every page read
+  from a cursor: the page keeps the number it was given and "Show more" adds rows to the same list,
+  so counting again is a full pass for an answer nobody reads.
 - **A public address is bounded.** `/gigs/{band_slug}` takes no sign-in, so it answers a
   store-ordered `earliestFirst(band, limit)` (2000) rather than however much a catalog has grown to.
 - **Ids come from sequences** (V9), because an identity column cannot be batched; with

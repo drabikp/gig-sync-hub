@@ -31,7 +31,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Manages the local gig catalog (the source of truth) over the {@link GigRepository}.
@@ -77,6 +79,19 @@ public class GigCatalogService
     @Override
     public Gig gig(BandId band, GigId id) {
         return gigRepository.findById(band, id).orElseThrow(() -> new NotFoundException("No such gig."));
+    }
+
+    @Override
+    public List<Gig> gigs(BandId band, List<GigId> ids) {
+        Map<GigId, Gig> found = gigRepository.findAllByIds(band, ids).stream()
+                .collect(Collectors.toMap(Gig::id, Function.identity()));
+        return ids.stream().map(id -> {
+            Gig gig = found.get(id);
+            if (gig == null) {
+                throw new NotFoundException("No such gig.");
+            }
+            return gig;
+        }).toList();
     }
 
     @Override

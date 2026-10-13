@@ -5,11 +5,14 @@ import sk.drabikp.gigsynchub.gig.domain.BandId;
 import sk.drabikp.gigsynchub.gig.domain.GigId;
 import sk.drabikp.gigsynchub.gig.domain.platform.Platform;
 import sk.drabikp.gigsynchub.sync.domain.SyncAction;
+import sk.drabikp.gigsynchub.sync.domain.SyncCounts;
 import sk.drabikp.gigsynchub.sync.domain.SyncLogEntry;
 import sk.drabikp.gigsynchub.sync.domain.SyncTask;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -26,6 +29,17 @@ public interface SyncTaskQueries {
 
     /** The band's tasks not settled for good: PENDING, RUNNING and FAILED. */
     List<SyncTask> unfinished(BandId band);
+
+    /**
+     * The same open work COUNTED, for the bands asked about at once — the four numbers the Activity
+     * page's heading and the operator's gauges show.
+     *
+     * <p>Counted by the store, deliberately. Both callers used to ask {@link #unfinished(BandId)}
+     * and count in Java, which reads every open row to answer with four numbers: a band with a
+     * thousand queued gigs paid a thousand rows for its heading, and the operator's gauges paid
+     * every band's, every minute. A band with nothing open is simply missing from the answer.
+     */
+    Map<BandId, SyncCounts> openWork(Collection<BandId> bands);
 
     /** The band's latest activity first ({@link SyncTask#LATEST_FIRST}), and the latest {@code limit} of it. */
     List<SyncTask> recent(BandId band, int limit);

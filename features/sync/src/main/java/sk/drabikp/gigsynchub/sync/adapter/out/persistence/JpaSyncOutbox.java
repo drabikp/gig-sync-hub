@@ -9,14 +9,19 @@ import sk.drabikp.gigsynchub.gig.domain.platform.Platform;
 import sk.drabikp.gigsynchub.sync.application.port.out.SyncOutbox;
 import sk.drabikp.gigsynchub.sync.domain.StepType;
 import sk.drabikp.gigsynchub.sync.domain.SyncAction;
+import sk.drabikp.gigsynchub.sync.domain.SyncCounts;
 import sk.drabikp.gigsynchub.sync.domain.SyncLogEntry;
 import sk.drabikp.gigsynchub.sync.domain.SyncStatus;
 import sk.drabikp.gigsynchub.sync.domain.SyncTask;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * JPA-backed {@link SyncOutbox} (tables {@code sync_task} + {@code sync_log}) in the
@@ -64,6 +69,20 @@ class JpaSyncOutbox implements SyncOutbox {
     @Override
     public List<SyncTask> unfinished(BandId band) {
         return mapper.toTasks(tasks.findByBandIdAndStatusInOrderByIdAsc(band.value(), UNFINISHED));
+    }
+
+    @Override
+    public Map<BandId, SyncCounts> openWork(Collection<BandId> bands) {
+        if (bands.isEmpty()) {
+            return Map.of();
+        }
+        Map<BandId, SyncCounts> counted = new HashMap<>();
+        for (Object[] row : tasks.countOpenWork(bands.stream().map(BandId::value).toList(), UNFINISHED)) {
+            BandId band = new BandId((UUID) row[0]);
+            counted.merge(band, SyncCounts.NONE.and(SyncStatus.valueOf((String) row[1]), (Boolean) row[2],
+                    (Long) row[3]), SyncCounts::plus);
+        }
+        return counted;
     }
 
     @Override

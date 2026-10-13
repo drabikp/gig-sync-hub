@@ -20,6 +20,7 @@ import sk.drabikp.gigsynchub.catalog.application.port.in.GigIdentityTakenExcepti
 import sk.drabikp.gigsynchub.gig.application.BadRequestException;
 import sk.drabikp.gigsynchub.gig.application.NotFoundException;
 import sk.drabikp.gigsynchub.gig.application.port.out.LiveUpdates;
+import sk.drabikp.gigsynchub.gig.domain.GigSchedule;
 import sk.drabikp.gigsynchub.gig.domain.Gig;
 import sk.drabikp.gigsynchub.gig.domain.TestGigs;
 import sk.drabikp.gigsynchub.sync.application.SyncFakes;
@@ -150,6 +151,43 @@ class CalendarReviewServiceTest {
         assertThatThrownBy(() -> catalog.addToCatalog(BAND, "other", festGig()))
                 .isInstanceOf(GigIdentityTakenException.class).extracting("code").isEqualTo(CatalogErrorCode.GIG_IDENTITY_TAKEN);
         assertThat(links.all(BAND)).doesNotContainKey("other");
+    }
+
+    /**
+     * The review reads the gigs around the calendar's own days, not the band's whole history — a
+     * band that has been playing for ten years must not pay for ten years to look at this month.
+     * What has to hold is that the ANSWER is the same, which it is by construction: everything the
+     * review asks the catalog is about an event's own day.
+     */
+    @Test
+    void a_gig_years_away_from_the_calendar_is_neither_read_nor_needed() throws Exception {
+        gigs.save(BAND, festGig());
+        gigs.save(BAND, TestGigs.gig("Long ago", "Barrák",
+                ZonedDateTime.of(FEST_DAY.minusYears(5).toLocalDate().atTime(20, 0), PRAGUE)));
+
+        CalendarOverview overview = read(fest());
+
+        assertThat(row(overview, "fest").match().state()).isEqualTo(CatalogMatch.State.SAME_DAY);
+        assertThat(row(overview, "fest").match().gig().title()).isEqualTo("Fest");
+    }
+
+    /**
+     * And the one thing narrowing the read could have broken: a link the band made itself, to a gig
+     * that has since moved out of the window. Showing it as gone from the catalog would be the page
+     * lying about the band's own decision, so the linked gigs are fetched by id whatever their day.
+     */
+    @Test
+    void a_linked_gig_that_has_moved_out_of_the_window_is_still_linked() throws Exception {
+        read(fest());
+        catalog.addToCatalog(BAND, "fest", festGig());
+        Gig moved = festGig().rescheduledTo(GigSchedule.startingAt(
+                ZonedDateTime.of(FEST_DAY.plusYears(2).toLocalDate().atTime(20, 30), PRAGUE)));
+        gigs.save(BAND, moved);
+
+        CalendarOverview overview = read(fest());
+
+        assertThat(row(overview, "fest").match().state()).isEqualTo(CatalogMatch.State.LINKED);
+        assertThat(row(overview, "fest").match().gig().id()).isEqualTo(festGig().id());
     }
 
     @Test

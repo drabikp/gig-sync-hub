@@ -11,6 +11,7 @@ import sk.drabikp.gigsynchub.gig.domain.GigQuery;
 import sk.drabikp.gigsynchub.gig.domain.GigRow;
 import sk.drabikp.gigsynchub.gig.domain.GigSlice;
 import sk.drabikp.gigsynchub.gig.domain.TestGigs;
+import sk.drabikp.gigsynchub.gig.domain.platform.Platform;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -34,10 +35,17 @@ import static sk.drabikp.gigsynchub.gig.domain.TestBands.OTHER;
  */
 public abstract class GigPagingContract {
 
+    /** Two platforms, named here and nowhere else: the kernel's tests know of no real one. */
+    protected static final Platform ONE = new Platform("ONE");
+    protected static final Platform TWO = new Platform("TWO");
+
     protected static final ZoneId ZONE = ZoneId.of("Europe/Prague");
     protected static final LocalDate TODAY = LocalDate.of(2026, 10, 11);
 
     protected abstract GigRepository repository();
+
+    /** Where this store's publications live — the one filter the gig table cannot answer alone. */
+    protected abstract PublishedGigStore publications();
 
     /**
      * Each promise is tried on an empty catalog and leaves one behind, saying so itself rather than
@@ -48,6 +56,7 @@ public abstract class GigPagingContract {
     @AfterEach
     void anEmptyCatalog() {
         for (BandId band : List.of(BAND, OTHER)) {
+            publications().all(band).forEach(p -> publications().remove(band, p.platform(), p.gigId()));
             repository().findAll(band).forEach(gig -> repository().deleteById(band, gig.id()));
         }
     }
@@ -64,6 +73,33 @@ public abstract class GigPagingContract {
 
     private List<String> titles(GigSlice slice) {
         return slice.rows().stream().map(GigRow::title).toList();
+    }
+
+    /**
+     * "Not on every platform yet" is the list's one filter about rows in ANOTHER table, and it is
+     * asked as a count rather than as a set: the store is told how many platforms there are and
+     * leaves out the gigs that have that many publications. Written the other way round — a set of
+     * the gigs that ARE everywhere, excluded — it read the band's whole publication table to build
+     * a {@code not in} as long as the catalog, which is why the shape is part of the contract and
+     * not just of the SQL.
+     */
+    @Test
+    void the_list_can_show_only_what_is_not_on_every_platform_yet() {
+        Gig everywhere = save(BAND, "already out", "Klub 007", "Praha", at(2026, 10, 20, 20));
+        Gig halfway = save(BAND, "on one of two", "Fléda", "Brno", at(2026, 10, 21, 20));
+        Gig nowhere = save(BAND, "nowhere yet", "Barrák", "Ostrava", at(2026, 10, 22, 20));
+        publications().record(BAND, ONE, everywhere.id(), "e1");
+        publications().record(BAND, TWO, everywhere.id(), "e2");
+        publications().record(BAND, ONE, halfway.id(), "h1");
+
+        assertThat(titles(repository().page(BAND, GigQuery.upcoming().missingFromSome(2), TODAY)))
+                .containsExactly("on one of two", "nowhere yet");
+        assertThat(titles(repository().page(BAND, GigQuery.upcoming().missingFromSome(1), TODAY)))
+                .as("with one platform, only what is on none of it")
+                .containsExactly("nowhere yet");
+        assertThat(repository().page(BAND, GigQuery.upcoming().missingFromSome(2), TODAY).total())
+                .as("the heading counts what the filter leaves, not the catalog").isEqualTo(2);
+        assertThat(nowhere.id()).isNotNull();
     }
 
     @Test
@@ -151,7 +187,7 @@ public abstract class GigPagingContract {
     }
 
     @Test
-    void the_cursor_walks_every_row_once_and_the_total_counts_them_all() {
+    void the_cursor_walks_every_row_once_and_only_the_first_page_counts_them_all() {
         for (int day = 12; day <= 21; day++) {
             save(BAND, "gig " + day, "Klub 007", "Praha", at(2026, 10, day, 20));
         }
@@ -162,7 +198,10 @@ public abstract class GigPagingContract {
         int pages = 0;
         do {
             GigSlice slice = repository().page(BAND, cursor == null ? query : query.from(cursor), TODAY);
-            assertThat(slice.total()).as("the total is what matches, not what the page holds").isEqualTo(10);
+            assertThat(slice.total())
+                    .as("the first page counts what matches, not what it holds; the pages that read on "
+                            + "from a cursor count nothing, the page already having been told")
+                    .isEqualTo(cursor == null ? 10L : null);
             assertThat(slice.rows()).hasSizeLessThanOrEqualTo(3);
             walked.addAll(titles(slice));
             cursor = slice.next();

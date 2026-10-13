@@ -17,6 +17,7 @@ import sk.drabikp.gigsynchub.sync.domain.SyncStatus;
 import sk.drabikp.gigsynchub.sync.domain.SyncTask;
 
 import java.time.Clock;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -69,7 +70,12 @@ public class SyncLogService implements SyncLogUseCase, ForgetOldSyncWorkUseCase 
 
     @Override
     public SyncCounts counts(BandId band) {
-        return SyncCounts.of(outbox.unfinished(band));
+        return outbox.openWork(List.of(band)).getOrDefault(band, SyncCounts.NONE);
+    }
+
+    @Override
+    public Map<BandId, SyncCounts> counts(Collection<BandId> bands) {
+        return outbox.openWork(bands);
     }
 
     @Override

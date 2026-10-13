@@ -1,5 +1,6 @@
 package sk.drabikp.gigsynchub.accounts.adapter.out.persistence;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import sk.drabikp.gigsynchub.gig.application.port.out.AcrossBands;
 
@@ -11,7 +12,12 @@ interface PlatformAccountJpaRepository extends JpaRepository<PlatformAccountEnti
 
     List<PlatformAccountEntity> findByBandIdOrderByPlatform(UUID bandId);
 
-    /** The accounts that keep secrets (to seal again with a new key). */
+    /**
+     * The accounts that keep secrets, a page at a time (to seal them again with a new key). Paged
+     * because this is every band's row in one list: on a server with a few thousand bands, reading
+     * them all into one transaction to rotate a key is the biggest thing the app ever holds, and it
+     * happens while it is starting up.
+     */
     @AcrossBands("key rotation on start seals EVERY band's secrets again, so it must see them all")
-    List<PlatformAccountEntity> findBySecretsIsNotNull();
+    List<PlatformAccountEntity> findBySecretsIsNotNullOrderByBandIdAscPlatformAsc(Pageable page);
 }

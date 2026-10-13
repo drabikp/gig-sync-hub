@@ -43,6 +43,19 @@ interface SyncTaskJpaRepository extends JpaRepository<SyncTaskEntity, Long> {
     @Query("select distinct t.bandId from SyncTaskEntity t where t.status = :status and t.nextAttemptAt <= :now")
     List<UUID> bandsWithWorkDue(String status, Instant now);
 
+    /**
+     * The open work counted by the database: one row per band, status and "has it run before",
+     * which is at most a handful of rows however many tasks there are. The Activity page's heading
+     * and the operator's gauges read this instead of every open row.
+     */
+    @Query("""
+            select t.bandId, t.status, case when t.attempts > 0 then true else false end, count(t)
+            from SyncTaskEntity t
+            where t.bandId in :bandIds and t.status in :statuses
+            group by t.bandId, t.status, case when t.attempts > 0 then true else false end
+            """)
+    List<Object[]> countOpenWork(Collection<UUID> bandIds, Collection<String> statuses);
+
     /** One band's due work, oldest first. */
     List<SyncTaskEntity> findByBandIdAndStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(
             UUID bandId, String status, Instant now, Limit limit);

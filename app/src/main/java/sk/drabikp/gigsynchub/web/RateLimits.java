@@ -16,15 +16,24 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.time.Clock;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * How much one user (or, before signing in, one address — behind the proxy, the client's) may ask of the
  * API in a minute ({@link LimitsProperties}); more is answered 429 {@code tooManyRequests} with
  * {@code Retry-After}. Counted per calendar minute, in memory: the API, the public list ({@code /gigs/}) and
  * signing in ({@code /oauth2/}, {@code /login/}); the page itself isn't.
+ *
+ * <p><b>What holds the counts is bounded</b>, which is not a detail in the thing whose job is to
+ * bound. A key is made for every caller that arrives, and the sweep that used to tidy up only threw
+ * away MINUTES that had passed — so a flood from many addresses inside one minute grew the map as
+ * fast as it arrived, and the limiter was the way to fill the heap rather than the thing in the
+ * way. It is now a map of at most {@link LimitsProperties#trackedCallers()} entries that forgets
+ * the least recently seen caller: forgetting one gives that caller a fresh minute, and the callers
+ * that are forgotten are by definition the quiet ones, never whoever is flooding.
  */
 class RateLimits extends OncePerRequestFilter {
 
@@ -37,12 +46,19 @@ class RateLimits extends OncePerRequestFilter {
     private final LimitsProperties limits;
     private final JsonMapper json;
     private final Clock clock;
-    private final Map<String, Window> windows = new ConcurrentHashMap<>();
+    private final Map<String, Window> windows;
 
     RateLimits(LimitsProperties limits, JsonMapper json, Clock clock) {
         this.limits = limits;
         this.json = json;
         this.clock = clock;
+        int most = limits.trackedCallers();
+        this.windows = Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Window> eldest) {
+                return size() > most;
+            }
+        });
     }
 
     /** What is counted: the API, the public list, and signing in (each start makes a session). */
@@ -63,9 +79,6 @@ class RateLimits extends OncePerRequestFilter {
             Window window = before == null || before.minute() != minute ? new Window(minute, 0, 0) : before;
             return new Window(minute, window.requests() + 1, window.changes() + (change ? 1 : 0));
         });
-        if (windows.size() > 10_000) {
-            windows.values().removeIf(w -> w.minute() < minute);
-        }
         if (now.requests() > limits.requestsPerMinute() || now.changes() > limits.changesPerMinute()) {
             long seconds = 60 - (millis / 1000) % 60;
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());

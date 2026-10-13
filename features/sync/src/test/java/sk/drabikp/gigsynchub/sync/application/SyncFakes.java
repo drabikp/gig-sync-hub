@@ -35,6 +35,7 @@ import sk.drabikp.gigsynchub.sync.application.port.out.SyncTrigger;
 import sk.drabikp.gigsynchub.sync.domain.StepOutcome;
 import sk.drabikp.gigsynchub.sync.domain.StepType;
 import sk.drabikp.gigsynchub.sync.domain.SyncAction;
+import sk.drabikp.gigsynchub.sync.domain.SyncCounts;
 import sk.drabikp.gigsynchub.sync.domain.SyncLogEntry;
 import sk.drabikp.gigsynchub.sync.domain.SyncStatus;
 import sk.drabikp.gigsynchub.sync.domain.SyncTask;
@@ -45,10 +46,12 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -105,6 +108,18 @@ public final class SyncFakes {
         public synchronized List<SyncTask> unfinished(BandId band) {
             return tasks.values().stream().filter(t -> t.band().equals(band)
                     && (t.status().open() || t.status() == SyncStatus.FAILED)).toList();
+        }
+
+        @Override
+        public synchronized Map<BandId, SyncCounts> openWork(Collection<BandId> bands) {
+            Map<BandId, SyncCounts> counted = new HashMap<>();
+            for (BandId band : bands) {
+                List<SyncTask> open = unfinished(band);
+                if (!open.isEmpty()) {                    // a band with nothing open is left out, as the store does
+                    counted.put(band, SyncCounts.of(open));
+                }
+            }
+            return counted;
         }
 
         @Override
@@ -345,6 +360,24 @@ public final class SyncFakes {
 
         private final Map<BandId, Map<GigId, Gig>> gigs = new HashMap<>();
 
+        /**
+         * Where this fake looks up what a gig is published on, for the one filter that asks
+         * ("not on every platform yet"). Left unset it knows of no publications at all, which
+         * means every gig is missing from somewhere — which is what an empty catalog of
+         * publications actually means, so a test that never publishes anything needs no wiring.
+         */
+        private Published published;
+
+        public Gigs publishedIn(Published publications) {
+            this.published = publications;
+            return this;
+        }
+
+        private int onHowManyPlatforms(BandId band, GigId gig) {
+            return published == null ? 0
+                    : (int) published.all(band).stream().filter(p -> p.gigId().equals(gig)).count();
+        }
+
         private Map<GigId, Gig> of(BandId band) {
             return gigs.computeIfAbsent(band, b -> new LinkedHashMap<>());
         }
@@ -357,6 +390,11 @@ public final class SyncFakes {
         @Override
         public synchronized Optional<Gig> findById(BandId band, GigId id) {
             return Optional.ofNullable(of(band).get(id));
+        }
+
+        @Override
+        public synchronized List<Gig> findAllByIds(BandId band, Collection<GigId> ids) {
+            return ids.stream().map(of(band)::get).filter(Objects::nonNull).toList();
         }
 
         @Override
@@ -374,6 +412,13 @@ public final class SyncFakes {
             return of(band).values().stream()
                     .sorted(Comparator.comparing((Gig g) -> g.schedule().showStart()).thenComparing(g -> g.id().key()))
                     .limit(limit).toList();
+        }
+
+        @Override
+        public synchronized List<Gig> findCovering(BandId band, DateRange range) {
+            return of(band).values().stream()
+                    .filter(g -> g.schedule().days().stream().anyMatch(range::containsInclusive))
+                    .toList();
         }
 
         @Override
@@ -405,9 +450,10 @@ public final class SyncFakes {
                     .filter(r -> query.onlyIds() == null || query.onlyIds().contains(r.id()))
                     .filter(r -> !query.excludingAny() || !query.exceptIds().contains(r.id()))
                     .filter(r -> query.cancelled() == null || query.cancelled() == r.cancelled())
+                    .filter(r -> !query.missingFromSome() || onHowManyPlatforms(band, r.id()) < query.notOnAllOf())
                     .sorted(upcoming ? ROWS : ROWS.reversed())
                     .toList();
-            long total = matching.size();
+            Long total = query.after() == null ? (long) matching.size() : null;   // as the store counts
             List<GigRow> after = matching.stream().filter(r -> beyond(r, query, upcoming)).toList();
             List<GigRow> page = after.stream().limit(query.size()).toList();
             return new GigSlice(page, after.size() > page.size() ? GigCursor.after(page.getLast()) : null, total);

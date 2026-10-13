@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -23,6 +24,8 @@ import sk.drabikp.gigsynchub.gig.application.GigErrorCode;
 import sk.drabikp.gigsynchub.gig.application.NotFoundException;
 import sk.drabikp.gigsynchub.gig.application.UserFacingException;
 import sk.drabikp.gigsynchub.gig.domain.UnknownReferenceException;
+
+import java.util.Map;
 
 
 /**
@@ -69,6 +72,20 @@ class ApiErrors {
     ResponseEntity<ProblemResponse> badRequest(Exception e) {
         log.debug("Bad request", e);
         return ResponseEntity.badRequest().body(Problems.of(GigErrorCode.BAD_REQUEST, e.getMessage()));
+    }
+
+    /**
+     * The background pool is full: reading a platform for Import, or a check on demand, is a band
+     * driving a platform over the network, so the pool that runs them is bounded
+     * ({@code spring.task.execution.*}) and says no rather than queueing for ever. It means the
+     * same thing to the user as any other "too much at once", so it is answered the same way.
+     */
+    @ExceptionHandler(TaskRejectedException.class)
+    ResponseEntity<ProblemResponse> busy(TaskRejectedException e) {
+        log.warn("The background pool refused work: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "60")
+                .body(Problems.of(WebErrorCode.TOO_MANY_REQUESTS, Map.of("seconds", "60"),
+                        "The server has as much to do as it can take — try again in a minute."));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

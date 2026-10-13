@@ -1,16 +1,20 @@
 package sk.drabikp.gigsynchub.sync.application.port.out;
 
 import org.junit.jupiter.api.Test;
+import sk.drabikp.gigsynchub.gig.domain.BandId;
 import sk.drabikp.gigsynchub.gig.domain.Gig;
 import sk.drabikp.gigsynchub.gig.domain.TestGigs;
 import sk.drabikp.gigsynchub.gig.domain.platform.Platform;
 import sk.drabikp.gigsynchub.sync.domain.StepType;
 import sk.drabikp.gigsynchub.sync.domain.SyncAction;
+import sk.drabikp.gigsynchub.sync.domain.SyncCounts;
 import sk.drabikp.gigsynchub.sync.domain.SyncStatus;
 import sk.drabikp.gigsynchub.sync.domain.SyncTask;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -117,6 +121,36 @@ public abstract class SyncOutboxContract {
         assertThat(outbox().openFor(BAND, gig.id())).containsExactly(task);
         assertThat(outbox().due(BAND, BANDZONE, SyncAction.UPDATE, NOW)).containsExactly(task);
         assertThat(outbox().due(BAND, BANDSINTOWN, SyncAction.UPDATE, NOW)).isEmpty();
+    }
+
+    /**
+     * Counted by the store, and the same four numbers either store would have counted by hand.
+     * The counting query groups by status and by whether a task has run before, which is one more
+     * place the two outboxes could quietly drift apart; a band with nothing open is absent from the
+     * answer rather than present with zeros, and both must agree about that too.
+     */
+    @Test
+    void the_open_work_is_counted_the_same_by_either_store() {
+        SyncTask queued = queue(gig, SyncAction.UPDATE);
+        SyncTask running = outbox().enqueue(BAND, TestGigs.gig("Second", "Klub").id(), "g", BANDSINTOWN,
+                SyncAction.PUBLISH, NOW);
+        outbox().markRunning(BAND, running.id(), NOW);
+        SyncTask retried = outbox().enqueue(BAND, TestGigs.gig("Third", "Klub").id(), "g", BANDZONE,
+                SyncAction.CANCEL, NOW);
+        outbox().markRunning(BAND, retried.id(), NOW);
+        outbox().markRetry(BAND, retried.id(), "later", NOW, NOW);
+        SyncTask failed = outbox().enqueue(BAND, TestGigs.gig("Fourth", "Klub").id(), "g", BANDZONE,
+                SyncAction.DELETE, NOW);
+        outbox().markRunning(BAND, failed.id(), NOW);
+        outbox().markFailed(BAND, failed.id(), "no", NOW);
+
+        Map<BandId, SyncCounts> counted = outbox().openWork(List.of(BAND, OTHER));
+
+        assertThat(counted.get(BAND)).isEqualTo(SyncCounts.of(outbox().unfinished(BAND)));
+        assertThat(counted.get(BAND)).isEqualTo(new SyncCounts(1, 1, 1, 1));
+        assertThat(queued.status()).isEqualTo(SyncStatus.PENDING);
+        assertThat(counted).as("a band with nothing open is not in the answer").doesNotContainKey(OTHER);
+        assertThat(outbox().openWork(List.of())).isEmpty();
     }
 
     @Test

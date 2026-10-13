@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 import sk.drabikp.gigsynchub.catalog.application.port.in.SaveGigUseCase;
@@ -18,10 +19,15 @@ import sk.drabikp.gigsynchub.gig.domain.Location;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -103,7 +109,7 @@ class GigListCostsTest {
     }
 
     @Test
-    void the_second_page_costs_what_the_first_did_and_holds_the_rows_that_follow() throws Exception {
+    void the_second_page_costs_LESS_than_the_first_and_holds_the_rows_that_follow() throws Exception {
         statementsFor("?size=20");
         long first = statementsFor("?size=20");
         String cursor = mvc.perform(get(GIGS + "?size=20").with(SignedIn.owner()))
@@ -112,10 +118,14 @@ class GigListCostsTest {
 
         long second = statementsFor("?size=20&after=" + cursor);
 
-        assertThat(second).as("keyset paging: the hundredth page is the same work as the first").isEqualTo(first);
+        assertThat(second).as("keyset paging: the hundredth page is the same work as the first, LESS the "
+                        + "count — which is the first page's alone, the page having kept it")
+                .isEqualTo(first - 1);
         mvc.perform(get(GIGS + "?size=20&after=" + cursor).with(SignedIn.owner()))
                 .andExpect(jsonPath("$.gigs.length()").value(20))
                 .andExpect(jsonPath("$.gigs[0].title").value("cost gig 21"))
+                .andExpect(jsonPath("$.total").doesNotExist());
+        mvc.perform(get(GIGS + "?size=20").with(SignedIn.owner()))
                 .andExpect(jsonPath("$.total").value(60));
     }
 
@@ -134,8 +144,11 @@ class GigListCostsTest {
                         + "nothing failed, the store is not asked at all")
                 .isLessThanOrEqualTo(plain);
         assertThat(statementsFor("?size=20&show=publishable"))
-                .as("only \"missing from a platform\" needs one read more, being every gig BUT those")
-                .isEqualTo(plain + 1);
+                .as("\"not on every platform yet\" is a count inside the page's own query. It used to be "
+                        + "one read MORE — the band's whole publication table, turned into a `not in` of "
+                        + "every gig that is already everywhere, which grows with the catalog and is "
+                        + "exactly what this test exists to catch")
+                .isEqualTo(plain);
     }
 
     @Test
@@ -149,6 +162,45 @@ class GigListCostsTest {
                 .andExpect(jsonPath("$.total").value(0))
                 .andExpect(jsonPath("$.gigs.length()").value(0))
                 .andExpect(jsonPath("$.cursor").doesNotExist());
+    }
+
+    /**
+     * A bulk action reads the gigs it was given in ONE go. Selecting them was a {@code findById} per
+     * gig, in one transaction — fine for the three a person clicks, a thousand round trips for a
+     * "select all" on a full catalog, which the spec now allows up to.
+     */
+    @Test
+    void publishing_a_selection_reads_the_gigs_in_one_go() throws Exception {
+        List<String> tokens = tokensOfTheFirst(20);
+
+        statistics.clear();
+        mvc.perform(post(GIGS + "/publish").with(SignedIn.owner()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"gigs\": [\"" + String.join("\",\"", tokens.subList(0, 3)) + "\"]}"))
+                .andExpect(status().isOk());
+        long three = statistics.getPrepareStatementCount();
+
+        statistics.clear();
+        mvc.perform(post(GIGS + "/publish").with(SignedIn.owner()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"gigs\": [\"" + String.join("\",\"", tokens) + "\"]}"))
+                .andExpect(status().isOk());
+        long twenty = statistics.getPrepareStatementCount();
+
+        assertThat(twenty - three).as("three gigs cost %d statements and twenty cost %d: the READING of "
+                        + "them must not follow their number", three, twenty)
+                .isLessThan(20 - 3);
+    }
+
+    private List<String> tokensOfTheFirst(int howMany) throws Exception {
+        String body = mvc.perform(get(GIGS + "?size=" + howMany).with(SignedIn.owner()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        List<String> tokens = new ArrayList<>();
+        Matcher ids = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(body);
+        while (ids.find()) {
+            tokens.add(ids.group(1));
+        }
+        return tokens;
     }
 
     @Test

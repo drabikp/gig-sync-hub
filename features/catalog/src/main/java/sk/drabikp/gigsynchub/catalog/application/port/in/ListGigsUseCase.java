@@ -28,5 +28,12 @@ public interface ListGigsUseCase {
     /** The gig; {@link sk.drabikp.gigsynchub.gig.application.NotFoundException} when it isn't (any more). */
     Gig gig(BandId band, GigId id);
 
+    /**
+     * These gigs, in the order they were asked for and in ONE read — what a bulk action (publish,
+     * re-sync) works on. {@link sk.drabikp.gigsynchub.gig.application.NotFoundException} if any of
+     * them is not the band's any more, exactly as {@link #gig} would have said one at a time.
+     */
+    List<Gig> gigs(BandId band, List<GigId> ids);
+
     List<Gig> gigsStartingWithin(BandId band, DateRange range);
 }
