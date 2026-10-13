@@ -11,4 +11,12 @@ public interface DispatchSyncUseCase {
 
     /** After a restart: settles the tasks that were running when the app stopped. */
     void recoverInterrupted();
+
+    /**
+     * Settles tasks left RUNNING by something other than a restart — no worker holds their lane
+     * and nothing has been written to them for a while. A RUNNING task is invisible to the worker
+     * and makes its gig busy, so one of them used to mean a gig nobody could touch until the app
+     * was restarted.
+     */
+    void reapStranded();
 }

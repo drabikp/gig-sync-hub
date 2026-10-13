@@ -72,7 +72,7 @@ class GigPages {
     private static String filters(GigQuery query, boolean upcoming) {
         StringBuilder jpql = new StringBuilder(upcoming ? "and g.showAt >= :today " : "and g.showAt < :today ");
         if (query.searching()) {
-            jpql.append("and g.searchText like :text ");
+            jpql.append("and g.searchText like :text escape '\\' ");
         }
         if (query.onlyIds() != null) {
             jpql.append("and g.id in :ids ");
@@ -84,6 +84,18 @@ class GigPages {
             jpql.append("and g.cancelled = :cancelled ");
         }
         return jpql.toString();
+    }
+
+    /**
+     * What the band typed, as a {@code like} pattern that means itself. {@code TextFold} folds
+     * accents and whitespace but leaves {@code % _ \} alone, so without this a search for a per-cent
+     * sign matched the band's whole catalog and said so in the heading — and a search for {@code _}
+     * every gig with a character in it. The in-memory store searches with {@code contains}, where
+     * these characters already mean themselves, so this is what makes the two answer alike
+     * ({@code GigPagingContract}).
+     */
+    private static String likeLiteral(String text) {
+        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     private static String keyset(GigQuery query, boolean upcoming) {
@@ -98,7 +110,7 @@ class GigPages {
     private static <T> TypedQuery<T> bind(TypedQuery<T> query, BandId band, GigQuery asked, LocalDate today) {
         query.setParameter("band", band.value()).setParameter("today", today.atStartOfDay());
         if (asked.searching()) {
-            query.setParameter("text", "%" + asked.text() + "%");
+            query.setParameter("text", "%" + likeLiteral(asked.text()) + "%");
         }
         if (asked.onlyIds() != null) {
             query.setParameter("ids", keysOf(asked.onlyIds()));

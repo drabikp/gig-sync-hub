@@ -406,6 +406,17 @@ public final class SyncFakes {
             used++;
             return work.get();
         }
+
+        @Override
+        public void inRepeatableTransaction(Runnable work) {
+            inTransaction(work);
+        }
+
+        /** No unique keys in memory, so nothing to lose a race on: once is always enough here. */
+        @Override
+        public <T> T computeInRepeatableTransaction(Supplier<T> work) {
+            return computeInTransaction(work);
+        }
     }
 
     public static final class Signals implements SyncTrigger, SyncNotifier {
@@ -575,7 +586,7 @@ public final class SyncFakes {
     public static SyncDispatcher dispatcher(WorkflowEngine engine, Outbox outbox, Signals signals, Clock clock,
                                      PauseSyncUseCase pause, PlatformHealth health) {
         return new SyncDispatcher(engine, outbox, signals, clock, pause, health, TestPlatforms.PLATFORMS,
-                new FairTurns());
+                new FairTurns(), Duration.ofMinutes(30));
     }
 
     public static SyncDispatcher dispatcher(WorkflowEngine engine, Outbox outbox, Signals signals, Clock clock) {

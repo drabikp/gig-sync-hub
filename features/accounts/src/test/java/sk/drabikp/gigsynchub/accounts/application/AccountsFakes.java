@@ -85,6 +85,11 @@ public final class AccountsFakes {
             users.put(user.subject(), user);
         }
 
+        /** One thread, no rows: there is nothing here for a hold to keep anyone out of. */
+        @Override
+        public void hold(UserId user) {
+        }
+
         @Override
         public void delete(UserId user) {
             users.values().removeIf(u -> u.id().equals(user));
@@ -265,6 +270,16 @@ public final class AccountsFakes {
 
         @Override
         public <T> T computeInTransaction(Supplier<T> work) {
+            return work.get();
+        }
+
+        @Override
+        public void inRepeatableTransaction(Runnable work) {
+            work.run();
+        }
+
+        @Override
+        public <T> T computeInRepeatableTransaction(Supplier<T> work) {
             return work.get();
         }
     };

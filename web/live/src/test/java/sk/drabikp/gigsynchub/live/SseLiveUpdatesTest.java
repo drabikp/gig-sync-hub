@@ -8,9 +8,12 @@ import sk.drabikp.gigsynchub.gig.domain.BandId;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static sk.drabikp.gigsynchub.live.SseLiveUpdates.COALESCE_MS;
 
 class SseLiveUpdatesTest {
 
@@ -61,5 +64,61 @@ class SseLiveUpdatesTest {
         } finally {
             live.destroy();
         }
+    }
+
+    /**
+     * The one that matters: a page whose socket has stopped taking bytes — a phone in a tunnel, its
+     * window full and not yet timed out — must not stop anyone else being told. It used to: every
+     * fan-out and every heartbeat went out on one thread, so one stalled write held all of them, and
+     * the idle streams other proxies then dropped made it look like a network fault. Put the writes
+     * back on the timer thread and this test does not finish.
+     */
+    @Test
+    void a_page_that_has_stalled_delays_nothing_but_itself() throws Exception {
+        SseLiveUpdates live = new SseLiveUpdates();
+        CountDownLatch inTheWrite = new CountDownLatch(1);
+        CountDownLatch letItGo = new CountDownLatch(1);
+        Page reading = new Page();
+        SseEmitter stalled = new SseEmitter() {
+            private boolean greeted;
+
+            @Override
+            public void send(SseEventBuilder event) {
+                if (!greeted) {
+                    greeted = true;                             // the hello goes through; nothing after it does
+                    return;
+                }
+                inTheWrite.countDown();
+                try {
+                    letItGo.await(20, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        };
+        try {
+            live.open(BandId.FIRST, stalled);
+            live.open(OTHER, reading);
+
+            live.changedEverywhere(LiveUpdates.Topic.SYNC);
+            assertThat(inTheWrite.await(20, TimeUnit.SECONDS))
+                    .as("the stalled page is inside its write and staying there").isTrue();
+
+            live.changedEverywhere(LiveUpdates.Topic.GIGS);
+            assertThat(heard(reading, "gigs")).as("the reading page is told while the other one hangs").isTrue();
+        } finally {
+            letItGo.countDown();
+            live.destroy();
+        }
+    }
+
+    private boolean heard(Page page, String event) throws InterruptedException {
+        for (int tries = 0; tries < 100; tries++) {
+            if (page.events.contains(event)) {
+                return true;
+            }
+            Thread.sleep(COALESCE_MS);
+        }
+        return false;
     }
 }

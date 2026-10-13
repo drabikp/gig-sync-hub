@@ -76,9 +76,22 @@ class SyncWorker {
                 draining.decrementAndGet();
             }
             wake();
-            ticker.scheduleWithFixedDelay(this::wake, pollSeconds, pollSeconds, TimeUnit.SECONDS);
+            ticker.scheduleWithFixedDelay(this::tick, pollSeconds, pollSeconds, TimeUnit.SECONDS);
             workSignal.onWork(this::wake);              // work queued before now is drained by this first wake
         });
+    }
+
+    /**
+     * Time passed: settle anything left RUNNING that no worker is holding, then drain. The reaping
+     * is on this thread and not a worker's, so a worker is never kept from its own work by it.
+     */
+    private void tick() {
+        try {
+            dispatcher.reapStranded();
+        } catch (RuntimeException e) {
+            log.error("Settling stranded sync tasks failed", e);
+        }
+        wake();
     }
 
     /** New work was queued (or time passed): every idle worker drains. */

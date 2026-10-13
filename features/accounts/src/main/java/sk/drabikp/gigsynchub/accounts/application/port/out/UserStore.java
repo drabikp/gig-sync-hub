@@ -15,6 +15,13 @@ public interface UserStore {
 
     void save(User user);
 
+    /**
+     * Takes the user's row until the transaction ends, so that what is counted about them cannot
+     * change while it is being decided — the owner quota is counted and then added to, and two
+     * clicks at the same moment both counted the same nine.
+     */
+    void hold(UserId user);
+
     /** Deletes the user with their memberships (invitations and audit events keep no reference to them). */
     void delete(UserId user);
 }

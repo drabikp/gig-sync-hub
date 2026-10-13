@@ -70,7 +70,7 @@ public class GigCatalogService
 
     @Override
     public void add(BandId band, Gig gig) {
-        transactions.inTransaction(() -> writes.add(band, gig));
+        transactions.inRepeatableTransaction(() -> writes.add(band, gig));
         live.changed(band, LiveUpdates.Topic.GIGS);
     }
 
@@ -141,7 +141,7 @@ public class GigCatalogService
 
     /** Writes in one transaction, then tells the sync and the band's pages. */
     private QueueResult written(BandId band, Supplier<QueueResult> write) {
-        QueueResult queued = transactions.computeInTransaction(write);
+        QueueResult queued = transactions.computeInRepeatableTransaction(write);
         sync.signal(band, queued);
         live.changed(band, LiveUpdates.Topic.GIGS);
         return queued;

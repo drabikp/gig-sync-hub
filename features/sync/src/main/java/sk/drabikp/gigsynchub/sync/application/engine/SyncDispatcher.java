@@ -12,6 +12,7 @@ import sk.drabikp.gigsynchub.sync.domain.SyncTask;
 import sk.drabikp.gigsynchub.sync.domain.Workload;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
@@ -37,10 +38,11 @@ public class SyncDispatcher implements DispatchSyncUseCase {
     private final PlatformHealth health;
     private final Platforms platforms;
     private final FairTurns turns;
+    private final Duration strandedAfter;
 
     public SyncDispatcher(WorkflowEngine engine, SyncOutbox outbox, SyncNotifier notifier, Clock clock,
                           PauseSyncUseCase pause, PlatformHealth health, Platforms platforms,
-                          FairTurns turns) {
+                          FairTurns turns, Duration strandedAfter) {
         this.engine = engine;
         this.outbox = outbox;
         this.notifier = notifier;
@@ -49,6 +51,7 @@ public class SyncDispatcher implements DispatchSyncUseCase {
         this.health = health;
         this.platforms = platforms;
         this.turns = turns;
+        this.strandedAfter = strandedAfter;
     }
 
     @Override
@@ -70,14 +73,43 @@ public class SyncDispatcher implements DispatchSyncUseCase {
     @Override
     public void recoverInterrupted() {
         Instant now = clock.instant();
-        for (SyncTask task : outbox.running()) {
-            if (task.action().repeatable()) {
-                outbox.markRetry(task.id(), "interrupted by a restart — running it again", now, now);
-            } else {
-                outbox.markFailed(task.id(), "interrupted by a restart — it may or may not have happened on "
-                        + platforms.name(task.platform()) + "; check there, then Retry or Discard", now);
-            }
-            notifier.changed(task.band());
+        outbox.running().forEach(task -> settleStuck(task, "interrupted by a restart", now));
+    }
+
+    /**
+     * Tasks left RUNNING by something other than a restart — the settling write of an outcome
+     * failed, say, or the thread died under it. A RUNNING task is invisible to the worker
+     * ({@code due} asks for PENDING) and makes its gig busy, so every edit, delete, cancel and
+     * re-sync of that gig is refused with 409 {@code gigBusy}: without this, one such task meant a
+     * gig nobody could touch again until someone restarted the app.
+     *
+     * <p>Only tasks whose lane no worker holds and which have not been written to for
+     * {@code strandedAfter} are taken — a one-at-a-time step's pass is minutes of paced requests,
+     * and reaping a task that is genuinely in flight would run it on the platform twice.
+     */
+    @Override
+    public void reapStranded() {
+        Instant now = clock.instant();
+        Set<Lane> busy = turns.running();
+        Instant quietSince = now.minus(strandedAfter);
+        outbox.running().stream()
+                .filter(task -> !busy.contains(Lane.of(task)))
+                .filter(task -> task.updatedAt().isBefore(quietSince))
+                .forEach(task -> settleStuck(task, "stopped without finishing", now));
+    }
+
+    /**
+     * What a task that was RUNNING and is not any more becomes: repeatable work runs again,
+     * and work that may have created something on the platform goes to the user, because only
+     * they can look.
+     */
+    private void settleStuck(SyncTask task, String why, Instant now) {
+        if (task.action().repeatable()) {
+            outbox.markRetry(task.id(), why + " — running it again", now, now);
+        } else {
+            outbox.markFailed(task.id(), why + " — it may or may not have happened on "
+                    + platforms.name(task.platform()) + "; check there, then Retry or Discard", now);
         }
+        notifier.changed(task.band());
     }
 }

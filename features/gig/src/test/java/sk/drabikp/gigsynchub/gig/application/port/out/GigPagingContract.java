@@ -95,6 +95,27 @@ public abstract class GigPagingContract {
         assertThat(repository().page(BAND, GigQuery.upcoming().matching("nothing here"), TODAY).rows()).isEmpty();
     }
 
+    /**
+     * A search means the characters it is made of. {@code %} and {@code _} are a {@code like}
+     * pattern's own, and the folded text keeps them, so a store that passes them through answered a
+     * search for a per-cent sign with the band's WHOLE catalog — and counted it that way in the
+     * heading. Asked for here because only one of the two stores can get it wrong.
+     */
+    @Test
+    void the_characters_a_like_pattern_uses_are_searched_for_themselves() {
+        save(BAND, "100% live", "Barrák", "Ostrava", at(2026, 11, 20, 20));
+        save(BAND, "Winter show", "Fléda", "Brno", at(2026, 11, 21, 20));
+
+        assertThat(titles(repository().page(BAND, GigQuery.upcoming().matching("%"), TODAY)))
+                .as("a per-cent sign finds the gig with one, not every gig").containsExactly("100% live");
+        assertThat(titles(repository().page(BAND, GigQuery.upcoming().matching("100%"), TODAY)))
+                .as("and reads as part of the words around it").containsExactly("100% live");
+        assertThat(repository().page(BAND, GigQuery.upcoming().matching("_"), TODAY).rows())
+                .as("an underscore stands for itself, not for any one character").isEmpty();
+        assertThat(repository().page(BAND, GigQuery.upcoming().matching("w_nter"), TODAY).rows())
+                .as("so it does not match a word that merely fits the pattern").isEmpty();
+    }
+
     @Test
     void a_narrowing_to_no_gig_shows_none_and_one_to_some_shows_only_those() {
         Gig kept = save(BAND, "kept", "Klub 007", "Praha", at(2026, 11, 20, 20));

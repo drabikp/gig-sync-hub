@@ -36,7 +36,7 @@ public class GigPublishingService implements PublishGigsUseCase {
 
     @Override
     public QueueResult publish(BandId band, Set<Platform> targets, Collection<Gig> gigs) {
-        QueueResult result = transactions.computeInTransaction(() -> {
+        QueueResult result = transactions.computeInRepeatableTransaction(() -> {
             List<SyncTask> queued = new ArrayList<>();
             List<String> notQueued = new ArrayList<>();
             for (Platform platform : platforms.ordered(targets)) {
