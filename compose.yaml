@@ -51,10 +51,14 @@ services:
       POSTGRES_DB: gigsynchub
       POSTGRES_USER: gigsynchub
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-      # Pinned because the volume is mounted at /var/lib/postgresql (not .../data) and the image's
-      # default has moved between major versions: a default that changes under a mounted volume is
-      # an empty database on a machine that had one.
-      PGDATA: /var/lib/postgresql/data
+      # Pinned to the value THIS image already uses — checked against the running container, not
+      # assumed. The volume is mounted at /var/lib/postgresql and PostgreSQL 18's image keeps its
+      # cluster in <major>/docker beneath it; a pin of the older /var/lib/postgresql/data would
+      # have been an empty directory inside a full volume, which is an initdb and an empty
+      # database on a machine that had one. The major version in the path is deliberate: bumping
+      # the image to 19 then fails loudly here instead of quietly making a second cluster, and a
+      # major upgrade is pg_upgrade or dump-and-restore, never a new tag.
+      PGDATA: /var/lib/postgresql/18/docker
     secrets:
       - db_password
     volumes:
