@@ -44,7 +44,7 @@ class JpaSyncOutboxTest {
         assertThat(task.gigId()).isEqualTo(gig.id());
         assertThat(outbox.nextDue(NOW)).contains(task);
         assertThat(outbox.openFor(BAND, gig.id())).containsExactly(task);
-        assertThat(outbox.log(task.id())).extracting(SyncLogEntry::message).containsExactly("queued");
+        assertThat(outbox.log(task.band(), task.id())).extracting(SyncLogEntry::message).containsExactly("queued");
     }
 
     @Test
@@ -70,7 +70,7 @@ class JpaSyncOutboxTest {
         SyncTask done = outbox.find(task.band(), task.id()).orElseThrow();
         assertThat(done.status()).isEqualTo(SyncStatus.DONE);
         assertThat(done.attempts()).isEqualTo(2);
-        assertThat(outbox.log(task.id())).extracting(SyncLogEntry::message).containsExactly(
+        assertThat(outbox.log(task.band(), task.id())).extracting(SyncLogEntry::message).containsExactly(
                 "queued", "attempt 1 started", "failed: timeout — will retry at 2026-10-08T10:01:00Z",
                 "attempt 2 started", "done");
     }
@@ -103,7 +103,7 @@ class JpaSyncOutboxTest {
         outbox.requeue(task.band(), task.id(), NOW);
 
         assertThat(outbox.find(task.band(), task.id()).orElseThrow().status()).isEqualTo(SyncStatus.DONE);
-        assertThat(outbox.log(task.id())).extracting(SyncLogEntry::message)
+        assertThat(outbox.log(task.band(), task.id())).extracting(SyncLogEntry::message)
                 .containsExactly("queued", "attempt 1 started", "done — updated");
     }
 

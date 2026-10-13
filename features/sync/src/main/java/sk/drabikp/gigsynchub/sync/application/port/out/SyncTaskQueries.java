@@ -33,7 +33,7 @@ public interface SyncTaskQueries {
     /** The gig's latest activity first ({@link SyncTask#LATEST_FIRST}), whatever else was done meanwhile. */
     List<SyncTask> history(BandId band, GigId gigId, int limit);
 
-    List<SyncLogEntry> log(long taskId);
+    List<SyncLogEntry> log(BandId band, long taskId);
 
     /** The oldest PENDING task that is due, of any band. */
     Optional<SyncTask> nextDue(Instant now);

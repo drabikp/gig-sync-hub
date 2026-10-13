@@ -195,7 +195,7 @@ class BandScopedQueriesTest {
         assertThat(found).containsExactly("AuditEventEntity", "BandCalendarEntity", "BandCheckEntity",
                 "BandSettingEntity", "CalendarDecisionEntity", "CalendarEventEntity", "CalendarLinkEntity",
                 "CalendarRuleEntity", "GigEntity", "PlatformAccountEntity", "PublishedGigEntity",
-                "SyncTaskEntity");
+                "SyncLogEntity", "SyncTaskEntity");
     }
 
     private static List<Class<?>> repositories() {

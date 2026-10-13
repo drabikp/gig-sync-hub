@@ -75,7 +75,7 @@ public class SyncLogService implements SyncLogUseCase, ForgetOldSyncWorkUseCase 
     @Override
     public List<SyncLogEntry> log(BandId band, long taskId) {
         task(band, taskId);
-        return outbox.log(taskId);
+        return outbox.log(band, taskId);
     }
 
     @Override

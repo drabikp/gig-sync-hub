@@ -121,7 +121,11 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized List<SyncLogEntry> log(long taskId) {
+        public synchronized List<SyncLogEntry> log(BandId band, long taskId) {
+            SyncTask t = tasks.get(taskId);
+            if (t == null || !t.band().equals(band)) {
+                return List.of();                       // another band's task has no lines for you
+            }
             return log.stream().filter(e -> e.taskId() == taskId).toList();
         }
 

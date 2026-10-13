@@ -77,8 +77,8 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
-    public List<SyncLogEntry> log(long taskId) {
-        return mapper.toEntries(log.findByTaskIdOrderByIdAsc(taskId));
+    public List<SyncLogEntry> log(BandId band, long taskId) {
+        return mapper.toEntries(log.findByBandIdAndTaskIdOrderByIdAsc(band.value(), taskId));
     }
 
     @Override
@@ -258,6 +258,6 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     private void write(SyncTaskEntity task, Instant at, String message) {
-        log.save(new SyncLogEntity(task.getId(), at, message));
+        log.save(new SyncLogEntity(task.getBandId(), task.getId(), at, message));
     }
 }

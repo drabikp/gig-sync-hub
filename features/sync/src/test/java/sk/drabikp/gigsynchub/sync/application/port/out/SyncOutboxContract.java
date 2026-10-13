@@ -52,6 +52,8 @@ public abstract class SyncOutboxContract {
         SyncTask mine = queue(gig, SyncAction.UPDATE);
 
         assertThat(outbox().find(OTHER, mine.id())).as("not another band's to read").isEmpty();
+        assertThat(outbox().log(OTHER, mine.id())).as("nor its history").isEmpty();
+        assertThat(outbox().log(BAND, mine.id())).as("which its own band can read").isNotEmpty();
 
         // A write is louder than a read on purpose: reading another band's id is simply "not there",
         // but WRITING to one can only be a bug in the caller, and a bug that quietly does nothing is
@@ -97,7 +99,7 @@ public abstract class SyncOutboxContract {
         assertThat(outbox().forgetSettledBefore(later)).as("the settled one, and only it").isEqualTo(1);
 
         assertThat(outbox().find(BAND, done.id())).as("done work is gone").isEmpty();
-        assertThat(outbox().log(done.id())).as("and its log with it").isEmpty();
+        assertThat(outbox().log(done.band(), done.id())).as("and its log with it").isEmpty();
         assertThat(outbox().find(BAND, failed.id())).as("failed work waits for a person, whatever its age")
                 .isPresent();
         assertThat(outbox().find(BAND, waiting.id())).as("and waiting work is not old at all").isPresent();

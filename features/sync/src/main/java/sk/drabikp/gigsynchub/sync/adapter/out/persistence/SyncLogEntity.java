@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 import sk.drabikp.gigsynchub.sync.domain.SyncLogEntry;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /** JPA persistence model for one line of a sync task's history. */
 @Entity
@@ -21,6 +22,12 @@ class SyncLogEntity {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "syncLogSeq")
     @SequenceGenerator(name = "syncLogSeq", sequenceName = "sync_log_seq", allocationSize = 50)
     private Long id;
+    /**
+     * Whose line this is. A log line belongs to whichever band its TASK belongs to, which is true
+     * and was the whole trouble: with no band of its own the table fell out of every check that
+     * works out which tables keep a band's rows (V14).
+     */
+    private UUID bandId;
     private Long taskId;
     private Instant loggedAt;
     private String message;
@@ -29,10 +36,15 @@ class SyncLogEntity {
         // for JPA
     }
 
-    SyncLogEntity(long taskId, Instant at, String message) {
+    SyncLogEntity(UUID bandId, long taskId, Instant at, String message) {
+        this.bandId = bandId;
         this.taskId = taskId;
         this.loggedAt = at;
         this.message = SyncTaskEntity.clip(message, SyncTaskEntity.TEXT_MAX);
+    }
+
+    public UUID getBandId() {
+        return bandId;
     }
 
     public Long getTaskId() {

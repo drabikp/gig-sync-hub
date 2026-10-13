@@ -167,9 +167,9 @@ class WorkflowEngineTest {
             assertThat(t.status()).isEqualTo(SyncStatus.DONE);
             assertThat(t.step()).isEqualTo(StepType.FORM_EDIT);
         });
-        assertThat(outbox.log(past.id())).extracting(SyncLogEntry::message)
+        assertThat(outbox.log(past.band(), past.id())).extracting(SyncLogEntry::message)
                 .anySatisfy(m -> assertThat(m).isEqualTo("bulk edit: doesn't take past events → form edit"));
-        assertThat(outbox.log(refused.id())).extracting(SyncLogEntry::message)
+        assertThat(outbox.log(refused.band(), refused.id())).extracting(SyncLogEntry::message)
                 .anySatisfy(m -> assertThat(m).isEqualTo("bulk edit: INVALID_START_TIME → form edit"));
     }
 
@@ -198,7 +198,7 @@ class WorkflowEngineTest {
         engine.run(Workload.of(tasks.getFirst()));      // Bandzone has no bulk edit: its form does them all
 
         assertThat(tasks).allSatisfy(t -> assertThat(after(t).step()).isEqualTo(StepType.FORM_EDIT));
-        assertThat(outbox.log(tasks.getFirst().id())).extracting(SyncLogEntry::message)
+        assertThat(outbox.log(tasks.getFirst().band(), tasks.getFirst().id())).extracting(SyncLogEntry::message)
                 .contains("bulk edit: none for Bandzone → form edit");
         assertThat(bzForm.calls).as("one gig at a time, as many as a pass gives this step")
                 .hasSize(WorkflowEngine.ONE_AT_A_TIME_PER_PASS).allSatisfy(c -> assertThat(c).hasSize(1));
@@ -391,9 +391,9 @@ class WorkflowEngineTest {
         assertThat(List.of(after(cancel).status(), after(delete).status())).containsOnly(SyncStatus.DONE);
         assertThat(published.externalRef(BAND, BANDSINTOWN, past.id())).contains("901");
         assertThat(published.isPublished(BAND, BANDSINTOWN, gone.id())).isFalse();
-        assertThat(outbox.log(cancel.id())).extracting(SyncLogEntry::message).anySatisfy(m ->
+        assertThat(outbox.log(cancel.band(), cancel.id())).extracting(SyncLogEntry::message).anySatisfy(m ->
                 assertThat(m).isEqualTo("cancel: the list doesn't remove past events → cancel in the form"));
-        assertThat(outbox.log(delete.id())).extracting(SyncLogEntry::message).anySatisfy(m ->
+        assertThat(outbox.log(delete.band(), delete.id())).extracting(SyncLogEntry::message).anySatisfy(m ->
                 assertThat(m).contains("a past event — the list can't remove it", "→ remove in the form"));
     }
 
