@@ -41,6 +41,15 @@ public interface SyncTaskQueries {
     /** Every due task of any band, oldest first. */
     List<SyncTask> due(Instant now);
 
+    /**
+     * The bands that have work due at all — one entry per band, whatever each of them is waiting to
+     * do. Whose turn it is can then be decided without reading anybody's work: see {@code FairTurns}.
+     */
+    List<BandId> bandsWithWorkDue(Instant now);
+
+    /** One band's due work, oldest first, at most {@code limit} of it. */
+    List<SyncTask> due(BandId band, Instant now, int limit);
+
     /** Every due PENDING task of the band of this action on this platform, oldest first (to run as one batch). */
     List<SyncTask> due(BandId band, Platform platform, SyncAction action, Instant now);
 

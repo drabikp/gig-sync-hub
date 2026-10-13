@@ -188,12 +188,26 @@ public final class AccountsFakes {
         public void delete(UUID id) {
             byHash.values().removeIf(i -> i.id().equals(id));
         }
+
+        @Override
+        public int forgetExpiredBefore(Instant when) {
+            List<Invitation> over = byHash.values().stream().filter(i -> i.expiresAt().isBefore(when)).toList();
+            over.forEach(gone -> byHash.values().remove(gone));
+            return over.size();
+        }
     }
 
     /** Audit events in memory. */
     public static final class Audit implements AuditStore {
 
         public final List<AuditEvent> events = new ArrayList<>();
+
+        @Override
+        public int forgetBefore(Instant when) {
+            List<AuditEvent> over = events.stream().filter(e -> e.at().isBefore(when)).toList();
+            events.removeAll(over);
+            return over.size();
+        }
 
         @Override
         public void add(AuditEvent event) {

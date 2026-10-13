@@ -106,6 +106,42 @@ class JpaCalendarStoresTest {
         assertThat(decisions.all(OTHER)).containsExactly(Map.entry("uid-2", CalendarEventKind.GIG));
     }
 
+    /**
+     * What forgetting the saved copy takes. The copy holds the event's NOTES, which is where fees and
+     * phone numbers live, so an event gone from the calendar months ago is a row with somebody's
+     * details in it and nothing left to decide — but one whose going has NOT been seen is still a
+     * thing the band is being asked about, and taking that would make the Inbox lie.
+     */
+    @Test
+    void forgetting_takes_long_removed_events_and_leaves_the_ones_still_to_be_seen() {
+        Instant read = Instant.parse("2026-01-10T08:00:00Z");
+        Instant goneLongAgo = Instant.parse("2026-01-20T08:00:00Z");
+        Instant cutOff = Instant.parse("2026-07-01T00:00:00Z");
+        LocalDateTime start = LocalDateTime.of(2026, 2, 1, 16, 0);
+
+        KnownCalendarEvent settled = removedAt(goneLongAgo, "uid-gone-seen", start, null);
+        KnownCalendarEvent unseen = removedAt(goneLongAgo, "uid-gone-unseen", start,
+                new CalendarChange(CalendarChange.Type.REMOVED, Set.of(), CalendarEventKind.GIG, goneLongAgo));
+        KnownCalendarEvent here = new KnownCalendarEvent(
+                new CalendarEvent("uid-here", "Still on", "Klub", "", start, start.plusHours(3), false, false,
+                        true, CalendarEventStatus.CONFIRMED, read),
+                CalendarEventKind.GIG, read, null, null);
+        snapshots.saveRead(BAND, List.of(settled, unseen, here), read);
+
+        assertThat(snapshots.forgetRemovedBefore(cutOff)).as("only the one nobody is waiting on").isEqualTo(1);
+
+        assertThat(snapshots.all(BAND)).containsOnlyKeys("uid-gone-unseen", "uid-here");
+
+        snapshots.remove(BAND, "uid-gone-unseen");
+        snapshots.remove(BAND, "uid-here");
+    }
+
+    private KnownCalendarEvent removedAt(Instant removed, String uid, LocalDateTime start, CalendarChange change) {
+        CalendarEvent event = new CalendarEvent(uid, "Was on", "Klub, Praha", "Cena: 500", start,
+                start.plusHours(3), false, false, true, CalendarEventStatus.CONFIRMED, removed);
+        return new KnownCalendarEvent(event, CalendarEventKind.GIG, removed.minusSeconds(86400), removed, change);
+    }
+
     @Test
     void the_saved_calendar_keeps_every_field_and_the_unseen_change() {
         Instant firstRead = Instant.parse("2026-10-01T08:00:00Z");

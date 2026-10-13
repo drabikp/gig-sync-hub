@@ -5,6 +5,7 @@ import sk.drabikp.gigsynchub.gig.application.NotFoundException;
 import sk.drabikp.gigsynchub.gig.application.UserFacingException;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 import sk.drabikp.gigsynchub.gig.domain.GigId;
+import sk.drabikp.gigsynchub.sync.application.port.in.ForgetOldSyncWorkUseCase;
 import sk.drabikp.gigsynchub.sync.application.port.in.SyncErrorCode;
 import sk.drabikp.gigsynchub.sync.application.port.in.SyncLogUseCase;
 import sk.drabikp.gigsynchub.sync.application.port.out.SyncNotifier;
@@ -21,7 +22,7 @@ import java.util.Map;
 
 /** The sync log for the user: reading it, and retrying or discarding what the worker gave up on. */
 @Application
-public class SyncLogService implements SyncLogUseCase {
+public class SyncLogService implements SyncLogUseCase, ForgetOldSyncWorkUseCase {
 
     /** How many of the latest tasks "all" shows. */
     static final int LATEST = 500;
@@ -36,6 +37,11 @@ public class SyncLogService implements SyncLogUseCase {
         this.trigger = trigger;
         this.notifier = notifier;
         this.clock = clock;
+    }
+
+    @Override
+    public int forgetSettledBefore(java.time.Instant when) {
+        return outbox.forgetSettledBefore(when);
     }
 
     @Override

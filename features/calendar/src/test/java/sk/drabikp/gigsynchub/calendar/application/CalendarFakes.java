@@ -144,6 +144,22 @@ final class CalendarFakes {
         public Optional<Instant> lastRead(BandId band) {
             return Optional.ofNullable(lastRead.get(band));
         }
+
+        /** As the store's query: gone from the calendar, long ago, with no unseen change held. */
+        @Override
+        public int forgetRemovedBefore(Instant when) {
+            int gone = 0;
+            for (Map<String, KnownCalendarEvent> ofBand : events.values()) {
+                List<String> over = ofBand.values().stream()
+                        .filter(event -> event.removedAt() != null && event.removedAt().isBefore(when)
+                                && event.change() == null)
+                        .map(event -> event.event().id())
+                        .toList();
+                over.forEach(ofBand::remove);
+                gone += over.size();
+            }
+            return gone;
+        }
     }
 
     static final class Decisions implements CalendarDecisionStore {

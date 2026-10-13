@@ -6,6 +6,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import sk.drabikp.gigsynchub.accounts.application.AccountsHousekeeping;
 import sk.drabikp.gigsynchub.accounts.application.AccountsService;
 import sk.drabikp.gigsynchub.accounts.application.AesGcmSecretBox;
 import sk.drabikp.gigsynchub.accounts.application.AuditService;
@@ -36,6 +37,11 @@ import java.time.Clock;
 class AccountsConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(AccountsConfiguration.class);
+
+    @Bean
+    AccountsHousekeeping accountsHousekeeping(AuditStore audit, InvitationStore invitations) {
+        return new AccountsHousekeeping(audit, invitations);
+    }
 
     @Bean
     AccountsService accountsService(CurrentLogin login, UserStore users, BandStore bands, MembershipStore memberships,

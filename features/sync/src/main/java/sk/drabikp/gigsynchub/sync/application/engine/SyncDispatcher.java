@@ -30,6 +30,14 @@ import java.util.Set;
 @Application
 public class SyncDispatcher implements DispatchSyncUseCase {
 
+    /**
+     * How much of one band's queue is looked at to find a workload to run. A band's due work is
+     * read only when its turn comes, and only this far: a band with ten thousand tasks has, at the
+     * front of its queue, every lane it could possibly run — so reading further would cost more and
+     * decide nothing. What is left waits where it stands, as it always does.
+     */
+    static final int A_BANDS_WINDOW = 200;
+
     private final WorkflowEngine engine;
     private final SyncOutbox outbox;
     private final SyncNotifier notifier;
@@ -56,8 +64,10 @@ public class SyncDispatcher implements DispatchSyncUseCase {
 
     @Override
     public boolean runNext() {
+        Instant now = clock.instant();
         Set<BandId> paused = pause.pausedBands();
-        Optional<SyncTask> next = turns.claim(outbox.due(clock.instant()),
+        Optional<SyncTask> next = turns.claim(outbox.bandsWithWorkDue(now),
+                band -> outbox.due(band, now, A_BANDS_WINDOW),
                 task -> !paused.contains(task.band()) && !health.held(Lane.of(task)));
         if (next.isEmpty()) {
             return false;

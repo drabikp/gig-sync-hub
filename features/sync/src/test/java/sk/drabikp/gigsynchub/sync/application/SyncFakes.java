@@ -169,6 +169,27 @@ public final class SyncFakes {
         }
 
         @Override
+        public synchronized int forgetSettledBefore(Instant when) {
+            List<Long> over = tasks.values().stream()
+                    .filter(t -> (t.status() == SyncStatus.DONE || t.status() == SyncStatus.DISCARDED)
+                            && t.updatedAt().isBefore(when))
+                    .map(SyncTask::id).toList();
+            over.forEach(tasks::remove);
+            log.removeIf(line -> over.contains(line.taskId()));
+            return over.size();
+        }
+
+        @Override
+        public synchronized List<BandId> bandsWithWorkDue(Instant now) {
+            return tasks.values().stream().filter(t -> due(t, now)).map(SyncTask::band).distinct().toList();
+        }
+
+        @Override
+        public synchronized List<SyncTask> due(BandId band, Instant now, int limit) {
+            return tasks.values().stream().filter(t -> due(t, now) && t.band().equals(band)).limit(limit).toList();
+        }
+
+        @Override
         public synchronized List<SyncTask> running() {
             return tasks.values().stream().filter(t -> t.status() == SyncStatus.RUNNING).toList();
         }

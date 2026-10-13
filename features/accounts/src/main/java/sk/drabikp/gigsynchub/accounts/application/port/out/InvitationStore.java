@@ -26,4 +26,12 @@ public interface InvitationStore {
     List<Invitation> open(BandId band, Instant now);
 
     void delete(UUID id);
+
+    /**
+     * Forgets invitations that ran out before {@code when}; answers how many went. An invitation is
+     * good for seven days and holds an e-mail address: once it is long over it is a row with
+     * somebody's address in it and no purpose. Whoever accepted one is recorded by their membership,
+     * not by this.
+     */
+    int forgetExpiredBefore(Instant when);
 }

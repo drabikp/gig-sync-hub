@@ -18,6 +18,7 @@ import sk.drabikp.gigsynchub.sync.domain.SyncTask;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -201,16 +202,20 @@ class ManyBandsSyncTest {
         due.add(outbox.enqueue(a, TestGigs.gig("Elsewhere", "K").id(), "g", BANDSINTOWN, SyncAction.UPDATE,
                 clock.instant()));
 
-        SyncTask first = turns.claim(due, t -> true).orElseThrow();
-        SyncTask second = turns.claim(due, t -> true).orElseThrow();
-        SyncTask third = turns.claim(due, t -> true).orElseThrow();
-        SyncTask fourth = turns.claim(due, t -> true).orElseThrow();
+        List<BandId> withWorkDue = due.stream().map(SyncTask::band).distinct().toList();
+        Function<BandId, List<SyncTask>> dueOf =
+                band -> due.stream().filter(t -> t.band().equals(band)).toList();
+
+        SyncTask first = turns.claim(withWorkDue, dueOf, t -> true).orElseThrow();
+        SyncTask second = turns.claim(withWorkDue, dueOf, t -> true).orElseThrow();
+        SyncTask third = turns.claim(withWorkDue, dueOf, t -> true).orElseThrow();
+        SyncTask fourth = turns.claim(withWorkDue, dueOf, t -> true).orElseThrow();
 
         assertThat(List.of(first.band(), second.band(), third.band(), fourth.band())).containsExactly(a, b, c, a);
         assertThat(fourth.platform()).as("a's other lane — its first is still running").isEqualTo(BANDSINTOWN);
-        assertThat(turns.claim(due, t -> true)).as("every lane with due work is running").isEmpty();
+        assertThat(turns.claim(withWorkDue, dueOf, t -> true)).as("every lane with due work is running").isEmpty();
         turns.release(Lane.of(first));
-        assertThat(turns.claim(due, t -> true)).get().satisfies(t -> assertThat(Lane.of(t)).isEqualTo(Lane.of(first)));
-        assertThat(turns.claim(due, t -> !t.band().equals(a))).isEmpty();
+        assertThat(turns.claim(withWorkDue, dueOf, t -> true)).get().satisfies(t -> assertThat(Lane.of(t)).isEqualTo(Lane.of(first)));
+        assertThat(turns.claim(withWorkDue, dueOf, t -> !t.band().equals(a))).isEmpty();
     }
 }

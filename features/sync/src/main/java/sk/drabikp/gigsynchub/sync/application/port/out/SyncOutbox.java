@@ -68,4 +68,11 @@ public interface SyncOutbox extends SyncTaskQueries {
 
     /** The user's discard of a PENDING or FAILED task. */
     void discard(BandId band, long id, Instant now);
+
+    /**
+     * Forgets the work that is over — DONE and DISCARDED tasks last written to before
+     * {@code when} — and their log with them; answers how many went. Failed work stays, whatever
+     * its age: it is waiting for someone.
+     */
+    int forgetSettledBefore(Instant when);
 }

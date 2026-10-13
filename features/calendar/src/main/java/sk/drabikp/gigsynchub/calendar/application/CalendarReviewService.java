@@ -1,6 +1,7 @@
 package sk.drabikp.gigsynchub.calendar.application;
 
 import org.jmolecules.architecture.hexagonal.Application;
+import sk.drabikp.gigsynchub.calendar.application.port.in.ForgetOldCalendarCopyUseCase;
 import sk.drabikp.gigsynchub.calendar.application.port.in.ReviewCalendarUseCase;
 import sk.drabikp.gigsynchub.calendar.application.port.out.BandProfileStore;
 import sk.drabikp.gigsynchub.calendar.application.port.out.CalendarDecisionStore;
@@ -50,7 +51,7 @@ import java.util.stream.Collectors;
  * bringing gigs into the catalog is {@link CalendarCatalogService}'s. Never writes the calendar.
  */
 @Application
-public class CalendarReviewService implements ReviewCalendarUseCase {
+public class CalendarReviewService implements ReviewCalendarUseCase, ForgetOldCalendarCopyUseCase {
 
     private final CalendarFeed feed;
     private final BandProfileStore profileStore;
@@ -77,6 +78,11 @@ public class CalendarReviewService implements ReviewCalendarUseCase {
         this.transactions = transactions;
         this.clock = clock;
         this.thresholds = thresholds;
+    }
+
+    @Override
+    public int forgetRemovedBefore(Instant when) {
+        return snapshotStore.forgetRemovedBefore(when);
     }
 
     @Override

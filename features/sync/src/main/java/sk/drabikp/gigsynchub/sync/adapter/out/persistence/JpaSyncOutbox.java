@@ -135,6 +135,24 @@ class JpaSyncOutbox implements SyncOutbox {
     }
 
     @Override
+    @Transactional
+    public int forgetSettledBefore(Instant when) {
+        return tasks.forgetSettledBefore(
+                List.of(SyncStatus.DONE.name(), SyncStatus.DISCARDED.name()), when);
+    }
+
+    @Override
+    public List<BandId> bandsWithWorkDue(Instant now) {
+        return tasks.bandsWithWorkDue(SyncStatus.PENDING.name(), now).stream().map(BandId::new).toList();
+    }
+
+    @Override
+    public List<SyncTask> due(BandId band, Instant now, int limit) {
+        return mapper.toTasks(tasks.findByBandIdAndStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(
+                band.value(), SyncStatus.PENDING.name(), now, Limit.of(limit)));
+    }
+
+    @Override
     public List<SyncTask> running() {
         return mapper.toTasks(tasks.findByStatusInOrderByIdAsc(List.of(SyncStatus.RUNNING.name())));
     }

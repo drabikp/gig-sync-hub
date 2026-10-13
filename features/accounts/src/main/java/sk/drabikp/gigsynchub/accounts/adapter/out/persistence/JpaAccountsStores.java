@@ -195,6 +195,18 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
 
     @Override
     @Transactional
+    public int forgetBefore(Instant when) {
+        return audit.forgetBefore(when);
+    }
+
+    @Override
+    @Transactional
+    public int forgetExpiredBefore(Instant when) {
+        return invitations.forgetExpiredBefore(when);
+    }
+
+    @Override
+    @Transactional
     public void add(AuditEvent event) {
         audit.save(mapper.toEntity(event));
     }

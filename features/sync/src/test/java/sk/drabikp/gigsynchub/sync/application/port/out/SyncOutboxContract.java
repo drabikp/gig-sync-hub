@@ -75,6 +75,37 @@ public abstract class SyncOutboxContract {
                 });
     }
 
+    /**
+     * What forgetting old work must and must not take. Deleting rows is the one kind of change that
+     * cannot be undone by the next deploy, so the line is drawn by behaviour and not by a comment:
+     * work that is OVER goes, work still waiting for a person stays however old it is.
+     */
+    @Test
+    void forgetting_old_work_takes_what_is_settled_and_leaves_what_is_waiting() {
+        SyncTask done = queue(gig, SyncAction.UPDATE);
+        outbox().markRunning(done.band(), done.id(), NOW);
+        outbox().markDone(done.band(), done.id(), "published", NOW);
+
+        SyncTask failed = queue(other, SyncAction.UPDATE);
+        outbox().markRunning(failed.band(), failed.id(), NOW);
+        outbox().markFailed(failed.band(), failed.id(), "the city is unknown", NOW);
+
+        SyncTask waiting = outbox().enqueue(BAND, TestGigs.gig("Third", "Klub").id(), "g", BANDSINTOWN,
+                SyncAction.UPDATE, NOW);
+
+        Instant later = NOW.plus(Duration.ofDays(91));
+        assertThat(outbox().forgetSettledBefore(later)).as("the settled one, and only it").isEqualTo(1);
+
+        assertThat(outbox().find(BAND, done.id())).as("done work is gone").isEmpty();
+        assertThat(outbox().log(done.id())).as("and its log with it").isEmpty();
+        assertThat(outbox().find(BAND, failed.id())).as("failed work waits for a person, whatever its age")
+                .isPresent();
+        assertThat(outbox().find(BAND, waiting.id())).as("and waiting work is not old at all").isPresent();
+
+        assertThat(outbox().forgetSettledBefore(NOW)).as("nothing settled before the clock started")
+                .isZero();
+    }
+
     @Test
     void a_queued_task_is_pending_and_due_now() {
         SyncTask task = queue(gig, SyncAction.UPDATE);
