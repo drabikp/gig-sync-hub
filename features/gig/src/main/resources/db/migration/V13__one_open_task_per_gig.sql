@@ -4,10 +4,11 @@
 -- #onPublishedPlatforms, #delete). That is a read-then-write, and under READ COMMITTED two
 -- requests for the same gig both see nothing open and both queue. The engine then puts BOTH rows
 -- in one workload (WorkflowEngine#whatIsDue) and -- because every intake is computed before the
--- first batch runs -- MootWork's "already published" guard answers false for both. On Bandsintown
--- that uploads the gig twice and the second event's id overwrites the first in published_gig: the
--- first is then a live public event that nothing here has a pointer to, and no band can ever
--- remove it from this app. A double-clicked Publish, two tabs or a retried POST was enough.
+-- first batch runs -- MootWork's "already published" guard answers false for both. On a platform
+-- whose create makes a new event each time, that publishes the gig twice and the second event's
+-- id overwrites the first in published_gig: the first is then a live public event that nothing
+-- here has a pointer to, and no band can ever remove it from this app. A double-clicked Publish,
+-- two tabs or a retried POST was enough.
 --
 -- The queueing rules were all advisory until now. This index is the first of them the database
 -- actually holds, which is why it is worth the one it does not hold: see SyncRequests' javadoc.

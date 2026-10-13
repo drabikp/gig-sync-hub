@@ -16,17 +16,27 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The features are platform-agnostic in their text too: no class, string or comment of a
  * feature names a platform (what a platform is like comes from its traits). ArchUnit sees only
  * dependencies between classes, so the sources are read here.
+ *
+ * <p>Not only the Java. A feature's OTHER sources say as much about what it knows: its OpenAPI
+ * spec, which is generated into Java the same rule would then have to cover, and the schema's own
+ * migrations — and a migration's comment is where a platform's name slips in most naturally,
+ * because the incident that made someone write the migration happened on one. (It had: V13's
+ * header named a platform and nothing noticed, the walk being {@code .java} alone.)
  */
 class PlatformNamesTest {
 
     private static final Pattern PLATFORM = Pattern.compile("(?i)bandzone|bandsintown");
+
+    /** What a feature is written in: its code, the API it serves, and the schema it keeps. */
+    private static final List<String> SOURCES = List.of(".java", ".yaml", ".sql");
 
     @Test
     void no_feature_names_a_platform() throws IOException {
         Path features = repositoryRoot().resolve("features");
         List<String> named;
         try (Stream<Path> files = Files.walk(features)) {
-            named = files.filter(f -> f.toString().endsWith(".java") && f.toString().contains("/src/main/"))
+            named = files.filter(f -> f.toString().contains("/src/main/") && SOURCES.stream()
+                            .anyMatch(f.toString()::endsWith))
                     .flatMap(PlatformNamesTest::linesNamingAPlatform).toList();
         }
         assertThat(named).isEmpty();

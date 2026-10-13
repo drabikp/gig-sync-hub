@@ -80,8 +80,12 @@ Honest notes, so they are decisions and not surprises:
   identity.
 - **`BandId` is a tenant, not an aggregate root.** Every port that touches a band's data takes it
   explicitly; no thread-local "current band". A band does not *own* its gigs in the model — it would
-  be an unbounded collection — and the boundary is held by the database instead (row-level security,
-  `RowScope`).
+  be an unbounded collection — and the boundary is held by the QUERIES instead: every one of them
+  names the band, and `BandScopedQueriesTest` enumerates the repositories on the classpath and
+  insists on it, so a query that leaves the band out fails the build. (Until V12 the boundary was
+  described here as the database's, by row-level security. That is gone — it was bypassed by the
+  table owner, which is who the feature tests connect as, so it had never been proving anything —
+  and the sentence outlived it.)
 - **`Publication` is its own aggregate**, referenced by id, because a `published_gig` row
   deliberately outlives the deleted catalog gig until the platform's DELETE succeeds.
 - **`SyncTask` likewise**: tasks outlive their gig on purpose (`gigLabel` is there so the log still
