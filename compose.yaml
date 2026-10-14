@@ -28,10 +28,17 @@ x-hardening: &hardening
   cap_drop:
     - ALL
 
+# Whether a container comes back by itself. `unless-stopped` (the default here) is what a server
+# wants: a crash or a daemon restart brings the stack back, while an explicit `docker compose stop`
+# is remembered and stays stopped. A machine where this app is one project among several wants
+# `GSH_RESTART=no` in its .env: then nothing starts until someone says `up`, and the stack never
+# appears behind the next `docker` command that happens to wake the daemon.
+x-restart: &restart ${GSH_RESTART:-unless-stopped}
+
 services:
   db:
     image: postgres:18-alpine
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     security_opt:
       - no-new-privileges:true
@@ -79,7 +86,7 @@ services:
         UID: ${GSH_UID:-1000}
         GID: ${GSH_GID:-1000}
     image: gigsynchub:latest
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     <<: *hardening
     # The JVM gets its heap from the container's limit (-XX:MaxRAMPercentage=75 in the Dockerfile),
@@ -189,7 +196,7 @@ services:
   # is in its log once, on the first start.
   rauthy:
     image: ghcr.io/sebadob/rauthy:0.37.1
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     <<: *hardening
     mem_limit: ${GSH_AUTH_MEM:-512m}
@@ -225,7 +232,7 @@ services:
   # the way in: HTTPS for GSH_DOMAIN (docker/Caddyfile) — /auth/* to Rauthy, the rest to the app
   proxy:
     image: caddy:2-alpine
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     security_opt:
       - no-new-privileges:true
@@ -262,7 +269,7 @@ services:
   # pg_dump on start and then daily into ./data/backups, the newest 14 kept
   backup:
     image: postgres:18-alpine
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     <<: *hardening
     mem_limit: ${GSH_BACKUP_MEM:-256m}
@@ -312,7 +319,7 @@ services:
   prometheus:
     image: prom/prometheus:v3.7.3
     profiles: [observability]
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     <<: *hardening
     mem_limit: ${GSH_PROMETHEUS_MEM:-512m}
@@ -329,7 +336,7 @@ services:
   loki:
     image: grafana/loki:3.5.9
     profiles: [observability]
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     <<: *hardening
     mem_limit: ${GSH_LOKI_MEM:-512m}
@@ -341,7 +348,7 @@ services:
   tempo:
     image: grafana/tempo:2.9.0
     profiles: [observability]
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     <<: *hardening
     mem_limit: ${GSH_TEMPO_MEM:-512m}
@@ -361,7 +368,7 @@ services:
   alloy:
     image: grafana/alloy:v1.12.1
     profiles: [observability]
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     <<: *hardening
     mem_limit: ${GSH_ALLOY_MEM:-256m}
@@ -381,7 +388,7 @@ services:
   grafana:
     image: grafana/grafana:12.3.1
     profiles: [observability]
-    restart: unless-stopped
+    restart: *restart
     logging: *logging
     <<: *hardening
     mem_limit: ${GSH_GRAFANA_MEM:-512m}

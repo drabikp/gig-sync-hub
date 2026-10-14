@@ -1063,7 +1063,11 @@ database on a machine that had one) and `stop_grace_period: 2m` (a database is s
 killed). The app stops gracefully (`server.shutdown=graceful`, 20 s, inside compose's 45 s) so a
 sync step talking to a platform is not cut off mid-create. Flyway runs with
 `lock_timeout = 15s`: a migration that cannot get its lock fails rather than queueing the whole
-database behind it.
+database behind it. **Whether a container comes back by itself is the machine's** (`GSH_RESTART`,
+default `unless-stopped`): a server wants a crash or a reboot to bring the stack back, and an
+explicit `docker compose stop` to be remembered; a workstation where this app is one project among
+several sets `GSH_RESTART=no`, and then nothing runs between a `stop` and the next `up` — not after
+a reboot, and not when another project's `docker` command wakes the daemon.
 
 **CI** (`.github/workflows/build.yml`): every push and pull request runs `./mvnw verify` on **Java
 25** — the version the image runs, not the newest — with Docker for Testcontainers; Dependabot
@@ -1136,6 +1140,7 @@ one place and named; none of them is a guess left in the code.
 | The nightly check | 3 h a night | `gigsynchub.check.budget` | it carries on tomorrow where it stopped |
 | What is kept | 90 d settled work, 365 d audit, 180 d calendar copy, 30 d invitations | `gigsynchub.housekeeping.*` | the nightly housekeeping forgets it |
 | A container | memory and CPU per service, logs 3 × 10 MB | `.env` (`GSH_*_MEM`, `GSH_*_CPUS`) | the kernel refuses the memory; logs roll |
+| A container coming back | after a crash or a reboot, unless it was stopped on purpose | `.env` (`GSH_RESTART`, `no` on a workstation) | `no`: nothing runs until the next `up` |
 
 **One app per database.** A second instance would run a second sync worker over the same tasks —
 the status changes are guarded (`SyncStatus.canBecome`, `sync_task.version`), so the damage is
