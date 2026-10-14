@@ -165,7 +165,7 @@ export function CalendarRules({ rules }: { rules: CalendarRule[] }) {
           <IconChevronDown size={16} style={{ transform: shippedOpen ? 'rotate(180deg)' : undefined }} />
         </Group>
       </UnstyledButton>
-      <Collapse in={shippedOpen}>
+      <Collapse expanded={shippedOpen}>
         <Table verticalSpacing={6} fz="sm">
           <Table.Thead>
             <Table.Tr>

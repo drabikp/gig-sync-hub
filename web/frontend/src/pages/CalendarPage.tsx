@@ -88,7 +88,7 @@ function Row({ row }: { row: CalendarRow }) {
                 <IconChevronDown size={14} style={{ transform: why ? 'rotate(180deg)' : undefined }} />
               </Group>
             </UnstyledButton>
-            <Collapse in={why}>
+            <Collapse expanded={why}>
               <Group gap={6} mt={6}>
                 {row.reasons.map((r, i) => (
                   <Badge key={i} variant="default" radius="xl" styles={{ label: { textTransform: 'none', fontWeight: 600 } }}>
@@ -232,7 +232,7 @@ export function CalendarPage() {
             <IconChevronDown size={18} style={{ transform: rulesOpen ? 'rotate(180deg)' : undefined }} />
           </Group>
         </UnstyledButton>
-        <Collapse in={rulesOpen}>
+        <Collapse expanded={rulesOpen}>
           <Text size="sm" c="dimmed" mt="sm" mb="sm">{t('calendar.rulesHelp')}</Text>
           {rules.data && <CalendarRules rules={rules.data} />}
         </Collapse>

@@ -28,7 +28,7 @@ export function AuditLog() {
           <IconChevronDown size={16} style={{ transform: open ? 'rotate(180deg)' : undefined }} />
         </Group>
       </UnstyledButton>
-      <Collapse in={open}>
+      <Collapse expanded={open}>
         {(log.data ?? []).length === 0 ? <Text size="sm" c="dimmed">{t('audit.none')}</Text> : (
           <Table verticalSpacing={4} fz="sm">
             <Table.Tbody>

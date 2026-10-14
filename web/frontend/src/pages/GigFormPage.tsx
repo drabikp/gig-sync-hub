@@ -309,7 +309,7 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
                 <Text fw={600}>{slotOpen ? t('form.slotHide') : t('form.slotShow')}</Text>
               </Group>
             </UnstyledButton>
-            <Collapse in={slotOpen}>
+            <Collapse expanded={slotOpen}>
               <Stack gap="xs">
                 <Group grow align="flex-start">
                   <DateField label={t('form.slotDate')} value={draft.slotDate} clearable
@@ -388,7 +388,7 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
                 <Text fw={600}>{t('form.links')}</Text>
               </Group>
             </UnstyledButton>
-            <Collapse in={moreOpen}>
+            <Collapse expanded={moreOpen}>
               <Stack gap="md">
                 <TextInput label={t('form.ticketUrl')} type="url" maxLength={255} value={draft.ticketUrl ?? ''} onChange={(e) => set({ ticketUrl: e.currentTarget.value || null })} />
                 <TextInput label={t('form.facebookUrl')} type="url" maxLength={255} value={draft.facebookUrl ?? ''} onChange={(e) => set({ facebookUrl: e.currentTarget.value || null })} />
