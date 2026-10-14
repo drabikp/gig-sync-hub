@@ -1,4 +1,4 @@
-# Every push and every pull request builds what `./mvnw test` builds here: the Java modules and
+# Every pull request, and master itself, builds what `./mvnw test` builds here: the Java modules and
 # the page, with the migrations run against a real PostgreSQL (Testcontainers), because a schema
 # this app only ever validates against is a schema nobody has checked.
 #
@@ -6,9 +6,13 @@
 # on the JDK a developer happens to have and fails on the one in production is worse than no CI.
 name: build
 
+# A branch with a pull request open is covered by the `pull_request` trigger, and master by the
+# `push` one. Listening for a push on every branch as well ran the whole suite TWICE for each
+# change — eight minutes of a runner, twice, to answer the same question. The cost of this is that
+# a branch with no pull request gets no build; open one and it is covered from that moment.
 on:
   push:
-    branches: ["**"]
+    branches: [master]
   pull_request:
 
 permissions:
