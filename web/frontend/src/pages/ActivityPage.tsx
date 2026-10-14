@@ -55,7 +55,7 @@ function TaskRow({ task }: { task: Task }) {
           </Stack>
         </Group>
       </UnstyledButton>
-      <Collapse in={open}>
+      <Collapse expanded={open}>
         <Stack gap={4} mt="sm" pl={42}>
           {(log.data ?? []).map((e, i) => (
             <Text key={i} size="sm"><Text span c="dimmed">{when(e.at)}</Text> {e.message}</Text>
