@@ -71,7 +71,11 @@ class PosterDownloaderTest {
         assertThatThrownBy(() -> new PosterDownloader(Duration.ofSeconds(10), Duration.ofSeconds(30), false).download(base + "/missing.jpg"))
                 .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
                     assertThat(e.kind()).isEqualTo(FailureKind.TEMPORARY);
-                    assertThat(e.getMessage()).contains("Poster download failed").doesNotContain("404");
+                    // The address is in the message and what the host ANSWERED is not — said as an
+                    // equality, because the address ends in a port the stub server was given at random
+                    // and `doesNotContain("404")` fails whenever those three digits happen to land in
+                    // it. They did, on the first CI run of this repository's life: port 40447.
+                    assertThat(e.getMessage()).isEqualTo("Poster download failed: " + base + "/missing.jpg");
                 });
     }
 
