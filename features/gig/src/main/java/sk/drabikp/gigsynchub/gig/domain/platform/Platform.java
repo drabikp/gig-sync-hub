@@ -12,10 +12,10 @@ import java.util.regex.Pattern;
 @ValueObject
 public record Platform(String id) implements Comparable<Platform> {
 
-    private static final Pattern ID = Pattern.compile("[A-Z][A-Z0-9_]*");
+    private static final Pattern ID_FORMAT = Pattern.compile("[A-Z][A-Z0-9_]*");
 
     public Platform {
-        if (id == null || !ID.matcher(id).matches()) {
+        if (id == null || !ID_FORMAT.matcher(id).matches()) {
             throw new IllegalArgumentException("a platform id is upper case letters, digits and _: " + id);
         }
     }

@@ -116,7 +116,7 @@ class GigsController implements GigsApi {
     @Override
     public ResponseEntity<QueueResultResponse> publishGigs(UUID bandId, GigSelectionRequest selection) {
         BandId band = refs.toBandId(bandId);
-        List<Gig> selected = mapper.toGigIds(selection.getGigs()).stream().map(id -> gigs.gig(band, id)).toList();
+        List<Gig> selected = gigs.gigs(band, mapper.toGigIds(selection.getGigs()));
         return ResponseEntity.ok(mapper.toResponse(publishGigs.publish(band,
                 new LinkedHashSet<>(platforms.get(selection.getPlatforms())), selected)));
     }
@@ -124,8 +124,7 @@ class GigsController implements GigsApi {
     @Override
     public ResponseEntity<QueueResultResponse> resyncGigs(UUID bandId, GigSelectionRequest selection) {
         BandId band = refs.toBandId(bandId);
-        List<GigId> selected = mapper.toGigIds(selection.getGigs()).stream().map(id -> gigs.gig(band, id).id())
-                .toList();
+        List<GigId> selected = gigs.gigs(band, mapper.toGigIds(selection.getGigs())).stream().map(Gig::id).toList();
         return ResponseEntity.ok(mapper.toResponse(resyncGigs.resync(band, selected)));
     }
 }

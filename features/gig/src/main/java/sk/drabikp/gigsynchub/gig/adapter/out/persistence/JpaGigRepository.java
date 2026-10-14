@@ -14,6 +14,7 @@ import sk.drabikp.gigsynchub.gig.domain.GigSlice;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -57,6 +58,15 @@ class JpaGigRepository implements GigRepository {
     }
 
     @Override
+    public List<Gig> findAllByIds(BandId band, Collection<GigId> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findByBandIdAndIdIn(band.value(), ids.stream().map(GigId::value).toList())
+                .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
     public List<Gig> findAll(BandId band) {
         return jpaRepository.findByBandId(band.value()).stream().map(mapper::toDomain).toList();
     }
@@ -70,6 +80,12 @@ class JpaGigRepository implements GigRepository {
     public List<Gig> earliestFirst(BandId band, int limit) {
         return jpaRepository.findByBandIdOrderByShowAtAscIdAsc(band.value(), Limit.of(limit))
                 .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public List<Gig> findCovering(BandId band, DateRange range) {
+        return jpaRepository.coveringAnyOf(band.value(), range.start().atStartOfDay(),
+                range.end().plusDays(1).atStartOfDay()).stream().map(mapper::toDomain).toList();
     }
 
     @Override

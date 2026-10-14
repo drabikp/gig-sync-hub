@@ -394,9 +394,11 @@ components:
       properties:
         name:
           type: string
+          maxLength: 100
         slug:
           description: The band's address (/b/<slug>, /gigs/<slug>) — lower case letters, digits, dashes.
           type: string
+          maxLength: 64
         publicList:
           description: Its gigs listed at the public address /gigs/<slug> (left out — as it was; a new band — no).
           type: boolean
@@ -449,11 +451,15 @@ components:
           type: object
           additionalProperties:
             type: string
+            maxLength: 2000
+          maxProperties: 20
         secrets:
           description: Its secret fields; one left out or blank keeps the one kept.
           type: object
           additionalProperties:
             type: string
+            maxLength: 8000
+          maxProperties: 20
     PlatformAccountResponse:
       type: object
       required: [platform, connected, settings, secretsSet, lastCheck]
@@ -499,6 +505,7 @@ components:
       properties:
         email:
           type: string
+          maxLength: 320
         role:
           $ref: '#/components/schemas/RoleValue'
     InvitationResponse:

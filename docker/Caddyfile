@@ -7,6 +7,14 @@
 	@notLive not path /api/bands/*/events
 	encode @notLive zstd gzip
 
+	# A request body is read into the app's heap whole, and nothing on the Java side bounds it
+	# (the specs' limits are generated into no checks — see pom.xml useBeanValidation). So the
+	# edge bounds it: a gig, a rule set or an import decision is kilobytes, and the one upload
+	# anyone sends is a poster the app fetches itself rather than receives.
+	request_body {
+		max_size 2MB
+	}
+
 	# the sign-in: Rauthy serves everything under /auth/v1
 	handle /auth/* {
 		reverse_proxy rauthy:8080
@@ -24,15 +32,40 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
+
+		# What a page here may load and what may load a page here. This app's whole job is
+		# showing text it did not write — venue names scraped from Bandzone, event titles from
+		# the Bandsintown portal, and the titles, places and NOTES of a band's own third-party
+		# calendar — so the day someone reaches for dangerouslySetInnerHTML, a Markdown
+		# renderer or <img src={fromTheServer}>, this is what stands between that and a session
+		# cookie plus the deliberately readable XSRF-TOKEN, which together are every band the
+		# victim owns.
+		#
+		# 'unsafe-inline' for styles is Mantine's CSS-in-JS and cannot be dropped without
+		# changing how the page is built; scripts need no such thing (the bundle and
+		# registerSW.js are both files). The Bandsintown bookmarklet is unaffected: a
+		# javascript: bookmark is the USER's code, not the page's, and is exempt from the host
+		# page's policy in every browser that supports them.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'; object-src 'none'"
+		# X-Frame-Options covers the browsers that do not read frame-ancestors. Spring sends it
+		# on /api answers already; the page itself — the thing worth framing — had nothing.
+		X-Frame-Options DENY
+		# nothing here wants a camera, a microphone or a place: say so rather than leave it open
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy same-origin
 	}
 
-	# no token in the log: an invitation link's (/invite/…, /api/invitations/…) nor the sign-out's id_token_hint
+	# No token in the log. An invitation link's (/invite/…, /api/invitations/…), the sign-out's
+	# id_token_hint — and the sign-in's own `code` and `state`, which were going in whole: an
+	# authorization code is single-use and lasts a minute and redeeming it needs the client
+	# secret and the PKCE verifier as well, so it is credential hygiene rather than a way in,
+	# but a log is read by people and copied into backups and it has no business holding either.
 	log {
 		output stdout
 		format filter {
 			wrap json
 			fields {
-				request>uri regexp "(invite/|invitations/|id_token_hint=)[^/?&]+" "${1}REDACTED"
+				request>uri regexp "(invite/|invitations/|id_token_hint=|code=|state=|session_state=)[^/?&]+" "${1}REDACTED"
 			}
 		}
 	}

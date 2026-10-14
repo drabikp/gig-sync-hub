@@ -11,6 +11,7 @@ import sk.drabikp.gigsynchub.gig.domain.GigSlice;
 
 import java.time.LocalDate;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,6 +38,13 @@ public interface GigRepository {
     Optional<Gig> findByMatch(BandId band, GigMatch match);
 
     /**
+     * These gigs of the band, in one read, and only the ones it really has. What a bulk action
+     * works on: a thousand selected gigs used to be a thousand {@code findById} calls in one
+     * transaction, which is the same N+1 the gig list is held away from by {@code publicationsOf}.
+     */
+    List<Gig> findAllByIds(BandId band, Collection<GigId> ids);
+
+    /**
      * Every gig of the band. Only for work that is about ALL of them — an export, a reconciliation —
      * never to answer a page: {@link #page} does that, and it reads a page's worth of rows.
      */
@@ -55,6 +63,17 @@ public interface GigRepository {
     List<Gig> earliestFirst(BandId band, int limit);
 
     List<Gig> findStartingWithin(BandId band, DateRange range);
+
+    /**
+     * The band's gigs whose days OVERLAP the range — a gig that began before it and is still
+     * running on one of its days counts, which {@link #findStartingWithin} (which asks about the
+     * start alone) would miss.
+     *
+     * <p>What the calendar review reads instead of the whole catalog. It compares each calendar
+     * event with the gigs on ITS day, so the only gigs it can ever need are the ones in the window
+     * its events cover; before this it read every gig a band had ever played to look at a month.
+     */
+    List<Gig> findCovering(BandId band, DateRange range);
 
     void deleteById(BandId band, GigId id);
 }

@@ -47,7 +47,7 @@ class BandzoneHtmlFetcherTest {
         });
         server.start();
         fetcher = new BandzoneHtmlFetcher(new BandzoneProperties("http://127.0.0.1:" + server.getAddress().getPort(),
-                null, null, "eufory"));
+                null, null, "eufory", null));
     }
 
     @AfterEach

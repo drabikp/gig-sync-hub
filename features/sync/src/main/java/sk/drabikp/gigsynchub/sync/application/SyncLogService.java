@@ -5,6 +5,7 @@ import sk.drabikp.gigsynchub.gig.application.NotFoundException;
 import sk.drabikp.gigsynchub.gig.application.UserFacingException;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
 import sk.drabikp.gigsynchub.gig.domain.GigId;
+import sk.drabikp.gigsynchub.sync.application.port.in.ForgetOldSyncWorkUseCase;
 import sk.drabikp.gigsynchub.sync.application.port.in.SyncErrorCode;
 import sk.drabikp.gigsynchub.sync.application.port.in.SyncLogUseCase;
 import sk.drabikp.gigsynchub.sync.application.port.out.SyncNotifier;
@@ -16,12 +17,13 @@ import sk.drabikp.gigsynchub.sync.domain.SyncStatus;
 import sk.drabikp.gigsynchub.sync.domain.SyncTask;
 
 import java.time.Clock;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
 /** The sync log for the user: reading it, and retrying or discarding what the worker gave up on. */
 @Application
-public class SyncLogService implements SyncLogUseCase {
+public class SyncLogService implements SyncLogUseCase, ForgetOldSyncWorkUseCase {
 
     /** How many of the latest tasks "all" shows. */
     static final int LATEST = 500;
@@ -36,6 +38,11 @@ public class SyncLogService implements SyncLogUseCase {
         this.trigger = trigger;
         this.notifier = notifier;
         this.clock = clock;
+    }
+
+    @Override
+    public int forgetSettledBefore(java.time.Instant when) {
+        return outbox.forgetSettledBefore(when);
     }
 
     @Override
@@ -63,13 +70,18 @@ public class SyncLogService implements SyncLogUseCase {
 
     @Override
     public SyncCounts counts(BandId band) {
-        return SyncCounts.of(outbox.unfinished(band));
+        return outbox.openWork(List.of(band)).getOrDefault(band, SyncCounts.NONE);
+    }
+
+    @Override
+    public Map<BandId, SyncCounts> counts(Collection<BandId> bands) {
+        return outbox.openWork(bands);
     }
 
     @Override
     public List<SyncLogEntry> log(BandId band, long taskId) {
         task(band, taskId);
-        return outbox.log(taskId);
+        return outbox.log(band, taskId);
     }
 
     @Override
@@ -78,7 +90,7 @@ public class SyncLogService implements SyncLogUseCase {
         if (task.status() != SyncStatus.FAILED && task.status() != SyncStatus.DISCARDED) {
             throw movedOn(task, "Only a failed or discarded task can be retried — it has moved on meanwhile.");
         }
-        outbox.requeue(taskId, clock.instant());
+        outbox.requeue(band, taskId, clock.instant());
         trigger.wake();
         notifier.changed(band);
     }
@@ -89,13 +101,18 @@ public class SyncLogService implements SyncLogUseCase {
         if (task.status() != SyncStatus.FAILED && task.status() != SyncStatus.PENDING) {
             throw movedOn(task, "Only a waiting or failed task can be discarded — it has moved on meanwhile.");
         }
-        outbox.discard(taskId, clock.instant());
+        outbox.discard(band, taskId, clock.instant());
         notifier.changed(band);
     }
 
-    /** The band's task — another band's is "not there" for it. */
+    /**
+     * The band's task — another band's is "not there" for it. The band is part of the ASKING now;
+     * it used to be a filter applied to whatever came back by id, which worked but was a check the
+     * build could not see, and the only one standing between a crafted task id and another band's
+     * work.
+     */
     private SyncTask task(BandId band, long taskId) {
-        return outbox.find(taskId).filter(t -> t.band().equals(band))
+        return outbox.find(band, taskId)
                 .orElseThrow(() -> new NotFoundException("no sync task " + taskId));
     }
 

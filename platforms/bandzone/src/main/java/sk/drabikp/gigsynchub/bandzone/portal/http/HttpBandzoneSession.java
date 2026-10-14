@@ -201,9 +201,10 @@ final class HttpBandzoneSession implements BandzoneSession {
 
     private Optional<Boolean> listedCancelled(String bandzoneId, String tab) throws BandzonePortalException {
         Document page = web.get("/" + bandSlug + "?at=gig" + tab).document();
-        Element link = page.selectFirst("article.gig a.gig__link[href*=\"/koncert/" + bandzoneId + "-\"]");
-        return link == null ? Optional.empty()
-                : Optional.of(link.closest("article.gig").hasClass("gig--canceled"));
+        // the article itself, not the link inside it: `closest` on the link answers the same thing
+        // and can answer null, which is a NullPointerException on a page that changed shape
+        Element gig = page.selectFirst("article.gig:has(a.gig__link[href*=\"/koncert/" + bandzoneId + "-\"])");
+        return gig == null ? Optional.empty() : Optional.of(gig.hasClass("gig--canceled"));
     }
 
     /** The year the concert starts in, from its edit form. */

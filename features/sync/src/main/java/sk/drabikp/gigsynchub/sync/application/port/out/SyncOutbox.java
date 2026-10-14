@@ -17,6 +17,12 @@ import java.util.Set;
  * task's history. Writes join the caller's transaction, so a catalog change and the tasks
  * it needs commit (or roll back) together. Every state change is logged. Who only reads it
  * uses {@link SyncTaskQueries}.
+ *
+ * <p><b>Every one of these names the band, the id alone never being enough.</b> A task's id comes
+ * from a sequence every band draws on, so it is guessable, and until October 2026 the whole of this
+ * write path took the id by itself — a crafted number reached another band's work, and the only
+ * thing in the way was whichever caller remembered to check. The band cannot be left out now, and
+ * {@code BandScopedQueriesTest} is what keeps a new method from leaving it out again.
  */
 @Repository
 public interface SyncOutbox extends SyncTaskQueries {
@@ -42,24 +48,31 @@ public interface SyncOutbox extends SyncTaskQueries {
     void relabel(BandId band, GigId gigId, String gigLabel);
 
     /** RUNNING, one more attempt — only if still PENDING (the user may have discarded it); false otherwise. */
-    boolean markRunning(long id, Instant now);
+    boolean markRunning(BandId band, long id, Instant now);
 
-    void markDone(long id, String message, Instant now);
+    void markDone(BandId band, long id, String message, Instant now);
 
     /** Back to PENDING until {@code nextAttempt}. */
-    void markRetry(long id, String error, Instant nextAttempt, Instant now);
+    void markRetry(BandId band, long id, String error, Instant nextAttempt, Instant now);
 
-    void markFailed(long id, String error, Instant now);
+    void markFailed(BandId band, long id, String error, Instant now);
 
     /** A RUNNING task that couldn't start after all: PENDING until {@code nextAttempt}, the attempt not counted. */
-    void postpone(long id, String why, Instant nextAttempt, Instant now);
+    void postpone(BandId band, long id, String why, Instant nextAttempt, Instant now);
 
     /** A workflow run moves on to {@code next}: PENDING, due now, logging {@code why}. */
-    void advance(long id, StepType next, String why, Instant now);
+    void advance(BandId band, long id, StepType next, String why, Instant now);
 
     /** The user's retry of a FAILED or DISCARDED task: PENDING now, attempts counted afresh. */
-    void requeue(long id, Instant now);
+    void requeue(BandId band, long id, Instant now);
 
     /** The user's discard of a PENDING or FAILED task. */
-    void discard(long id, Instant now);
+    void discard(BandId band, long id, Instant now);
+
+    /**
+     * Forgets the work that is over — DONE and DISCARDED tasks last written to before
+     * {@code when} — and their log with them; answers how many went. Failed work stays, whatever
+     * its age: it is waiting for someone.
+     */
+    int forgetSettledBefore(Instant when);
 }

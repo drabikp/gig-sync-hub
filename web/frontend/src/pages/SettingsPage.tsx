@@ -1,4 +1,4 @@
-import { Avatar, Button, Group, Paper, SegmentedControl, Stack, Switch, Text, Title, useMantineColorScheme } from '@mantine/core';
+import { Anchor, Avatar, Button, Group, Paper, SegmentedControl, Stack, Switch, Text, Title, useMantineColorScheme } from '@mantine/core';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
@@ -12,6 +12,7 @@ import { CalendarConnection } from '../components/CalendarSetup';
 import { PageHeader } from '../components/PageHeader';
 import { PlatformAccounts } from '../components/PlatformAccounts';
 import { LANGUAGES, setLanguage } from '../i18n';
+import { SOURCE_URL } from '../lib/source';
 import { setTimeFormat, timeFormat, type TimeFormat } from '../lib/format';
 import { done, failed } from '../lib/notify';
 
@@ -149,6 +150,11 @@ export function SettingsPage() {
       <Section title={t('settings.sync')}>
         <Switch size="md" checked={paused} label={t('activity.pause')} description={t('activity.pauseHelp')}
           onChange={() => sync.mutate({ kind: paused ? 'resume' : 'pause' }, { onError: failed })} />
+      </Section>
+      <Section title={t('settings.about')}>
+        <Text size="sm">{t('settings.licence')}</Text>
+        <Anchor href={SOURCE_URL} target="_blank" rel="noreferrer" size="sm">{t('settings.source')}</Anchor>
+        <Text size="xs" c="dimmed">{t('settings.sourceHelp')}</Text>
       </Section>
     </Stack>
   );

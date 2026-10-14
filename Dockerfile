@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
-# The whole app in one image: the Spring Boot jar (with the page built in) on Java 21. Built from
+# The whole app in one image: the Spring Boot jar (with the page built in) on Java 25. Built from
 # the sources (no local build needed); see compose.yaml for running it with its database.
 #
 # No browser lives here any more: both platforms are driven over plain HTTP, and the one sign-in
 # that needs a browser is done by the band in its own. So nothing in this image runs Chromium
 # unsandboxed beside the bands' sealed secrets, and the image is a JRE and a jar.
 
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /src
 COPY .mvn .mvn
 COPY mvnw pom.xml ./
@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.m2 --mount=type=cache,target=/root/.npm \
  && cp app/target/gigsynchub-app-*.jar /src/app.jar \
  && java -Djarmode=tools -jar /src/app.jar extract --layers --destination /out
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 ENV LANG=C.UTF-8 \
     TZ=Europe/Bratislava
 # curl for the health check below; the rest is certificates and zones the app needs itself

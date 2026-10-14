@@ -31,7 +31,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Manages the local gig catalog (the source of truth) over the {@link GigRepository}.
@@ -70,13 +72,26 @@ public class GigCatalogService
 
     @Override
     public void add(BandId band, Gig gig) {
-        transactions.inTransaction(() -> writes.add(band, gig));
+        transactions.inRepeatableTransaction(() -> writes.add(band, gig));
         live.changed(band, LiveUpdates.Topic.GIGS);
     }
 
     @Override
     public Gig gig(BandId band, GigId id) {
         return gigRepository.findById(band, id).orElseThrow(() -> new NotFoundException("No such gig."));
+    }
+
+    @Override
+    public List<Gig> gigs(BandId band, List<GigId> ids) {
+        Map<GigId, Gig> found = gigRepository.findAllByIds(band, ids).stream()
+                .collect(Collectors.toMap(Gig::id, Function.identity()));
+        return ids.stream().map(id -> {
+            Gig gig = found.get(id);
+            if (gig == null) {
+                throw new NotFoundException("No such gig.");
+            }
+            return gig;
+        }).toList();
     }
 
     @Override
@@ -114,7 +129,7 @@ public class GigCatalogService
     private static Map<GigId, Map<Platform, Publication>> byGig(List<Publication> publications) {
         Map<GigId, Map<Platform, Publication>> byGig = new HashMap<>();
         for (Publication p : publications) {
-            byGig.computeIfAbsent(p.gigId(), id -> new TreeMap<>()).put(p.platform(), p);
+            byGig.computeIfAbsent(p.gigId(), _ -> new TreeMap<>()).put(p.platform(), p);
         }
         return byGig;
     }
@@ -141,7 +156,7 @@ public class GigCatalogService
 
     /** Writes in one transaction, then tells the sync and the band's pages. */
     private QueueResult written(BandId band, Supplier<QueueResult> write) {
-        QueueResult queued = transactions.computeInTransaction(write);
+        QueueResult queued = transactions.computeInRepeatableTransaction(write);
         sync.signal(band, queued);
         live.changed(band, LiveUpdates.Topic.GIGS);
         return queued;

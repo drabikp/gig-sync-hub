@@ -71,6 +71,12 @@ class JpaCalendarSnapshotStore implements CalendarSnapshotStore {
     }
 
     @Override
+    @Transactional
+    public int forgetRemovedBefore(Instant when) {
+        return jpaRepository.forgetRemovedBefore(when);
+    }
+
+    @Override
     public Optional<Instant> lastRead(BandId band) {
         return Optional.ofNullable(jpaRepository.lastSeen(band.value()));
     }

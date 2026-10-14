@@ -78,6 +78,42 @@ class JpaAccountsStoresTest {
     }
 
     /**
+     * What forgetting takes, and what it leaves. Both of these tables hold something about a person
+     * — who did what, and an e-mail address — so an unbounded one is a cost twice over; but a
+     * retention that took the wrong rows would be worse than no retention at all, so the line is
+     * drawn here by behaviour.
+     */
+    @Test
+    void forgetting_takes_old_audit_events_and_invitations_that_ran_out() {
+        Band band = new Band(new BandId(UUID.randomUUID()), "housekeeping", "Housekeeping");
+        User owner = new User(new UserId(UUID.randomUUID()), "sub-keep", "k@band.test", "K");
+        stores.save(band);
+        stores.save(owner);
+        Instant longAgo = Instant.parse("2025-01-01T10:00:00Z");
+        Instant lately = Instant.parse("2026-10-12T10:00:00Z");
+        Instant cutOff = Instant.parse("2026-01-01T00:00:00Z");
+
+        stores.add(new AuditEvent(band.id(), owner.id(), "gig.add", "old", 201, longAgo));
+        stores.add(new AuditEvent(band.id(), owner.id(), "gig.add", "recent", 201, lately));
+        Invitation over = new Invitation(UUID.randomUUID(), band.id(), "over@band.test", Role.MANAGER, owner.id(),
+                longAgo, longAgo.plusSeconds(3600), null);
+        Invitation live = new Invitation(UUID.randomUUID(), band.id(), "live@band.test", Role.MANAGER, owner.id(),
+                lately, lately.plusSeconds(3600), null);
+        stores.save(over, "b".repeat(64));
+        stores.save(live, "c".repeat(64));
+
+        assertThat(stores.forgetBefore(cutOff)).isEqualTo(1);
+        assertThat(stores.forgetExpiredBefore(cutOff)).isEqualTo(1);
+
+        assertThat(stores.recent(band.id(), 10)).extracting(AuditEvent::target)
+                .as("the old event is gone and the recent one is not").containsExactly("recent");
+        assertThat(stores.byTokenHash("b".repeat(64))).as("the invitation that ran out is gone").isEmpty();
+        assertThat(stores.byTokenHash("c".repeat(64))).as("the live one is not").isPresent();
+
+        stores.delete(band.id());
+    }
+
+    /**
      * The audit log is a band's own: who changed what, read by its owners. It is the one table of this
      * module that holds a band's DATA rather than who belongs to which band, so it is the one that has
      * to be shown apart — a log that leaked would say what another band did and when.

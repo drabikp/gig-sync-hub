@@ -267,8 +267,12 @@ components:
         One page of the gig list. `total` is how many gigs match the filter, so the page can say
         "50 of 213" without reading the other 163; `cursor` reads on from the last row, and is
         absent at the end of the list.
+
+        `total` comes with the FIRST page and with no other: counting is a second pass over
+        everything the filter matches, and a page reading on from a cursor already has the number
+        it was given at the start.
       type: object
-      required: [gigs, total]
+      required: [gigs]
       properties:
         gigs:
           type: array
@@ -277,6 +281,7 @@ components:
         total:
           type: integer
           format: int64
+          nullable: true
         cursor:
           type: string
           nullable: true
@@ -404,6 +409,7 @@ components:
         rev:
           description: The revision the edit was made on (Gig.rev).
           type: string
+          maxLength: 100
         gig:
           $ref: '../../../../gig/src/main/openapi/gig.yaml#/components/schemas/GigFormRequest'
     GigEditedResponse:
@@ -419,15 +425,24 @@ components:
       required: [gigs]
       properties:
         gigs:
-          description: The gigs' tokens.
+          description: |
+            The gigs' tokens. The bound is five full pages of the list (which answers at most 200
+            rows), because the page selects the rows it has LOADED and "Show more" keeps adding
+            them — so it is above any real "select all" and still a number, which an unbounded
+            array is not: one task per gig per platform is written for each of these, in one
+            transaction.
           type: array
           items:
             type: string
+            maxLength: 100
+          maxItems: 1000
         platforms:
           description: Where to publish (publish only).
           type: array
           items:
             type: string
+            maxLength: 40
+          maxItems: 20
     QueuedTaskResponse:
       type: object
       required: [taskId, platform, action]

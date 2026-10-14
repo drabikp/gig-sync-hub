@@ -133,6 +133,13 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
         bands.hold(band.value());
     }
 
+    /** A write lock on the user's own row — what everything counted about them is counted FROM. */
+    @Override
+    @Transactional
+    public void hold(UserId user) {
+        users.hold(user.value());
+    }
+
     @Override
     @Transactional
     public void save(Membership membership) {
@@ -184,6 +191,18 @@ class JpaAccountsStores implements UserStore, BandStore, MembershipStore, Invita
     @Transactional
     public void delete(UUID invitation) {
         invitations.deleteById(invitation);
+    }
+
+    @Override
+    @Transactional
+    public int forgetBefore(Instant when) {
+        return audit.forgetBefore(when);
+    }
+
+    @Override
+    @Transactional
+    public int forgetExpiredBefore(Instant when) {
+        return invitations.forgetExpiredBefore(when);
     }
 
     @Override

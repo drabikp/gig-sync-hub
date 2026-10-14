@@ -14,7 +14,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -26,7 +29,19 @@ import java.util.concurrent.TimeUnit;
  * import), so a topic is sent once per {@value #COALESCE_MS} ms at most (per band); a comment every
  * {@value #HEARTBEAT_S} s keeps idle streams open through proxies. A stream ends after {@value #LIFETIME_MIN}
  * minutes (the page opens a new one by itself — so a member removed from the band stops hearing it); at most
- * {@value #MAX_PER_BAND} streams per band and {@value #MAX_STREAMS} on the server — over that, the oldest ends.
+ * {@value #MAX_PER_BAND} streams per band and {@value #MAX_STREAMS} on the server.
+ *
+ * <p><b>Nobody writes on the timer thread.</b> {@code emitter.send} is a blocking write to a socket,
+ * so one page on a stalled connection — a phone that went into a tunnel, its window full and not yet
+ * timed out — used to hold the one thread that fans out every OTHER band's events and sends every
+ * heartbeat. Live updates stopped for everyone, and the idle streams other proxies then closed made
+ * it look like a network fault. So each stream has its own small outbox and its own thread draining
+ * it: a stalled page delays nothing but itself.
+ *
+ * <p>An event that does not fit a stream's outbox is DROPPED, and that is sound rather than a
+ * compromise: an event carries no data, only the name of what changed, and the page answers it by
+ * asking for that part again. A page too far behind to take the name will be told by the next one it
+ * does take, or will ask for everything when it reconnects.
  */
 @Component
 class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
@@ -37,9 +52,22 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
     static final long LIFETIME_MIN = 30;
     static final int MAX_PER_BAND = 100;
     static final int MAX_STREAMS = 2000;
+    /** A page this far behind is not reading; one more name would tell it nothing. */
+    static final int OUTBOX = 8;
 
-    /** A page's stream and the band it shows. */
-    private record Stream(BandId band, SseEmitter emitter) {
+    /** A page's stream, the band it shows, and what is waiting to be written to it. */
+    private record Stream(BandId band, SseEmitter emitter, BlockingQueue<SseEmitter.SseEventBuilder> outbox) {
+
+        Stream(BandId band, SseEmitter emitter) {
+            this(band, emitter, new ArrayBlockingQueue<>(OUTBOX));
+        }
+
+        /** Never blocks and never throws: whoever announces a change is not the one who waits for a page. */
+        void offer(SseEmitter.SseEventBuilder event) {
+            if (!outbox.offer(event)) {
+                log.debug("A page is not keeping up; it is not told this time");
+            }
+        }
     }
 
     /** A change waiting to be sent: whose ({@code null} = everyone's) and what. */
@@ -57,6 +85,11 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
         thread.setDaemon(true);
         return thread;
     });
+    /**
+     * One thread per stream, parked on its own socket. Virtual, because a platform thread each would
+     * be 2000 of them: here a stalled page costs a few kilobytes and nobody else's latency.
+     */
+    private final ExecutorService writers = Executors.newVirtualThreadPerTaskExecutor();
 
     /** Starts the heartbeat once the bean is built (not in the constructor: {@code this} is complete by then). */
     @Override
@@ -73,16 +106,17 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
         Stream stream = new Stream(band, emitter);
         streams.add(stream);
         List<Stream> bands = streams.stream().filter(s -> s.band().equals(band)).toList();
-        if (bands.size() > MAX_PER_BAND) {
+        if (bands.size() > MAX_PER_BAND || streams.size() > MAX_STREAMS) {
+            // The oldest of THIS band's, under either cap. Ending the oldest on the server would
+            // make one band's hundred tabs close another band's pages — a tenant able to blind the
+            // others, for free, by opening windows.
             end(bands.getFirst());
-        }
-        if (streams.size() > MAX_STREAMS) {
-            end(streams.getFirst());
         }
         emitter.onCompletion(() -> streams.remove(stream));
         emitter.onTimeout(() -> streams.remove(stream));
         emitter.onError(e -> streams.remove(stream));
-        send(stream, SseEmitter.event().name("hello").data("live"));
+        writers.execute(() -> drain(stream));
+        stream.offer(SseEmitter.event().name("hello").data("live"));
         return emitter;
     }
 
@@ -108,7 +142,7 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
             }
             String name = change.topic().name().toLowerCase(Locale.ROOT);
             streams.stream().filter(change::reaches)
-                    .forEach(stream -> send(stream, SseEmitter.event().name(name).data(name)));
+                    .forEach(stream -> stream.offer(SseEmitter.event().name(name).data(name)));
         }, COALESCE_MS, TimeUnit.MILLISECONDS);
     }
 
@@ -116,7 +150,7 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
         return streams.size();
     }
 
-    /** Ends a stream to make room (the oldest). */
+    /** Ends a stream to make room (the oldest of its band). */
     private void end(Stream stream) {
         streams.remove(stream);
         try {
@@ -127,22 +161,35 @@ class SseLiveUpdates implements LiveUpdates, InitializingBean, DisposableBean {
     }
 
     private void heartbeat() {
-        streams.forEach(stream -> send(stream, SseEmitter.event().comment("still here")));
+        streams.forEach(stream -> stream.offer(SseEmitter.event().comment("still here")));
     }
 
-    private void send(Stream stream, SseEmitter.SseEventBuilder event) {
+    /**
+     * One stream's writes, in order, until the page goes away. The take blocks on an empty outbox
+     * and the send blocks on a full socket — both on this stream's own thread, which is the whole
+     * point of having one.
+     */
+    private void drain(Stream stream) {
         try {
-            stream.emitter().send(event);
+            while (streams.contains(stream)) {
+                SseEmitter.SseEventBuilder event = stream.outbox().poll(HEARTBEAT_S, TimeUnit.SECONDS);
+                if (event != null) {
+                    stream.emitter().send(event);
+                }
+            }
         } catch (IOException | IllegalStateException e) {
             log.debug("A page's live stream is gone", e);
             streams.remove(stream);
             stream.emitter().completeWithError(e);
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();                 // the server is stopping
         }
     }
 
     @Override
     public void destroy() {
         timer.shutdownNow();
+        writers.shutdownNow();
         streams.forEach(stream -> stream.emitter().complete());
     }
 }

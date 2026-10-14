@@ -35,6 +35,7 @@ import sk.drabikp.gigsynchub.sync.application.port.out.SyncTrigger;
 import sk.drabikp.gigsynchub.sync.domain.StepOutcome;
 import sk.drabikp.gigsynchub.sync.domain.StepType;
 import sk.drabikp.gigsynchub.sync.domain.SyncAction;
+import sk.drabikp.gigsynchub.sync.domain.SyncCounts;
 import sk.drabikp.gigsynchub.sync.domain.SyncLogEntry;
 import sk.drabikp.gigsynchub.sync.domain.SyncStatus;
 import sk.drabikp.gigsynchub.sync.domain.SyncTask;
@@ -45,10 +46,12 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -91,8 +94,8 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized Optional<SyncTask> find(long id) {
-            return Optional.ofNullable(tasks.get(id));
+        public synchronized Optional<SyncTask> find(BandId band, long id) {
+            return Optional.ofNullable(mineOrNothing(band, id));
         }
 
         @Override
@@ -105,6 +108,18 @@ public final class SyncFakes {
         public synchronized List<SyncTask> unfinished(BandId band) {
             return tasks.values().stream().filter(t -> t.band().equals(band)
                     && (t.status().open() || t.status() == SyncStatus.FAILED)).toList();
+        }
+
+        @Override
+        public synchronized Map<BandId, SyncCounts> openWork(Collection<BandId> bands) {
+            Map<BandId, SyncCounts> counted = new HashMap<>();
+            for (BandId band : bands) {
+                List<SyncTask> open = unfinished(band);
+                if (!open.isEmpty()) {                    // a band with nothing open is left out, as the store does
+                    counted.put(band, SyncCounts.of(open));
+                }
+            }
+            return counted;
         }
 
         @Override
@@ -121,7 +136,11 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized List<SyncLogEntry> log(long taskId) {
+        public synchronized List<SyncLogEntry> log(BandId band, long taskId) {
+            SyncTask t = tasks.get(taskId);
+            if (t == null || !t.band().equals(band)) {
+                return List.of();                       // another band's task has no lines for you
+            }
             return log.stream().filter(e -> e.taskId() == taskId).toList();
         }
 
@@ -153,11 +172,6 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized Optional<SyncTask> nextDue(Instant now) {
-            return tasks.values().stream().filter(t -> due(t, now)).findFirst();
-        }
-
-        @Override
         public synchronized List<SyncTask> due(Instant now) {
             return tasks.values().stream().filter(t -> due(t, now)).toList();
         }
@@ -169,13 +183,34 @@ public final class SyncFakes {
         }
 
         @Override
+        public synchronized int forgetSettledBefore(Instant when) {
+            List<Long> over = tasks.values().stream()
+                    .filter(t -> (t.status() == SyncStatus.DONE || t.status() == SyncStatus.DISCARDED)
+                            && t.updatedAt().isBefore(when))
+                    .map(SyncTask::id).toList();
+            over.forEach(tasks::remove);
+            log.removeIf(line -> over.contains(line.taskId()));
+            return over.size();
+        }
+
+        @Override
+        public synchronized List<BandId> bandsWithWorkDue(Instant now) {
+            return tasks.values().stream().filter(t -> due(t, now)).map(SyncTask::band).distinct().toList();
+        }
+
+        @Override
+        public synchronized List<SyncTask> due(BandId band, Instant now, int limit) {
+            return tasks.values().stream().filter(t -> due(t, now) && t.band().equals(band)).limit(limit).toList();
+        }
+
+        @Override
         public synchronized List<SyncTask> running() {
             return tasks.values().stream().filter(t -> t.status() == SyncStatus.RUNNING).toList();
         }
 
         @Override
-        public synchronized boolean markRunning(long id, Instant now) {
-            SyncTask t = tasks.get(id);
+        public synchronized boolean markRunning(BandId band, long id, Instant now) {
+            SyncTask t = mine(band, id);
             if (t.status() != SyncStatus.PENDING) {
                 return false;
             }
@@ -184,31 +219,34 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized void markDone(long id, String message, Instant now) {
-            change(id, SyncStatus.DONE, tasks.get(id).attempts(), null, message, now);
+        public synchronized void markDone(BandId band, long id, String message, Instant now) {
+            SyncTask t = mine(band, id);
+            change(id, SyncStatus.DONE, t.attempts(), null, message, now);
         }
 
         @Override
-        public synchronized void markRetry(long id, String error, Instant nextAttempt, Instant now) {
-            change(id, SyncStatus.PENDING, tasks.get(id).attempts(), nextAttempt, error, now);
+        public synchronized void markRetry(BandId band, long id, String error, Instant nextAttempt, Instant now) {
+            SyncTask t = mine(band, id);
+            change(id, SyncStatus.PENDING, t.attempts(), nextAttempt, error, now);
         }
 
         @Override
-        public synchronized void postpone(long id, String why, Instant nextAttempt, Instant now) {
-            SyncTask t = tasks.get(id);
+        public synchronized void postpone(BandId band, long id, String why, Instant nextAttempt, Instant now) {
+            SyncTask t = mine(band, id);
             if (t.status() == SyncStatus.RUNNING) {
                 change(id, SyncStatus.PENDING, Math.max(0, t.attempts() - 1), nextAttempt, why, now);
             }
         }
 
         @Override
-        public synchronized void markFailed(long id, String error, Instant now) {
-            change(id, SyncStatus.FAILED, tasks.get(id).attempts(), null, error, now);
+        public synchronized void markFailed(BandId band, long id, String error, Instant now) {
+            SyncTask t = mine(band, id);
+            change(id, SyncStatus.FAILED, t.attempts(), null, error, now);
         }
 
         @Override
-        public synchronized void advance(long id, StepType next, String why, Instant now) {
-            SyncTask t = tasks.get(id);
+        public synchronized void advance(BandId band, long id, StepType next, String why, Instant now) {
+            SyncTask t = mine(band, id);
             if (!t.status().canBecome(SyncStatus.PENDING)) {
                 return;                                 // as the real outbox: a finished task stays so
             }
@@ -218,13 +256,36 @@ public final class SyncFakes {
         }
 
         @Override
-        public synchronized void requeue(long id, Instant now) {
+        public synchronized void requeue(BandId band, long id, Instant now) {
+            mine(band, id);
             change(id, SyncStatus.PENDING, 0, now, null, now);
         }
 
         @Override
-        public synchronized void discard(long id, Instant now) {
-            change(id, SyncStatus.DISCARDED, tasks.get(id).attempts(), null, "discarded by you", now);
+        public synchronized void discard(BandId band, long id, Instant now) {
+            SyncTask t = mine(band, id);
+            change(id, SyncStatus.DISCARDED, t.attempts(), null, "discarded by you", now);
+        }
+
+        /**
+         * The band's task to WRITE to. A task id is a number from a sequence every band draws on,
+         * so asking with the wrong band is a bug in the caller, not a race: the real outbox cannot
+         * find the row and says so, and this says so the same way — a fake that quietly did nothing
+         * would let such a bug through every service test. {@code SyncOutboxContract} holds both to
+         * it.
+         */
+        private SyncTask mine(BandId band, long id) {
+            SyncTask t = tasks.get(id);
+            if (t == null || !t.band().equals(band)) {
+                throw new IllegalStateException("no sync task " + id + " for this band");
+            }
+            return t;
+        }
+
+        /** The band's task to READ, or nothing — asking about another band's is simply "not there". */
+        private SyncTask mineOrNothing(BandId band, long id) {
+            SyncTask t = tasks.get(id);
+            return t != null && t.band().equals(band) ? t : null;
         }
 
         private static boolean due(SyncTask t, Instant now) {
@@ -294,6 +355,24 @@ public final class SyncFakes {
 
         private final Map<BandId, Map<GigId, Gig>> gigs = new HashMap<>();
 
+        /**
+         * Where this fake looks up what a gig is published on, for the one filter that asks
+         * ("not on every platform yet"). Left unset it knows of no publications at all, which
+         * means every gig is missing from somewhere — which is what an empty catalog of
+         * publications actually means, so a test that never publishes anything needs no wiring.
+         */
+        private Published published;
+
+        public Gigs publishedIn(Published publications) {
+            this.published = publications;
+            return this;
+        }
+
+        private int onHowManyPlatforms(BandId band, GigId gig) {
+            return published == null ? 0
+                    : (int) published.all(band).stream().filter(p -> p.gigId().equals(gig)).count();
+        }
+
         private Map<GigId, Gig> of(BandId band) {
             return gigs.computeIfAbsent(band, b -> new LinkedHashMap<>());
         }
@@ -306,6 +385,11 @@ public final class SyncFakes {
         @Override
         public synchronized Optional<Gig> findById(BandId band, GigId id) {
             return Optional.ofNullable(of(band).get(id));
+        }
+
+        @Override
+        public synchronized List<Gig> findAllByIds(BandId band, Collection<GigId> ids) {
+            return ids.stream().map(of(band)::get).filter(Objects::nonNull).toList();
         }
 
         @Override
@@ -323,6 +407,13 @@ public final class SyncFakes {
             return of(band).values().stream()
                     .sorted(Comparator.comparing((Gig g) -> g.schedule().showStart()).thenComparing(g -> g.id().key()))
                     .limit(limit).toList();
+        }
+
+        @Override
+        public synchronized List<Gig> findCovering(BandId band, DateRange range) {
+            return of(band).values().stream()
+                    .filter(g -> g.schedule().days().stream().anyMatch(range::containsInclusive))
+                    .toList();
         }
 
         @Override
@@ -354,9 +445,10 @@ public final class SyncFakes {
                     .filter(r -> query.onlyIds() == null || query.onlyIds().contains(r.id()))
                     .filter(r -> !query.excludingAny() || !query.exceptIds().contains(r.id()))
                     .filter(r -> query.cancelled() == null || query.cancelled() == r.cancelled())
+                    .filter(r -> !query.missingFromSome() || onHowManyPlatforms(band, r.id()) < query.notOnAllOf())
                     .sorted(upcoming ? ROWS : ROWS.reversed())
                     .toList();
-            long total = matching.size();
+            Long total = query.after() == null ? (long) matching.size() : null;   // as the store counts
             List<GigRow> after = matching.stream().filter(r -> beyond(r, query, upcoming)).toList();
             List<GigRow> page = after.stream().limit(query.size()).toList();
             return new GigSlice(page, after.size() > page.size() ? GigCursor.after(page.getLast()) : null, total);
@@ -405,6 +497,17 @@ public final class SyncFakes {
         public <T> T computeInTransaction(Supplier<T> work) {
             used++;
             return work.get();
+        }
+
+        @Override
+        public void inRepeatableTransaction(Runnable work) {
+            inTransaction(work);
+        }
+
+        /** No unique keys in memory, so nothing to lose a race on: once is always enough here. */
+        @Override
+        public <T> T computeInRepeatableTransaction(Supplier<T> work) {
+            return computeInTransaction(work);
         }
     }
 
@@ -575,7 +678,7 @@ public final class SyncFakes {
     public static SyncDispatcher dispatcher(WorkflowEngine engine, Outbox outbox, Signals signals, Clock clock,
                                      PauseSyncUseCase pause, PlatformHealth health) {
         return new SyncDispatcher(engine, outbox, signals, clock, pause, health, TestPlatforms.PLATFORMS,
-                new FairTurns());
+                new FairTurns(), Duration.ofMinutes(30));
     }
 
     public static SyncDispatcher dispatcher(WorkflowEngine engine, Outbox outbox, Signals signals, Clock clock) {

@@ -124,6 +124,7 @@ export function GigsPage() {
           aria-label={t('gigs.search')}
           value={query}
           onChange={(e) => setQuery(e.currentTarget.value)}
+          maxLength={100}
           type="search"
         />
       </Group>

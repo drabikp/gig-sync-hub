@@ -85,6 +85,11 @@ public final class AccountsFakes {
             users.put(user.subject(), user);
         }
 
+        /** One thread, no rows: there is nothing here for a hold to keep anyone out of. */
+        @Override
+        public void hold(UserId user) {
+        }
+
         @Override
         public void delete(UserId user) {
             users.values().removeIf(u -> u.id().equals(user));
@@ -183,12 +188,26 @@ public final class AccountsFakes {
         public void delete(UUID id) {
             byHash.values().removeIf(i -> i.id().equals(id));
         }
+
+        @Override
+        public int forgetExpiredBefore(Instant when) {
+            List<Invitation> over = byHash.values().stream().filter(i -> i.expiresAt().isBefore(when)).toList();
+            over.forEach(gone -> byHash.values().remove(gone));
+            return over.size();
+        }
     }
 
     /** Audit events in memory. */
     public static final class Audit implements AuditStore {
 
         public final List<AuditEvent> events = new ArrayList<>();
+
+        @Override
+        public int forgetBefore(Instant when) {
+            List<AuditEvent> over = events.stream().filter(e -> e.at().isBefore(when)).toList();
+            events.removeAll(over);
+            return over.size();
+        }
 
         @Override
         public void add(AuditEvent event) {
@@ -265,6 +284,16 @@ public final class AccountsFakes {
 
         @Override
         public <T> T computeInTransaction(Supplier<T> work) {
+            return work.get();
+        }
+
+        @Override
+        public void inRepeatableTransaction(Runnable work) {
+            work.run();
+        }
+
+        @Override
+        public <T> T computeInRepeatableTransaction(Supplier<T> work) {
             return work.get();
         }
     };

@@ -36,7 +36,7 @@ public class GigResyncService implements ResyncGigUseCase {
 
     @Override
     public QueueResult resync(BandId band, Collection<GigId> gigs) {
-        QueueResult result = transactions.computeInTransaction(() -> {
+        QueueResult result = transactions.computeInRepeatableTransaction(() -> {
             List<SyncTask> queued = new ArrayList<>();
             List<String> notQueued = new ArrayList<>();
             for (GigId id : gigs) {

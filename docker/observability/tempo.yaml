@@ -1,0 +1,36 @@
+# Tempo as a single process with the filesystem under it. It takes OTLP, which is what the app
+# sends (management.otlp.tracing.endpoint) and what anything else would send too.
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  # a trace is complete when nothing has been added to it for this long; a sync workload is slow
+  # (a platform answers when it answers), so this is generous
+  trace_idle_period: 30s
+  max_block_duration: 5m
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+compactor:
+  compaction:
+    # a week. Traces are for "what happened yesterday", and the metrics outlive them.
+    block_retention: 168h
+
+usage_report:
+  reporting_enabled: false

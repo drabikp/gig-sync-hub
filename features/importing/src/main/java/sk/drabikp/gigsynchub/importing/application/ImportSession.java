@@ -70,7 +70,7 @@ public class ImportSession implements ImportSessionUseCase {
 
     /** The band's import (each band has its own, one at a time). */
     private AtomicReference<Progress> progress(BandId band) {
-        return progress.computeIfAbsent(band, b -> new AtomicReference<>(Progress.IDLE));
+        return progress.computeIfAbsent(band, _ -> new AtomicReference<>(Progress.IDLE));
     }
 
     @Override

@@ -17,6 +17,7 @@ import sk.drabikp.gigsynchub.sync.domain.SyncCounts;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -58,8 +59,10 @@ class BandMetrics implements MeterBinder {
                 List<MultiGauge.Row<?>> taskRows = new ArrayList<>();
                 List<MultiGauge.Row<?>> heldRows = new ArrayList<>();
                 Instant now = Instant.now();
-                for (BandId band : bands.all()) {
-                    SyncCounts counts = syncLog.counts(band);
+                List<BandId> all = bands.all();
+                Map<BandId, SyncCounts> open = syncLog.counts(all);   // one read, not one per band
+                for (BandId band : all) {
+                    SyncCounts counts = open.getOrDefault(band, SyncCounts.NONE);
                     Tags tags = Tags.of("band", band.toString());
                     taskRows.add(MultiGauge.Row.of(tags.and("status", "queued"), counts.queued()));
                     taskRows.add(MultiGauge.Row.of(tags.and("status", "running"), counts.running()));

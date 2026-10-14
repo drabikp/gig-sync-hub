@@ -1,5 +1,6 @@
 package sk.drabikp.gigsynchub;
 
+import jakarta.persistence.EntityManager;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -86,17 +87,22 @@ class ArchitectureTest {
     /**
      * Everything a band has is read and written by band: no persistence adapter asks its Spring Data
      * repository for every row of a table ({@code findAll()}, {@code count()}, {@code deleteAll()}) —
-     * queries across bands (the sync worker's due work) are named as such. The bands themselves
-     * (accounts: the directory of every band) are the exception.
+     * queries across bands (the sync worker's due work) are named as such.
+     *
+     * <p>The one exception is the directory of bands itself — there is no band to scope "which bands
+     * exist" by. It is named by the repository it is allowed on and not, as it was until October 2026,
+     * by exempting the whole {@code accounts} module: that module also keeps the memberships, the
+     * users, the audit log and every band's sealed platform secrets, so the exemption covered far
+     * more than the one query that needed it.
      */
     @ArchTest
     static final ArchRule a_bands_rows_are_read_and_written_by_band = noClasses()
             .that().resideInAPackage(BASE + "..adapter.out.persistence..")
-            .and().resideOutsideOfPackage(ROOT + "accounts..")
             .should().callMethodWhere(DescribedPredicate.describe("a repository's every-row method",
                     (JavaMethodCall call) -> Set.of("findAll", "count", "deleteAll").contains(call.getTarget().getName())
                             && call.getTarget().getRawParameterTypes().isEmpty()
-                            && call.getTarget().getOwner().isAssignableTo(Repository.class)));
+                            && call.getTarget().getOwner().isAssignableTo(Repository.class)
+                            && !call.getTarget().getOwner().getSimpleName().equals("BandJpaRepository")));
 
     /**
      * No query is written in one database's own SQL. Every query is JPQL (or a derived method name),
@@ -119,6 +125,27 @@ class ArchitectureTest {
             .that().resideInAPackage(BASE + "..")
             .should().callMethodWhere(DescribedPredicate.describe("createNativeQuery",
                     (JavaMethodCall call) -> call.getTarget().getName().equals("createNativeQuery")));
+
+    /**
+     * A query built by hand is outside everything that checks queries. {@code BandScopedQueriesTest}
+     * enumerates Spring Data repositories, and a class that assembles JPQL for the entity manager is
+     * not one, so neither the band check nor the native-SQL rules above ever look at it — the gig
+     * list, the most-run query in the app, sat in exactly that blind spot.
+     *
+     * <p>{@code GigPages} is the one place allowed to, because a keyset page with optional filters
+     * cannot be a derived method; its {@code FROM} is a fixed fragment that names the band and every
+     * value is bound, and {@code GigPagingContract#a_page_holds_only_the_asking_bands_gigs} is what
+     * says so about its behaviour. A second such class has to come here and be named, and bring its
+     * own behavioural test with it.
+     */
+    @ArchTest
+    static final ArchRule only_the_gig_list_builds_a_query_by_hand = noClasses()
+            .that().resideInAPackage(BASE + "..")
+            .and().haveSimpleNameNotEndingWith("GigPages")
+            .should().callMethodWhere(DescribedPredicate.describe("EntityManager.createQuery / getCriteriaBuilder",
+                    (JavaMethodCall call) -> Set.of("createQuery", "getCriteriaBuilder")
+                            .contains(call.getTarget().getName())
+                            && call.getTarget().getOwner().isAssignableTo(EntityManager.class)));
 
     @ArchTest
     static final ArchRule the_kernels_persistence_and_wiring_are_its_own = classes()

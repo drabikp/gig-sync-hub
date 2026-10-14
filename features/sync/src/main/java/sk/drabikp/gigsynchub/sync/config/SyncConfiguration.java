@@ -116,9 +116,9 @@ class SyncConfiguration {
     @Bean
     SyncDispatcher syncDispatcher(WorkflowEngine workflowEngine, SyncOutbox outbox, SyncNotifier notifier,
                                   Clock clock, SyncPause syncPause, PlatformBreakers platformBreakers,
-                                  Platforms platforms, FairTurns fairTurns) {
+                                  Platforms platforms, FairTurns fairTurns, SyncProperties sync) {
         return new SyncDispatcher(workflowEngine, outbox, notifier, clock, syncPause, platformBreakers, platforms,
-                fairTurns);
+                fairTurns, Duration.ofMinutes(sync.strandedAfterMinutes()));
     }
 
     @Bean

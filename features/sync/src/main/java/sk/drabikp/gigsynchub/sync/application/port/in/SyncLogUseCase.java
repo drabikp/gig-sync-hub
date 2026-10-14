@@ -6,7 +6,9 @@ import sk.drabikp.gigsynchub.sync.domain.SyncCounts;
 import sk.drabikp.gigsynchub.sync.domain.SyncLogEntry;
 import sk.drabikp.gigsynchub.sync.domain.SyncTask;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /** The sync log: what was, is and will be done on the platforms, and the user's say on failures. */
 public interface SyncLogUseCase {
@@ -25,6 +27,12 @@ public interface SyncLogUseCase {
 
     /** The unfinished work (failed included) by what it is doing now. */
     SyncCounts counts(BandId band);
+
+    /**
+     * The same four numbers for several bands in one read — the operator's gauges, which ask about
+     * every band there is and asked once per band until October 2026.
+     */
+    Map<BandId, SyncCounts> counts(Collection<BandId> bands);
 
     /** A task's history; NotFoundException when it isn't the band's. */
     List<SyncLogEntry> log(BandId band, long taskId);

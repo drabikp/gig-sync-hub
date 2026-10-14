@@ -44,7 +44,7 @@ record BitConnection(String refreshToken, String managerId, String actorId, Stri
         JsonNode json;
         try {
             json = JsonMapper.builder().build().readTree(text);
-        } catch (JacksonException e) {
+        } catch (JacksonException _) {
             throw BitPortalException.needsUser("That isn't what Bandsintown's page gave — copy the whole of it, "
                     + "braces and all.");
         }

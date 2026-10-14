@@ -7,6 +7,8 @@ import org.springframework.stereotype.Component;
 import sk.drabikp.gigsynchub.accounts.application.port.in.PlatformAccounts;
 import sk.drabikp.gigsynchub.bandzone.BandzoneAccount;
 import sk.drabikp.gigsynchub.bandzone.BandzonePortalException;
+import io.micrometer.observation.ObservationRegistry;
+import sk.drabikp.gigsynchub.portal.PlatformEgress;
 import sk.drabikp.gigsynchub.bandzone.BandzoneProperties;
 import sk.drabikp.gigsynchub.bandzone.portal.BandzonePortalClient;
 import sk.drabikp.gigsynchub.bandzone.portal.BandzoneSession;
@@ -34,6 +36,8 @@ class HttpBandzonePortalClient implements BandzonePortalClient {
 
     private static final Logger logger = LoggerFactory.getLogger(HttpBandzonePortalClient.class);
 
+    private final ObservationRegistry observations;
+    private final PlatformEgress egress;
     private final String baseUrl;
     private final PlatformAccounts accounts;
     private final PosterDownloader posters;
@@ -41,12 +45,20 @@ class HttpBandzonePortalClient implements BandzonePortalClient {
 
     /** The one the wiring uses — said so, because the other constructor makes the choice ambiguous. */
     @Autowired
-    HttpBandzonePortalClient(BandzoneProperties properties, PlatformAccounts accounts) {
-        this(properties.baseUrl(), accounts, new PosterDownloader());
+    HttpBandzonePortalClient(BandzoneProperties properties, PlatformAccounts accounts,
+                             ObservationRegistry observations) {
+        this(properties.baseUrl(), accounts, new PosterDownloader(), observations, properties.egress());
     }
 
     /** For a test, which says where Bandzone is and how posters are fetched. */
     HttpBandzonePortalClient(String baseUrl, PlatformAccounts accounts, PosterDownloader posters) {
+        this(baseUrl, accounts, posters, ObservationRegistry.NOOP, PlatformEgress.DIRECT);
+    }
+
+    HttpBandzonePortalClient(String baseUrl, PlatformAccounts accounts, PosterDownloader posters,
+                             ObservationRegistry observations, PlatformEgress egress) {
+        this.observations = observations;
+        this.egress = egress;
         this.baseUrl = baseUrl;
         this.accounts = accounts;
         this.posters = posters;
@@ -55,7 +67,8 @@ class HttpBandzonePortalClient implements BandzonePortalClient {
     @Override
     public BandzoneSession openSession(BandId band, Duration wait) throws BandzonePortalException {
         BandzoneAccount account = BandzoneAccount.of(accounts, band);
-        BandzoneWeb web = logins.computeIfAbsent(account.browserKey(), key -> new BandzoneWeb(baseUrl));
+        BandzoneWeb web = logins.computeIfAbsent(account.browserKey(),
+                key -> new BandzoneWeb(baseUrl, observations, egress));
         if (web.loggedIn()) {
             logger.info("Bandzone: reusing the login");
         } else {

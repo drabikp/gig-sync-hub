@@ -80,11 +80,26 @@ public class AccountsService implements UsersUseCase, BandsUseCase, BandAccess, 
         }));
     }
 
-    /** The first band without an owner goes to its owner-to-be (or, with none named, to whoever is first). */
+    /**
+     * The first band without an owner goes to the owner the configuration NAMES, and to nobody
+     * otherwise.
+     *
+     * <p>It used to go to whoever signed in first when no e-mail was named — and the property is
+     * commented out by default, so that was the default. Band #1 is the band migration V2 gave
+     * every pre-existing row: its whole gig history, and after adoption the way back in to every
+     * platform it was connected to. Anyone in the sign-in's group who reached the app first
+     * acquired all of it, once, with nothing to undo it (the lastOwner rule then keeps the band
+     * from becoming ownerless again). A one-shot land grab at install time is not a thing to leave
+     * to who clicks first, so with nobody named this does nothing.
+     */
     private void claimFirstBand(User user) {
-        boolean ownerless = bands.byId(BandId.FIRST).isPresent() && !memberships.ofBand(BandId.FIRST).hasOwner();
-        boolean meant = firstOwnerEmail.isEmpty() || firstOwnerEmail.equalsIgnoreCase(user.email());
-        if (ownerless && meant) {
+        if (bands.byId(BandId.FIRST).isEmpty() || memberships.ofBand(BandId.FIRST).hasOwner()) {
+            return;
+        }
+        if (firstOwnerEmail.isEmpty()) {
+            return;        // nobody named, so nobody claims it: set gigsynchub.accounts.first-owner-email
+        }
+        if (firstOwnerEmail.equalsIgnoreCase(user.email())) {
             memberships.save(new Membership(user.id(), BandId.FIRST, Role.OWNER, null));
         }
     }
@@ -111,6 +126,9 @@ public class AccountsService implements UsersUseCase, BandsUseCase, BandAccess, 
         return transactions.computeInTransaction(() -> {
             Band band = valid(new BandId(UUID.randomUUID()), name, slug);
             requireFree(band.slug(), band.id());
+            // The quota is counted and then added to, so it is held first — two "Create your band"
+            // clicks at the same moment both counted nine and both made the tenth.
+            users.hold(user);
             long owned = memberships.ofUser(user).stream().filter(m -> m.role() == Role.OWNER).count();
             if (owned >= maxBandsOwned) {
                 throw new UserFacingException(AccountsErrorCode.TOO_MANY_BANDS,
@@ -153,7 +171,14 @@ public class AccountsService implements UsersUseCase, BandsUseCase, BandAccess, 
     public void deleteMe(UserId user) {
         transactions.inTransaction(() -> {
             List<BandId> alone = new ArrayList<>();
-            for (Membership mine : memberships.ofUser(user)) {
+            // Held in one agreed order, because two people deleting their accounts at the same moment
+            // are holding the rosters of every band they share: unordered, one takes A then waits for
+            // B while the other holds B and waits for A, and PostgreSQL ends the deadlock by failing
+            // one of them with a 500 for what the design says is a safe thing to do.
+            List<Membership> mineInOrder = memberships.ofUser(user).stream()
+                    .sorted(Comparator.comparing(m -> m.band().value()))
+                    .toList();
+            for (Membership mine : mineInOrder) {
                 memberships.hold(mine.band());                  // decide on a roster nobody else is changing
                 BandMembers roster = memberships.ofBand(mine.band());
                 if (roster.onlyMember(user)) {

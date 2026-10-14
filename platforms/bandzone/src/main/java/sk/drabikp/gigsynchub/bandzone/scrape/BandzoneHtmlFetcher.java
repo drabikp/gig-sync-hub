@@ -1,6 +1,7 @@
 package sk.drabikp.gigsynchub.bandzone.scrape;
 
 import org.jsoup.HttpStatusException;
+import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -11,8 +12,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 import sk.drabikp.gigsynchub.bandzone.BandzonePortalException;
 import sk.drabikp.gigsynchub.bandzone.BandzoneProperties;
+import sk.drabikp.gigsynchub.portal.PlatformEgress;
 
 import java.io.IOException;
+import java.net.PasswordAuthentication;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,9 +42,11 @@ class BandzoneHtmlFetcher {
     private static final Logger logger = LoggerFactory.getLogger(BandzoneHtmlFetcher.class);
 
     private final String baseUrl;
+    private final PlatformEgress egress;
 
     BandzoneHtmlFetcher(BandzoneProperties properties) {
         this.baseUrl = properties.baseUrl();
+        this.egress = properties.egress();
     }
 
     Elements fetchAllGigs(String bandSlug) throws BandzonePortalException {
@@ -72,7 +77,7 @@ class BandzoneHtmlFetcher {
             for (Future<Elements> year : read) {
                 articles.addAll(year.get());
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             throw BandzonePortalException.busy("Interrupted while reading Bandzone.");
         } catch (CancellationException e) {
@@ -102,7 +107,22 @@ class BandzoneHtmlFetcher {
         return elements;
     }
 
-    private static Document get(String url) throws IOException {
-        return Jsoup.connect(url).timeout((int) PAGE_TIMEOUT.toMillis()).get();
+    /**
+     * Through the same address the rest of Bandzone's traffic uses ({@link PlatformEgress}). This
+     * one matters more than it looks: reading a band's history asks for every year tab, and a
+     * burst is the thing the pacing elsewhere exists to avoid — so if this server's traffic is to
+     * come from somewhere, it should ALL come from there, not just the half that carries a session.
+     */
+    private Document get(String url) throws IOException {
+        Connection connection = Jsoup.connect(url).timeout((int) PAGE_TIMEOUT.toMillis());
+        if (egress.configured()) {
+            connection.proxy(egress.host(), egress.port());
+            if (egress.username() != null) {
+                connection.auth(context -> context.isProxy()
+                        ? new PasswordAuthentication(egress.username(), egress.password().toCharArray())
+                        : null);
+            }
+        }
+        return connection.get();
     }
 }

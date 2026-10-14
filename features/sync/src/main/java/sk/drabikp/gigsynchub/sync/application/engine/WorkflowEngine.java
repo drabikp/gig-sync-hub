@@ -1,6 +1,7 @@
 package sk.drabikp.gigsynchub.sync.application.engine;
 
 import org.jmolecules.architecture.hexagonal.Application;
+import sk.drabikp.gigsynchub.gig.domain.BandId;
 import sk.drabikp.gigsynchub.gig.domain.platform.Platforms;
 import sk.drabikp.gigsynchub.sync.application.port.in.PauseSyncUseCase;
 import sk.drabikp.gigsynchub.sync.application.port.out.SyncFaults;
@@ -114,15 +115,24 @@ public class WorkflowEngine {
     private Map<StepType, List<Enrolled>> whatIsDue(Workload workload) {
         Map<StepType, List<Enrolled>> waiting = new EnumMap<>(StepType.class);
         for (SyncTask run : outbox.due(workload.band(), workload.platform(), workload.action(), clock.instant())) {
-            waiting.computeIfAbsent(run.waitingAt(), step -> new ArrayList<>()).add(new Enrolled(run, List.of()));
+            waiting.computeIfAbsent(run.waitingAt(), _ -> new ArrayList<>()).add(new Enrolled(run, List.of()));
         }
         return waiting;
     }
 
     /**
-     * One step of the workflow: what it is to do for each run waiting here (at most this pass's
-     * share of them), then the batches. Runs this step passes on join the step that is to try
-     * next, which this pass has not reached yet.
+     * One step of the workflow: this pass's share of the runs waiting here, a batch at a time.
+     * Runs this step passes on join the step that is to try next, which this pass has not reached
+     * yet.
+     *
+     * <p><b>Each batch is asked what to do only when its turn comes.</b> A batch step has one
+     * batch per pass, so for it this is the same thing either way; a one-at-a-time step has up to
+     * {@value #ONE_AT_A_TIME_PER_PASS}, run over the minutes that human pacing takes, and reading
+     * all ten gigs up front meant the tenth was told to the platform as it stood before the first
+     * one ran. Cancel a gig while its pass is going and the step pushed the uncancelled gig and
+     * then marked the task done: the catalog said cancelled, the platform said live, and the sync
+     * believed it had finished. It is also what made {@code MootWork}'s "already published" guard
+     * answer for both rows of a double publish.
      */
     private void atStep(Workload workload, StepType type, List<Enrolled> here,
                         Map<StepType, List<Enrolled>> waiting) {
@@ -131,22 +141,25 @@ public class WorkflowEngine {
             here.forEach(run -> onward(run, type, "none for " + platforms.name(workload.platform()), waiting));
             return;
         }
-        List<Enrolled> taken = new ArrayList<>();
-        List<SyncStep.Item> items = new ArrayList<>();
-        for (Enrolled run : here.subList(0, Math.min(gigsThisPass(step), here.size()))) {
-            switch (intake.at(step, run.run())) {
-                case Intake.Take(SyncStep.Item item) -> {
-                    taken.add(run);
-                    items.add(item);
+        List<Enrolled> share = here.subList(0, Math.min(gigsThisPass(step), here.size()));
+        for (int from = 0; from < share.size() && mayRun(workload.lane()); from += step.batchSize()) {
+            int to = Math.min(share.size(), from + step.batchSize());
+            List<Enrolled> taken = new ArrayList<>();
+            List<SyncStep.Item> items = new ArrayList<>();
+            for (Enrolled run : share.subList(from, to)) {
+                switch (intake.at(step, run.run())) {
+                    case Intake.Take(SyncStep.Item item) -> {
+                        taken.add(run);
+                        items.add(item);
+                    }
+                    case Intake.Moot(String why) -> outbox.markDone(run.band(), run.id(), why, clock.instant());
+                    case Intake.ByHand(String message) -> outbox.markFailed(run.band(), run.id(), message, clock.instant());
+                    case Intake.PassedOn(String why) -> onward(run, type, why, waiting);
                 }
-                case Intake.Moot(String why) -> outbox.markDone(run.id(), why, clock.instant());
-                case Intake.ByHand(String message) -> outbox.markFailed(run.id(), message, clock.instant());
-                case Intake.PassedOn(String why) -> onward(run, type, why, waiting);
             }
-        }
-        for (int from = 0; from < taken.size() && mayRun(workload.lane()); from += step.batchSize()) {
-            int to = Math.min(taken.size(), from + step.batchSize());
-            runBatch(workload, step, taken.subList(from, to), items.subList(from, to), waiting);
+            if (!taken.isEmpty()) {
+                runBatch(workload, step, taken, items, waiting);
+            }
         }
     }
 
@@ -160,7 +173,7 @@ public class WorkflowEngine {
         List<Enrolled> started = new ArrayList<>();
         List<SyncStep.Item> startedItems = new ArrayList<>();
         for (int i = 0; i < batch.size(); i++) {
-            if (outbox.markRunning(batch.get(i).id(), clock.instant())) {
+            if (outbox.markRunning(batch.get(i).band(), batch.get(i).id(), clock.instant())) {
                 started.add(batch.get(i));
                 startedItems.add(items.get(i));
             }
@@ -174,9 +187,7 @@ public class WorkflowEngine {
         for (int i = 0; i < started.size(); i++) {
             StepOutcome outcome = i < outcomes.size() ? outcomes.get(i)
                     : StepOutcome.failed(step.type().label() + " gave no result for this gig");
-            if (settlement.settle(started.get(i).run(), step, outcome) == OutcomeSettlement.Settled.PASSED_ON) {
-                onward(started.get(i), step.type(), outcome.note(), waiting);
-            }
+            settle(started.get(i), step, outcome, waiting);
             answers.add(outcome);
         }
         report(new Lane(workload.band(), step.platform()), step, answers);
@@ -195,13 +206,36 @@ public class WorkflowEngine {
         Instant now = clock.instant();
         Optional<StepType> next = Workflows.after(from);
         if (next.isEmpty()) {
-            outbox.markFailed(run.id(), steps.byHand(run.run().platform(), reasons), now);
+            outbox.markFailed(run.band(), run.id(), steps.byHand(run.run().platform(), reasons), now);
             return;
         }
-        outbox.advance(run.id(), next.get(), said, now);
-        outbox.find(run.id())           // moving on begins the attempts afresh: take the run as it now is
-                .ifPresent(moved -> waiting.computeIfAbsent(next.get(), step -> new ArrayList<>())
+        outbox.advance(run.band(), run.id(), next.get(), said, now);
+        outbox.find(run.band(), run.id())           // moving on begins the attempts afresh: take the run as it now is
+                .ifPresent(moved -> waiting.computeIfAbsent(next.get(), _ -> new ArrayList<>())
                         .add(new Enrolled(moved, reasons)));
+    }
+
+    /**
+     * One gig's outcome written down, and the run moved on if the step passed it on.
+     *
+     * <p>Guarded per gig, because this is the one write in a batch that can fail on something
+     * other than the platform: an edit during the pass relabels the gig's open work
+     * ({@link SyncOutbox#relabel}) and bumps {@code sync_task.version}, so the settling write
+     * loses its optimistic check. Unguarded, that exception left the batch — and every gig in it
+     * that was already marked RUNNING stayed RUNNING for ever, because only a restart settles
+     * those: a spinner on each of their pages and 409 {@code gigBusy} on every action the band
+     * tried. The gig in hand is left to the reaper ({@link SyncDispatcher#recoverInterrupted})
+     * and its fault kept in full; the rest of the batch is still written down.
+     */
+    private void settle(Enrolled run, SyncStep step, StepOutcome outcome,
+                        Map<StepType, List<Enrolled>> waiting) {
+        try {
+            if (settlement.settle(run.run(), step, outcome) == OutcomeSettlement.Settled.PASSED_ON) {
+                onward(run, step.type(), outcome.note(), waiting);
+            }
+        } catch (RuntimeException e) {
+            faults.unexpected(step, e);
+        }
     }
 
     /** A batch that reached the platform at all tells us whether the band's account there is working. */
@@ -250,6 +284,11 @@ public class WorkflowEngine {
 
         long id() {
             return run.id();
+        }
+
+        /** Whose work this is — asked for with the id at every write, the id alone naming no band. */
+        BandId band() {
+            return run.band();
         }
     }
 }

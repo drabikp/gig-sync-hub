@@ -26,9 +26,16 @@ needs a sign-in. Which bands a signed-in user sees is the app's: their **members
 below; a user is made at their first sign-in, `OidcCurrentLogin` → `CurrentLogin`). The page sends the browser to
 `/oauth2/authorization/rauthy` (code flow with PKCE, confidential client `gigsynchub`); Rauthy sends
 it back to `/login/oauth2/code/rauthy`, then to `/` (the page goes back where the user was,
-`lib/signIn.ts`). The app's session: 12 h; Rauthy's own session signs the user in again without a
-password. Signing out (`POST /api/auth/logout`) ends both: the answer names Rauthy's end-session
-address and the page goes there. `SecurityConfiguration` builds the client from `AuthProperties`
+`lib/signIn.ts`). **The app's session: 12 h idle AND 12 h in all** (`SessionLife`) — the first is
+`server.servlet.session.timeout`, the second `gigsynchub.auth.session-max-age`, counted from when
+the session was made, because an idle timeout alone never fires for a page that keeps asking; and
+every `gigsynchub.auth.revalidate-every` (5 min) the first request to arrive asks Rauthy's user
+info whether the sign-in still stands (gone, disabled, or out of the group `gigsynchub.auth.group-prefix`
+→ the session ends at once; Rauthy unreachable keeps it — an outage must not sign everyone out).
+That asking needs the access token the sign-in left, which lasts half an hour, so it is sharp for
+the first half hour of a session and the cap carries the rest. Rauthy's own session signs the user
+in again without a password. Signing out (`POST /api/auth/logout`) ends both: the answer names
+Rauthy's end-session address and the page goes there. `SecurityConfiguration` builds the client from `AuthProperties`
 (no discovery at start): the browser goes to the issuer (`gigsynchub.auth.issuer`,
 `https://$GSH_DOMAIN/auth/v1/`), the app fetches tokens, keys and user info inside the network
 (`gigsynchub.auth.internal-url`, `http://rauthy:8080/auth/v1/`); the ID token's issuer is checked.
@@ -48,7 +55,7 @@ server has its real address),
 add yourself and the members to the group `gigsynchub`. A later change of `GSH_DOMAIN` = change the
 client's redirect / post-logout addresses there (the bootstrap is never read again).
 
-**Docker** (`Dockerfile`, `compose.yaml`): the image builds the app from the sources (a Temurin 21 JRE
+**Docker** (`Dockerfile`, `compose.yaml`): the image builds the app from the sources (a Temurin 25 JRE
 and the jar — nothing else: no browser runs on this server, so none is installed; a non-root user whose
 uid/gid match the host's, `GSH_UID`/`GSH_GID`, default 1000); compose runs `db` (PostgreSQL 18, volume `db-data`, on `127.0.0.1:5432` for development),
 `app`, `rauthy-db` + `rauthy` (the sign-in), `proxy` (Caddy) and `backup` (`docker/backup.sh`:
@@ -123,7 +130,8 @@ features/accounts   users, bands, memberships (User, Band — id, slug, name —
                     band #1's from the configuration, once), PlatformAccountsUseCase (the page: owners connect,
                     members test), port.out PlatformAccountCheck (the platform's sign-in test); SecretBox
                     (AesGcmSecretBox: AES-256-GCM, keys gigsynchub.accounts.data-keys, sealed for its row;
-                    rotation = a new key first, everything sealed again on start); /api/bands,
+                    rotation = a new key first, everything sealed again on start, a page of rows at a time —
+                    a half-rotated table is a good one, every row saying which key sealed it); /api/bands,
                     …/platform-accounts; test-jar: AccountsFakes (+ Accounts: in-memory accounts, TEST_KEYS)
 features/places     Town (coordinates null when only typed), TownChoice, place search (Photon); /api/places
 features/sync       outbox (SyncOutbox = SyncTaskQueries + the writes; SyncTask…, PlatformState: a gig's
@@ -194,7 +202,9 @@ only the kernel; nothing uses the app's web setup; the features know no platform
 another; how a platform talks to its site stays behind its portal client; every controller implements
 the interface generated from its module's spec and has no private methods (the live stream
 excepted); no cycles between modules nor between any two packages. `PlatformNamesTest`: no
-feature source (code, string or comment — the generated code from the specs too) names a platform.
+feature source names a platform — its Java, its OpenAPI spec (and so what is generated from it)
+and the schema's own migrations, in code, string or comment alike. Not the generated classes
+themselves: they are the spec's, and the spec is read.
 
 ## The API (OpenAPI, contract first)
 
@@ -253,6 +263,14 @@ enum `…Value` (inline enums are made named ones) — the names are the generat
   runs before dev, build and test) → `src/api/generated/*.ts` (git-ignored); `api/types.ts` only
   names those types; `api/client.ts` is an `openapi-fetch` client over every spec's paths, so a
   path, parameter, body or answer that doesn't match the spec doesn't compile.
+- **The specs' limits are CHECKS**: the generator runs with `useBeanValidation=true`, so a
+  `maxLength`, `maxItems` or `maximum` in a spec becomes a jakarta.validation annotation on the
+  generated class or parameter and `spring-boot-starter-validation` (app) enforces it — a request
+  that breaks one is a 400 `badRequest` (`ApiErrors`, which catches both shapes: Spring's own for a
+  body, jakarta's `ConstraintViolationException` for a parameter, since the generator's `@Validated`
+  routes those through AOP). The gig form's lengths are its COLUMNS' (V1__schema.sql), so what the
+  API refuses and what the database would refuse are the same number. `ApiSecurityTest`'s
+  `the_limits_the_specs_carry_are_checked` fails the moment that switch goes back.
 - **A band's paths**: everything a band has is under `/api/bands/{bandId}/…` (the shared
   `components/parameters/BandId` of gig.yaml; the generated interfaces take `UUID bandId`, the
   controllers pass `new BandId(…)` / `RefMapper.toBandId` on); `/api/platforms`, `/api/places`,
@@ -264,7 +282,7 @@ enum `…Value` (inline enums are made named ones) — the names are the generat
 Configuration is typed: a `@ConfigurationProperties` record per module (`<feature>.config` for
 the features: `CalendarProperties`, `SyncProperties`, `CheckProperties`,
 `PlacesProperties`; the platform's root package for `BandzoneProperties`,
-`BandsintownProperties`, `BrowserProperties`; `AccountsProperties`; `AuthProperties` in the app; secrets are hidden in
+`BandsintownProperties`; `AccountsProperties`; `AuthProperties` in the app; secrets are hidden in
 their `toString`); a band's logins are not configuration but its own (connected on the page).
 `spring-boot:run` runs in the repo root (`./data` is relative to it; in Docker `/app/data`).
 Spring tests: `app` (whole context) and each module with persistence (`gig`, `accounts`, `sync`, `calendar`:
@@ -393,8 +411,10 @@ rows are keyed `(band_id, …)`.
   carry `@AcrossBands("why")` (the worker's due work and pauses, `FairTurns`, restart recovery, key
   rotation's two re-seals, the shipped presets, and a task's log — whose band is checked on its task in
   `SyncLogService#log`). Two ArchUnit rules close the way round it: nothing is annotated
-  `@Query(nativeQuery = true)` and nothing calls `createNativeQuery` — with no exceptions, main has no
-  native SQL at all. Each band-scoped store also has a persistence test that writes two bands' rows and
+  `@Query(nativeQuery = true)` and nothing calls `createNativeQuery` — with no exceptions, so no
+  Java source of this app writes SQL. (The SQL this app does have is where SQL belongs: the Flyway
+  migrations, which ARE the schema, and two connection-init statements in the properties —
+  `set role` and Flyway's `lock_timeout`. Neither reads a row.) Each band-scoped store also has a persistence test that writes two bands' rows and
   reads one band's back. **The restricted role stays** and has nothing to do with tenancy: the app's
   connections work as `gigsynchub_app` — in Docker its own login (`SPRING_DATASOURCE_USERNAME`, the
   secret `db_app_password`, given its password after each migration by `AppRoleLogin`), not the
@@ -403,12 +423,20 @@ rows are keyed `(band_id, …)`.
   **Limits**:
   `gigsynchub.limits.requests-per-minute` (600) / `changes-per-minute` (120) per user (per address before
   signing in) on `/api`, `/gigs`, `/oauth2`, `/login` → 429 `tooManyRequests`;
-  `gigsynchub.accounts.max-bands-owned` (10) → `tooManyBands`; live streams: 100 per band, 2000 in all
-  (the oldest ends), each ends after 30 min (the page reconnects). **Addresses a band gives** (its
+  `gigsynchub.accounts.max-bands-owned` (10) → `tooManyBands` — and what COUNTS the requests is itself
+  bounded (`gigsynchub.limits.tracked-callers`, 50 000: the least recently seen caller is forgotten,
+  never the one flooding); live streams: 100 per band, 2000 in all
+  (the oldest ends), each ends after 30 min (the page reconnects). The background work a request
+  starts (Import's read, a check on demand) runs on a bounded pool (`spring.task.execution.*`, 8
+  threads and 50 waiting) and a refusal is a 429, not a queue nobody is watching. **Addresses a band gives** (its
   calendar, a gig's poster) are fetched only from the public internet, every redirect checked by hand
   (`PublicAddresses`; a gig's links must be http(s), `links`), at most 10 MB, and a failure says nothing of
-  what answered. **The public list** (`/gigs/<slug>`) is a band's choice (`band.public_list`, V7, Settings
-  → This band; band #1's on). An e-mail Rauthy hasn't verified is no e-mail to the app (invitations, the
+  what answered — and the address CHECKED is the address connected to, because the app fixes the
+  platform's cache of successful lookups (`PublicAddresses.holdResolvedNamesStill`, from the app
+  class's initializer: the JDK reads that policy once, at the first name the process resolves) rather
+  than leaving the two lookups free to disagree. An `InetAddressResolverProvider` would say it better
+  and does nothing in a Spring Boot jar — the javadoc says why. **The public list** (`/gigs/<slug>`)
+  is a band's choice (`band.public_list`, V7, Settings → This band; band #1's on). An e-mail Rauthy hasn't verified is no e-mail to the app (invitations, the
   first owner); a login's e-mail and name are refreshed at each sign-in. Caddy's log never holds a token
   (invitation links, the sign-out's `id_token_hint`).
 - **Many bands on one server** (phase 3): the sync runs `gigsynchub.sync.worker.threads` (2) **lanes** at
@@ -605,7 +633,11 @@ Re-sync (`ResyncGigUseCase`) or Forget link (a gone event, through `GigWrites.fo
 Publish creates it again; the gig pages follow). Also
 counts platform events no gig is published as (→ Import). Runs nightly
 (`PlatformCheckSchedule`, `gigsynchub.check.cron`, default 04:30; `gigsynchub.check.enabled`), every
-band one after another; each band's latest result is kept (`CheckResultStore`, table `band_check`).
+band one after another **within a budget** (`gigsynchub.check.budget`, 3 h): the next run is
+scheduled from the cron before the walk starts, so the cadence never drifts, and a walk that spends
+its budget carries on tomorrow at the band it stopped at — so the bands take turns rather than the
+first few being checked for ever. Each band's latest result is kept (`CheckResultStore`, table
+`band_check`).
 
 ## Import (`/import`)
 
@@ -650,6 +682,11 @@ included — local DB only) and compared with the last one (`CalendarChanges`): 
 (title, time, place, notes, status; plus what the rules said before, when the change made
 them say something else) / REMOVED / RETURNED, kept until the user marks them seen. The very
 first read is the baseline. The page shows the saved copy; "Read calendar" reads again.
+
+The review reads the gigs **around the calendar's own days** (`GigRepository.findCovering`, a day
+either side) and not the band's whole catalog — everything it asks the catalog is about an event's
+day, so the answer is the same by construction; a gig an event is LINKED to is fetched by its id
+whatever its day, so moving a gig out of the window never makes the page say the link is gone.
 
 **Into the catalog**: `CalendarCatalogUseCase` (`CalendarCatalogService`, through `GigWrites`: a gig
 the catalog already has is `gigIdentityTaken`, a link to a gone gig `notFound`).
@@ -860,6 +897,18 @@ is the one place the portal's JSON is read.
 - **Human pacing** (user requirement): a short random wait between requests and a longer one between
   upload batches, and one request at a time for an account — the platforms' terms are about people
   using their pages, and a burst is what gets an account flagged.
+- **Where the traffic comes from** (`PlatformEgress`, `gigsynchub.<platform>.proxy.*`): unset, this
+  machine's own address; set, ONE proxy the operator chose — their own machine, a paid static
+  address, an address in the band's own country, which is the signal worth fixing (a datacenter in
+  another country on an account only ever used from Czechia). It covers everything that platform
+  does, the public page scrape included: that one asks for every year tab at once, and a burst is
+  what the pacing exists to avoid, so half the traffic coming from somewhere else would be the
+  worst of both. **Not a rotating list, deliberately** — these are the band's own long-lived
+  sessions (Bandzone's lasts years), and a session arriving from a different address each time is
+  the shape of a stolen one rather than a quieter one; free proxy lists are also compromised hosts
+  carrying other people's blocks, and an unknown party in the middle of the session this app seals
+  everywhere else. The javadoc says it at length, with the two JDK traps (no SOCKS; Basic auth to
+  a proxy is off for tunnels until `jdk.http.auth.tunneling.disabledSchemes` is cleared).
 - Setup problems (nothing connected, a sign-in the band must renew) need the user (NEEDS_USER), not a
   retry.
 
@@ -871,8 +920,10 @@ collection and no cascade to get wrong here; the costs are elsewhere):
 
 - **A list is a QUERY, never a filter in the page.** Whatever a page shows, the store decides which
   rows, in which order, and how many: `GigRepository.page(band, GigQuery, today)` → `GigSlice`.
-  `findAll(band)` exists for work that really is about every gig (an export, a reconciliation, the
-  band's own file) and must not answer a page.
+  `findAll(band)` exists for work that really is about every gig and must not answer a page: the
+  platform export, Import's planner (which matches every platform event against the catalog) and
+  the band's own export file — three callers, and the list of them is short on purpose. The
+  calendar review used to be the fourth and is not any more (it reads the days its events cover).
 - **Paged by keyset, not by offset.** `(show_at, id) > (the last row's)` — the hundredth page costs
   what the first does, and rows arriving or leaving meanwhile cannot make one slide past unseen. The
   cursor (`GigCursor`) is opaque and one that isn't ours is a `BadRequestException`.
@@ -881,15 +932,27 @@ collection and no cascade to get wrong here; the costs are elsewhere):
   are for writing, where the dirty checking earns its keep.
 - **Nothing per row.** A page's platform states are read for the page's gigs
   (`publicationsOf(band, ids)`, `published_gig_band_gig`), never one query per row and never the
-  band's whole catalog. `GigListCostsTest` counts the statements and fails if the cost starts to
+  band's whole catalog; a bulk action reads the gigs it was given with one `findAllByIds` and not a
+  `findById` each. `GigListCostsTest` counts the statements and fails if the cost starts to
   follow the rows — the cheapest N+1 alarm there is.
+- **A number is counted where the rows are.** The Activity heading's and the operator's four
+  numbers are one `group by` (`SyncTaskQueries.openWork`), not every open row counted in Java; "not
+  on every platform yet" is a count per gig inside the list's own query (`GigQuery.notOnAllOf`),
+  not a `not in` of every gig that already is. `CountingOpenWorkCostsTest` fails if either starts
+  loading what it counts.
+- **The count that a page shows is the FIRST page's.** `GigSlice.total` is null on every page read
+  from a cursor: the page keeps the number it was given and "Show more" adds rows to the same list,
+  so counting again is a full pass for an answer nobody reads.
 - **A public address is bounded.** `/gigs/{band_slug}` takes no sign-in, so it answers a
   store-ordered `earliestFirst(band, limit)` (2000) rather than however much a catalog has grown to.
 - **Ids come from sequences** (V9), because an identity column cannot be batched; with
   `batch_size`, `order_inserts/updates` and `batch_versioned_data` a bulk publish's tasks, a run's
   log and a band's calendar rules go in a few round trips. `in_clause_parameter_padding` keeps the
   plan caches small: an `in (…)` of 3 or 7 ids is padded to 4 or 8, so a handful of shapes serve
-  every page. See `app/src/main/resources/application.properties`, mirrored in the test properties.
+  every page. These live in `app/src/main/resources/application.properties` and are copied BY HAND
+  into each module's test properties (`features/{gig,accounts,sync,calendar}/src/test/resources/`,
+  and the app's own): a module whose tests do not have them is a module where the batching this
+  relies on is never exercised, so a change here is a change in six files.
 - **A query parameter is a string, not a generated enum**: Spring converts one with `Enum.valueOf`,
   which does not know `upcoming`. MapStruct maps it (`GigMapper.toPeriod/toShow`, as
   `SyncMapper.toShow` already did).
@@ -959,27 +1022,144 @@ proposes putting it back: `app.band` had no privilege check on it, so anyone abl
 the app's own queries, never against a leaked database password. The **role stays** for its own sake
 (no DDL, no `flyway_schema_history`), as do its grants and default privileges.
 
+`V13__one_open_task_per_gig.sql`: a unique index on `sync_task (band_id, gig_id, platform, action)
+where status = 'PENDING'` (2026-10-13). The queueing rules were all advisory — `SyncRequests` reads
+a gig's open work and then writes, and under READ COMMITTED two requests for the same gig both see
+nothing and both queue, which on a platform whose create makes a new event each time publishes the
+gig twice and leaves a live event nothing here has a pointer to. PENDING only, deliberately:
+RUNNING too would refuse a legitimate edit while an update runs, and a test says so by name.
+`V14__sync_log_knows_its_band.sql`: `sync_log.band_id`, backfilled from its task (2026-10-13) — the
+one band-scoped table that had no band of its own, so its reads were exempt from the isolation net
+by an `@AcrossBands` rather than covered by it. A column and not a JPA association: the association
+would have been the better way to say it and Hibernate refuses it beside the raw `task_id`
+("physical column name [task_id] referred to by multiple logical column names"), and replacing the
+column with one would put a lazy fetch in the table with the most rows in this schema.
+
 **From H2** (the database until 2026-10): `H2Import` (a Flyway `afterMigrate` callback in the kernel)
 copies an H2 SQL backup (`SCRIPT TO`, `gigsynchub.db.import-h2`) into an EMPTY database right after
 the schema is built — every table's rows (the columns both have), times without zone shifts, the
 id counters moved past the copied ids; one transaction, so a failure leaves nothing and stops the
 start; skipped when the database has data; every row becomes band #1's. H2 stays a dependency only for this (`h2.version` pinned).
 
-**Backups**: the compose service `backup` (`pg_dump --format=custom` of `gigsynchub` and `rauthy`, daily,
-`./data/backups`, 14 of each kept); restore into an empty database with
-`pg_restore -d gigsynchub --no-owner gigsynchub-<day>.dump` (Rauthy's: `-d rauthy --role=rauthy`).
+**Backups**: the compose service `backup` (`docker/backup.sh`: `pg_dump --format=custom` of
+`gigsynchub` and `rauthy` plus `pg_dumpall --globals-only` for the ROLES, which live in neither
+database and which a restore needs first; daily, `./data/backups`, 14 of each kept, `umask 077`
+because a dump holds every band's data). Restoring is `docker/restore.sh`
+(`docker compose run --rm backup /restore.sh`, `DAY=` for a given day): it puts the roles back,
+refuses a database that already holds tables, and says what is left to do. The whole drill, and
+the two things no dump can hold — **`./secrets` (above all `data_keys`, without which every band's
+sealed logins and calendar address are gone for good) and `.env`** — are
+**`docs/disaster-recovery.md`**. The backup's own healthcheck reads `./data/backups/LAST_OK`, not
+whether the container is up: the failure that matters is the silent one.
+
+**The containers**: every log capped (3 × 10 MB — the default is "until the disk is full", and the
+first thing a full disk stops is PostgreSQL), every service `no-new-privileges` and `cap_drop: ALL`
+except the two that need one capability (`proxy`: `NET_BIND_SERVICE`) or whose image does its own
+privileged setup (`db`, deliberately left alone: the one container whose failure to start is not
+fixed by starting it again). Memory and CPU per service from `.env` (`GSH_*_MEM` / `GSH_*_CPUS`);
+`db` has `PGDATA` pinned (the volume is mounted at `/var/lib/postgresql`, and the image's default
+has moved between major versions — a default that changes under a mounted volume is an empty
+database on a machine that had one) and `stop_grace_period: 2m` (a database is stopped, never
+killed). The app stops gracefully (`server.shutdown=graceful`, 20 s, inside compose's 45 s) so a
+sync step talking to a platform is not cut off mid-create. Flyway runs with
+`lock_timeout = 15s`: a migration that cannot get its lock fails rather than queueing the whole
+database behind it. **Whether a container comes back by itself is the machine's** (`GSH_RESTART`,
+default `unless-stopped`): a server wants a crash or a reboot to bring the stack back, and an
+explicit `docker compose stop` to be remembered; a workstation where this app is one project among
+several sets `GSH_RESTART=no`, and then nothing runs between a `stop` and the next `up` — not after
+a reboot, and not when another project's `docker` command wakes the daemon.
+
+**CI** (`.github/workflows/build.yml`): every push and pull request runs `./mvnw verify` on **Java
+25** — the version the image runs, not the newest — with Docker for Testcontainers; Dependabot
+(`.github/dependabot.yml`) watches Maven, npm, Docker and the actions themselves, weekly and
+grouped.
+
+## Watching it: metrics, traces and logs
+
+The app always exposes its own numbers and always puts a trace id in every log line; whether
+anything COLLECTS them is a compose profile that is off by default.
+
+- **Metrics** — `/actuator/prometheus` on the management port: the JVM's, the pool's, every HTTP
+  request's, and this app's own (`gigsynchub.sync.tasks` / `.held` per band, `BandMetrics`). Every
+  series carries `application=gigsynchub`.
+- **Traces** — Micrometer Observation bridged to OpenTelemetry, sent as OTLP when
+  `GSH_OTLP_ENABLED=true`. Spring Boot instruments what it owns; the app adds the two spans no
+  framework can see: the **sync workload** (`SyncWorker`, a worker thread is not a request) and
+  each **call to a platform** (`PortalCall`, the JDK's HttpClient is nobody's to instrument). So a
+  publish reads as one span with the platform's own calls inside it, which is where the time goes.
+  Sampling is 1.0 — one band's server, and the trace you want already happened.
+- **Logs** — twice: the console stays the readable line `docker compose logs` shows, and
+  `./data/logs/gigsynchub.json` is the same events as ECS JSON, rolled and capped (10 MB × 7).
+  Both carry `traceId`/`spanId`, so `docker compose logs app | grep <traceId>` is a request's
+  whole story with no stack running at all.
+- **The join** is the trace id, and it is three libraries agreeing on a field name, which is
+  exactly the kind of thing that breaks silently. `ObservabilityTest` writes a line inside a span
+  and asserts the id in the file equals the id in the span — and that the field is `traceId`, not
+  ECS's own `trace.id`, which is what Grafana's Loki datasource is told to look for.
+- **No span per SQL statement**: `datasource-micrometer` is built for Spring Boot 3 and does not
+  load on 4, and wiring a proxy DataSource by hand would put a wrapper under Flyway, Hibernate and
+  the pool's `set role` for a signal this app has two better sources for — statement COUNTS are
+  asserted at build time, and a statement slower than `GSH_SLOW_QUERY_MS` (500) names itself in a
+  log line that already carries the trace id.
+
+**The stack** (`docker compose --profile observability up -d`, ~900 MB, `docker/observability/`):
+Prometheus scrapes the app, Alloy tails the app's log FILE into Loki, Tempo takes the OTLP, and
+Grafana (127.0.0.1:3000 only) shows all three with the links between them provisioned — a log line
+offers its trace, a trace offers its logs, a metric's exemplar offers the request that made it.
+**No Docker socket anywhere**: a container with it can do whatever the daemon can, and a stack for
+watching an app should not be the largest hole in it — the cost is that the other containers' logs
+stay in `docker compose logs`. Not Elasticsearch: one app on one server, where the question is
+"what happened to this request" rather than full-text search over a fleet, and Loki indexes labels
+instead of lines at a quarter of the memory.
+
+**More than one node, later**: nothing about the app changes — it exposes a scrape endpoint and
+speaks OTLP. Loki and Tempo run the same config files in distributed mode (`-target`, and
+`filesystem` → S3/MinIO with `replication_factor` > 1); Prometheus gains targets, or one per node
+behind Mimir/Thanos; Alloy becomes one agent per node pushing to the central Loki; Grafana is
+untouched. The lines that move are the storage blocks and `GSH_OTLP_ENDPOINT`.
+
+## The operating envelope
+
+What this app is built to carry, and what it does at the edge of it. Every number here is set in
+one place and named; none of them is a guess left in the code.
+
+| | How much | Where it is set | What happens at the edge |
+|---|---|---|---|
+| Requests | 600/min a caller, 120 of them changes | `gigsynchub.limits.*` | 429 `tooManyRequests` with `Retry-After` |
+| Callers counted | 50 000 at once | `gigsynchub.limits.tracked-callers` | the quietest is forgotten and counted afresh |
+| Request body | 2 MB | `docker/Caddyfile` | the proxy refuses it; the app never sees it |
+| A field, a list | the spec's `maxLength` / `maxItems` | the specs | 400 `badRequest` |
+| A page of gigs | 200 rows | `GigQuery.MAX_SIZE` | the ask is clamped |
+| A bulk action | 1000 gigs | `catalog.yaml` | 400 `badRequest` |
+| Bands owned | 10 a user | `gigsynchub.accounts.max-bands-owned` | 409 `tooManyBands` |
+| Live streams | 100 a band, 2000 in all, 30 min each | `SseLiveUpdates` | the oldest ends; the page reconnects |
+| Background work from a request | 8 at once, 50 waiting | `spring.task.execution.*` | 429 |
+| Sync lanes | 2 at once, the bands in turn | `gigsynchub.sync.worker.threads` | the rest wait their turn |
+| Any answer from outside | 10 MB | `PublicAddresses.MAX_BODY_BYTES` | the fetch fails; a band's address is told nothing of what answered |
+| A session | 12 h idle, 12 h in all, re-asked every 5 min | `server.servlet.session.timeout`, `gigsynchub.auth.*` | 401; the page shows the sign-in |
+| The nightly check | 3 h a night | `gigsynchub.check.budget` | it carries on tomorrow where it stopped |
+| What is kept | 90 d settled work, 365 d audit, 180 d calendar copy, 30 d invitations | `gigsynchub.housekeeping.*` | the nightly housekeeping forgets it |
+| A container | memory and CPU per service, logs 3 × 10 MB | `.env` (`GSH_*_MEM`, `GSH_*_CPUS`) | the kernel refuses the memory; logs roll |
+| A container coming back | after a crash or a reboot, unless it was stopped on purpose | `.env` (`GSH_RESTART`, `no` on a workstation) | `no`: nothing runs until the next `up` |
+
+**One app per database.** A second instance would run a second sync worker over the same tasks —
+the status changes are guarded (`SyncStatus.canBecome`, `sync_task.version`), so the damage is
+duplicated platform calls rather than corrupted rows, but it is not a supported way to run this.
+Nothing enforces it: the only way to would be an advisory lock, which is native SQL, and "no Java
+source of this app writes SQL" is a rule worth more than this guard.
 
 ## Key Dependencies
 
-- Spring Boot 4.0.3, Java 21; Spring Data JPA + PostgreSQL 18 + Flyway (H2 2.4.240 only for the import);
+- Spring Boot 4.1.1, Java 25; Spring Data JPA + PostgreSQL 18 + Flyway (H2 2.4.240 only for the import);
   Spring Security's OAuth2 client (OIDC) with Rauthy 0.37 (Docker)
-- Docker: the Temurin 21 JRE (nothing else — no browser is installed); Testcontainers 2 for the tests
+- Docker: the Temurin 25 JRE (nothing else — no browser is installed); Testcontainers 2 for the tests
 - OpenAPI: openapi-generator 7.26 (`spring`, Spring Boot 4 + Jackson 3); openapi-typescript 7 + openapi-fetch
 - MapStruct 1.6.3 (every mapper: API ↔ domain and JPA entity ↔ domain)
 - jMolecules (BOM 2025.0.2: `jmolecules-ddd` + `jmolecules-hexagonal-architecture` in every module,
   `jmolecules-archunit` in the app's tests) — annotations with no runtime that say what each type is
 - The page: React 19 + TypeScript, Vite 6, Mantine 8, TanStack Query 5, React Router 7, i18next,
-  vite-plugin-pwa, Mantine dates (+ dayjs); built by Maven (frontend-maven-plugin, Node 22 fetched into web/frontend/node)
+  vite-plugin-pwa, Mantine dates (+ dayjs); built by Maven (frontend-maven-plugin, Node 22 LTS fetched
+  into web/frontend/node — `node.version` in web/frontend/pom.xml)
 - JSoup 1.22.1 (HTML scraping)
 - OpenCSV 5.12.0 (CSV)
 - Nothing for driving a browser: both platforms are reached over plain HTTP (`java.net.http`)

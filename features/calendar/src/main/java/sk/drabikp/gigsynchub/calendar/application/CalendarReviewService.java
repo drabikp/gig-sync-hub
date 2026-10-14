@@ -1,6 +1,7 @@
 package sk.drabikp.gigsynchub.calendar.application;
 
 import org.jmolecules.architecture.hexagonal.Application;
+import sk.drabikp.gigsynchub.calendar.application.port.in.ForgetOldCalendarCopyUseCase;
 import sk.drabikp.gigsynchub.calendar.application.port.in.ReviewCalendarUseCase;
 import sk.drabikp.gigsynchub.calendar.application.port.out.BandProfileStore;
 import sk.drabikp.gigsynchub.calendar.application.port.out.CalendarDecisionStore;
@@ -27,6 +28,7 @@ import sk.drabikp.gigsynchub.gig.application.port.out.GigRepository;
 import sk.drabikp.gigsynchub.gig.application.port.out.LiveUpdates;
 import sk.drabikp.gigsynchub.gig.application.port.out.Transactions;
 import sk.drabikp.gigsynchub.gig.domain.BandId;
+import sk.drabikp.gigsynchub.gig.domain.DateRange;
 import sk.drabikp.gigsynchub.gig.domain.Gig;
 import sk.drabikp.gigsynchub.gig.domain.GigId;
 
@@ -35,10 +37,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -50,7 +52,7 @@ import java.util.stream.Collectors;
  * bringing gigs into the catalog is {@link CalendarCatalogService}'s. Never writes the calendar.
  */
 @Application
-public class CalendarReviewService implements ReviewCalendarUseCase {
+public class CalendarReviewService implements ReviewCalendarUseCase, ForgetOldCalendarCopyUseCase {
 
     private final CalendarFeed feed;
     private final BandProfileStore profileStore;
@@ -80,6 +82,11 @@ public class CalendarReviewService implements ReviewCalendarUseCase {
     }
 
     @Override
+    public int forgetRemovedBefore(Instant when) {
+        return snapshotStore.forgetRemovedBefore(when);
+    }
+
+    @Override
     public boolean configured(BandId band) {
         return feed.configured(band);
     }
@@ -90,7 +97,7 @@ public class CalendarReviewService implements ReviewCalendarUseCase {
         Instant now = clock.instant();
         transactions.inTransaction(() -> {
             List<CalendarClassification> classified = classify(band, fresh, profile(band),
-                    gigRepository.findAll(band));
+                    around(band, fresh));
             snapshotStore.saveRead(band, CalendarChanges.afterRead(snapshotStore.all(band), classified, now), now);
         });
         changed(band);
@@ -105,9 +112,11 @@ public class CalendarReviewService implements ReviewCalendarUseCase {
                 .map(KnownCalendarEvent::event)
                 .toList();
         BandProfile profile = profile(band);
-        List<Gig> gigs = gigRepository.findAll(band);
-        Map<GigId, Gig> catalog = gigs.stream().collect(Collectors.toMap(Gig::id, Function.identity(), (a, b) -> a));
+        List<Gig> gigs = around(band, shown);
+        Map<GigId, Gig> catalog = new HashMap<>();
+        gigs.forEach(gig -> catalog.put(gig.id(), gig));
         Map<String, GigId> links = linkStore.all(band);
+        alsoLinkedFromOutside(band, links, catalog);
         LocalDate today = LocalDate.now(clock);
         List<CalendarRow> rows = new ArrayList<>();
         for (CalendarClassification c : classify(band, shown, profile, gigs)) {
@@ -166,6 +175,40 @@ public class CalendarReviewService implements ReviewCalendarUseCase {
     /** The band's calendar page reads the calendar again. */
     private void changed(BandId band) {
         live.changed(band, LiveUpdates.Topic.CALENDAR);
+    }
+
+    /**
+     * The catalog the calendar is compared against: the gigs whose days fall in the window the
+     * events themselves cover, and not the band's whole history.
+     *
+     * <p>Everything this service asks of the catalog is about an event's own day — the classifier
+     * asks "is there a gig that day", the matcher "which gigs are on this day" — so a window that
+     * covers every event's day gives the same answers as the whole catalog, by construction rather
+     * than by luck. A day either side because a show that starts after midnight is drafted onto
+     * the next day, and a gig may run into the window from just before it.
+     */
+    private List<Gig> around(BandId band, Collection<CalendarEvent> events) {
+        LocalDate first = null;
+        LocalDate last = null;
+        for (CalendarEvent event : events) {
+            LocalDate day = event.day();
+            first = first == null || day.isBefore(first) ? day : first;
+            last = last == null || day.isAfter(last) ? day : last;
+        }
+        return first == null ? List.of()
+                : gigRepository.findCovering(band, new DateRange(first.minusDays(1), last.plusDays(1)));
+    }
+
+    /**
+     * A gig an event is LINKED to, when the gig has since been moved outside the window — the link
+     * is the band's own decision and must not look broken ("gone from the catalog") because the
+     * read was narrowed. Usually none, and then nothing is asked.
+     */
+    private void alsoLinkedFromOutside(BandId band, Map<String, GigId> links, Map<GigId, Gig> catalog) {
+        List<GigId> missing = links.values().stream().filter(id -> !catalog.containsKey(id)).distinct().toList();
+        if (!missing.isEmpty()) {
+            gigRepository.findAllByIds(band, missing).forEach(gig -> catalog.put(gig.id(), gig));
+        }
     }
 
     private List<CalendarClassification> classify(BandId band, List<CalendarEvent> events, BandProfile profile,

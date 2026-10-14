@@ -7,6 +7,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.web.SecurityFilterChain;
@@ -28,6 +29,9 @@ import java.util.Map;
  * itself and its files are public. CSRF protection as for a
  * single-page app: the token travels in the {@code XSRF-TOKEN} cookie and comes back in the
  * {@code X-XSRF-TOKEN} header.
+ *
+ * <p>How long a sign-in lasts, and how soon the app notices one Rauthy has ended, is
+ * {@link SessionLife}'s.
  *
  * <p>Rauthy is reached at two addresses: the browser goes to the issuer (through the proxy), the
  * app fetches tokens, keys and the user's details inside the containers' network
@@ -62,10 +66,15 @@ class SecurityConfiguration {
 
     @Bean
     SecurityFilterChain api(HttpSecurity http, ClientRegistrationRepository registrations, JsonMapper json,
-                            LimitsProperties limits) throws Exception {
+                            LimitsProperties limits, AuthProperties auth,
+                            OAuth2AuthorizedClientRepository clients) throws Exception {
+        ClientRegistration rauthy = registrations.findByRegistrationId(REGISTRATION);
         http.authorizeHttpRequests(requests -> requests
-                        // the actuator answers on the management port only (this machine, the operator)
-                        .requestMatchers("/api/auth/**", "/actuator/**").permitAll()
+                        // No /actuator/** here. It answers on the management port's own context
+                        // (127.0.0.1:8081, the operator's), which this chain never sees — and while
+                        // the matcher was harmless it meant the only thing keeping health and
+                        // metrics off the public port was one property staying set.
+                        .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .oauth2Login(login -> login
@@ -75,12 +84,17 @@ class SecurityConfiguration {
                 .requestCache(cache -> cache.requestCache(new NullRequestCache()))
                 .csrf(csrf -> csrf.spa())
                 .logout(logout -> logout.logoutUrl("/api/auth/logout")
-                        .logoutSuccessHandler(new RauthySignOut(registrations.findByRegistrationId(REGISTRATION), json)))
+                        .logoutSuccessHandler(new RauthySignOut(rauthy, json)))
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 // after the session is known (counted per user), before anything is decided or done
-                .addFilterBefore(new RateLimits(limits, json, Clock.systemUTC()), AuthorizationFilter.class);
+                .addFilterBefore(new RateLimits(limits, json, Clock.systemUTC()), AuthorizationFilter.class)
+                // and before anything is decided: a session past its cap, or one whose sign-in Rauthy
+                // has ended, is no session — it must not reach a rule that asks who the user is
+                .addFilterBefore(new SessionLife(auth, clients,
+                        new RauthyStillSignedIn(rauthy, auth.groupPrefix(), json), Clock.systemUTC()),
+                        AuthorizationFilter.class);
         return http.build();
     }
 }

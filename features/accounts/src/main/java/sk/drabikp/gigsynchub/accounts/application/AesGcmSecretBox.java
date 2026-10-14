@@ -45,7 +45,7 @@ public final class AesGcmSecretBox implements SecretBox {
             byte[] key;
             try {
                 key = Base64.getDecoder().decode(entry.substring(colon + 1));
-            } catch (IllegalArgumentException e) {
+            } catch (IllegalArgumentException _) {
                 throw new IllegalStateException("Data key " + id + " is not base64");
             }
             if (key.length != 32) {
@@ -95,7 +95,7 @@ public final class AesGcmSecretBox implements SecretBox {
             Cipher cipher = cipher(Cipher.DECRYPT_MODE, key, Arrays.copyOf(sealed.data(), NONCE), context);
             return new String(cipher.doFinal(sealed.data(), NONCE, sealed.data().length - NONCE),
                     StandardCharsets.UTF_8);
-        } catch (GeneralSecurityException e) {
+        } catch (GeneralSecurityException _) {
             throw new IllegalStateException("A secret could not be opened (changed, or sealed for another place)");
         }
     }

@@ -28,7 +28,10 @@ export default defineConfig({
       },
       workbox: {
         // the API is never served from the cache: the page keeps its last data itself
-        navigateFallbackDenylist: [/^\/api\//, /^\/actuator\//, /^\/oauth2\//, /^\/login\//, /^\/auth\//],
+        // /gigs/ is a BAND's public list served by the server, not one of the page's own
+        // addresses: without it here, anyone with the worker registered got the cached
+        // shell instead and was bounced to the start page
+        navigateFallbackDenylist: [/^\/api\//, /^\/actuator\//, /^\/oauth2\//, /^\/login\//, /^\/auth\//, /^\/gigs\//],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
       },
     }),

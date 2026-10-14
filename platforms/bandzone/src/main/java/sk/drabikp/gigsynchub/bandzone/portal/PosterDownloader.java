@@ -68,7 +68,7 @@ public final class PosterDownloader {
             return downloaded;
         } catch (IOException | IllegalArgumentException e) {
             throw BandzonePortalException.temporary("Poster download failed: " + posterUrl, e);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             throw BandzonePortalException.busy("Poster download interrupted: " + posterUrl);
         } finally {
@@ -92,7 +92,7 @@ public final class PosterDownloader {
         }
         try {
             Files.deleteIfExists(file);
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             // temp file; the OS cleans it up eventually
         }
     }

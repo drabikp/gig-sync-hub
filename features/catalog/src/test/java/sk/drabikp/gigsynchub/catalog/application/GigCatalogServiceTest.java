@@ -115,7 +115,7 @@ class GigCatalogServiceTest {
         onBothPlatforms(gig);
         Gig edited = renamed(gig, "Fest 2026");
         SyncTask first = service.update(BAND, gig, edited).queued().getFirst();
-        outbox.markRunning(first.id(), clock.instant());
+        outbox.markRunning(first.band(), first.id(), clock.instant());
 
         assertThatThrownBy(() -> service.update(BAND, edited, renamed(gig, "Fest 2026 — sold out")))
                 .isInstanceOf(GigBusyException.class);
@@ -134,7 +134,7 @@ class GigCatalogServiceTest {
         assertThat(published.isPublished(BAND, BANDZONE, gig.id())).isFalse();
 
         SyncTask running = service.update(BAND, gig, renamed(gig, "Fest 2026")).queued().getFirst();
-        outbox.markRunning(running.id(), clock.instant());
+        outbox.markRunning(running.band(), running.id(), clock.instant());
         assertThatThrownBy(() -> writes.forgetLink(BAND, BANDSINTOWN, gig.id()))
                 .isInstanceOfSatisfying(GigBusyException.class,
                         e -> assertThat(e.getMessage()).contains("Fest 2026").doesNotContain("GigId["));
@@ -204,7 +204,7 @@ class GigCatalogServiceTest {
         onBothPlatforms(gig);
 
         QueueResult cancelled = service.cancel(BAND, gig.id());
-        outbox.all().forEach(t -> outbox.markDone(t.id(), null, clock.instant()));
+        outbox.all().forEach(t -> outbox.markDone(t.band(), t.id(), null, clock.instant()));
         QueueResult reactivated = service.reactivate(BAND, gig.id());
 
         assertThat(cancelled.queued()).extracting(SyncTask::action).containsOnly(SyncAction.CANCEL).hasSize(2);

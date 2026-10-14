@@ -17,6 +17,12 @@
 			<artifactId>slf4j-api</artifactId>
 		</dependency>
 		<dependency>
+			<!-- an observation per call to a platform (PortalCall): the span the framework cannot
+			     make, because the JDK's HttpClient is nobody's to instrument -->
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-observation</artifactId>
+		</dependency>
+		<dependency>
 			<!-- @ConfigurationProperties only -->
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot</artifactId>

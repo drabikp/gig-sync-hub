@@ -53,7 +53,7 @@ public final class ProfileFile {
     private static RuleKind kind(String name) {
         try {
             return RuleKind.valueOf(name.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw new IllegalArgumentException("unknown rule kind " + name);
         }
     }
@@ -61,7 +61,7 @@ public final class ProfileFile {
     private static int weight(String token) {
         try {
             return Integer.parseInt(token);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             throw new IllegalArgumentException("weight \"" + token + "\" is not a whole number");
         }
     }

@@ -12,6 +12,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -85,7 +86,14 @@ public final class BandsintownCsv {
 
     /** The plain template, as the user downloads it for a manual import. */
     public static String template(List<Gig> gigs, String artistName) {
-        return write(Column.TEMPLATE, gigs.stream().map(gig -> row(gig, artistName)).toList());
+        return write(Column.TEMPLATE, gigs.stream().map(gig -> notFormulas(row(gig, artistName))).toList());
+    }
+
+    /** Every value of a row as itself — for the file a person downloads and opens. */
+    private static Map<Column, String> notFormulas(Map<Column, String> row) {
+        Map<Column, String> shown = new LinkedHashMap<>(row);
+        shown.replaceAll((column, value) -> notAFormula(value));
+        return shown;
     }
 
     /** New events to upload; {@code announce=false} marks every row "Do Not Announce". */
@@ -149,6 +157,25 @@ public final class BandsintownCsv {
     private static String addressPart(Gig gig, Function<Address, String> part) {
         Address address = gig.location().address();
         return address == null ? "" : nullToEmpty(part.apply(address));
+    }
+
+    /**
+     * A value a spreadsheet would run rather than show. Excel and its like treat a cell starting
+     * with {@code = + - @} or a control character as a formula, so a gig titled
+     * {@code =HYPERLINK(...)} becomes one when a colleague opens the band's downloaded CSV. A
+     * leading apostrophe is the standard answer and shows the text as it was typed.
+     *
+     * <p>Only on the DOWNLOAD path. The rows that go to Bandsintown's own bulk upload are read by
+     * the portal and not by a spreadsheet, and an apostrophe in them would end up in the published
+     * event's title.
+     */
+    static String notAFormula(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        char first = value.charAt(0);
+        return first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r'
+                ? "'" + value : value;
     }
 
     /** The header and the rows, each value under its column; a column a row leaves out is empty. */

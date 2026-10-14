@@ -6,6 +6,7 @@ import sk.drabikp.gigsynchub.accounts.domain.PlatformAccount;
 import sk.drabikp.gigsynchub.bandsintown.BandsintownAccount;
 import sk.drabikp.gigsynchub.bandsintown.BandsintownPlatform;
 import sk.drabikp.gigsynchub.bandsintown.BandsintownProperties;
+import sk.drabikp.gigsynchub.portal.PlatformEgress;
 import sk.drabikp.gigsynchub.bandsintown.BitPortalException;
 import sk.drabikp.gigsynchub.bandsintown.portal.BitEvent;
 import sk.drabikp.gigsynchub.bandsintown.portal.PortalReply;
@@ -43,10 +44,12 @@ class HttpBitSignIn implements PlatformSignIn {
 
     private final String baseUrl;
     private final Clock clock;
+    private final PlatformEgress egress;
 
     HttpBitSignIn(BandsintownProperties properties, Clock clock) {
         this.baseUrl = properties.baseUrl();
         this.clock = clock;
+        this.egress = properties.egress();
     }
 
     @Override
@@ -61,7 +64,7 @@ class HttpBitSignIn implements PlatformSignIn {
         String actorId;
         try {
             connection = BitConnection.read(typed.secret(BandsintownAccount.CONNECTION));
-            signIn = new BitSignIn(baseUrl, connection, clock);
+            signIn = new BitSignIn(baseUrl, connection, clock, egress);
             signIn.sessionToken();
             actorId = connection.actorId().isBlank()
                     ? theArtist(artists(new BitWeb(baseUrl, signIn)), typed.setting(BandsintownAccount.ARTIST_NAME))

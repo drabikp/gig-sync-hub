@@ -31,4 +31,12 @@ public interface CalendarSnapshotStore {
 
     /** When the calendar was last read, if ever. */
     Optional<Instant> lastRead(BandId band);
+
+    /**
+     * Forgets events the calendar no longer has and whose going has been seen, removed before
+     * {@code when}; answers how many went. The saved copy keeps every event a band's calendar ever
+     * held, notes included — and the notes are where fees and phone numbers live, so an event gone
+     * for half a year is a row with somebody's details in it and nothing left to decide.
+     */
+    int forgetRemovedBefore(Instant when);
 }

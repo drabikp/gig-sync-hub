@@ -63,10 +63,12 @@ class GigViews {
      * One page of the band's list. The store does the filtering, the ordering and the paging; this
      * adds each ROW's platform states, read for the page's gigs rather than the band's whole catalog.
      *
-     * <p>The two filters the gig table knows nothing about are turned into the sets it does
-     * understand first: the gigs a platform FAILED on name themselves (failed work is few), while
-     * "missing from some platform" is every gig BUT those already everywhere — so one narrows and the
-     * other excludes. Neither is read unless the band asks for it.
+     * <p>The two filters the gig table knows nothing about reach the store in the shape it can
+     * answer. The gigs a platform FAILED on name themselves (failed work is few), so they travel as
+     * a set. "Missing from some platform" does not: it used to be read as every gig that IS on all
+     * of them and sent back as a {@code not in} as long as the catalog, and it is now the number of
+     * platforms there are, counted per gig where the rows are. Neither is asked unless the band
+     * asks for it.
      */
     GigListResponse list(BandId band, GigQuery asked, Show show) {
         GigSlice slice = gigs.page(band, narrowed(band, asked, show));
@@ -88,16 +90,8 @@ class GigViews {
             case NEEDS -> asked.onlyIn(syncLog.unfinished(band).stream()
                     .filter(task -> task.status() == SyncStatus.FAILED)
                     .map(SyncTask::gigId).collect(Collectors.toSet()));
-            case PUBLISHABLE -> asked.excluding(publishedEverywhere(band)).cancelled(false);
+            case PUBLISHABLE -> asked.missingFromSome(platforms.all().size()).cancelled(false);
         };
-    }
-
-    /** The gigs that are on every platform there is — what "publishable" leaves out. */
-    private Set<GigId> publishedEverywhere(BandId band) {
-        int everywhere = platforms.all().size();
-        return publications.publicationsByGig(band).entrySet().stream()
-                .filter(gig -> gig.getValue().size() >= everywhere)
-                .map(Map.Entry::getKey).collect(Collectors.toSet());
     }
 
     private GigRowView rowView(GigRow row, Map<Platform, Publication> published, Map<Platform, SyncTask> open) {

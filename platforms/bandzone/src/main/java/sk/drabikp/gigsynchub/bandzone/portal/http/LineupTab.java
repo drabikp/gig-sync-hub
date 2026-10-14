@@ -55,6 +55,9 @@ final class LineupTab {
     private static List<String> desired(List<String> lineup, String ownBandName) {
         List<String> desired = new ArrayList<>();
         for (String name : lineup) {
+            if (name == null || name.isBlank()) {
+                continue;                                 // a lineup comes from a form and a platform's page alike
+            }
             if (!sameName(name, ownBandName) && desired.stream().noneMatch(d -> sameName(d, name))) {
                 desired.add(name.trim());
             }

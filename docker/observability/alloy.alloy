@@ -1,0 +1,57 @@
+// How the app's log lines reach Loki — by reading the FILE the app writes, and nothing else.
+//
+// The usual way is to mount the Docker socket and let the collector discover every container.
+// That is not done here: a container with the socket can do anything the daemon can, which is
+// root on the host, and this whole stack exists to watch an app rather than to be the largest
+// hole in it. The cost is that only the app's own logs reach Loki; the database's, the proxy's
+// and the sign-in's stay in `docker compose logs`, where they were. The app's are the ones with
+// the trace ids in them, which is what Grafana needs to join a log line to a trace.
+//
+// `logging.structured.format.file=ecs` writes these: one JSON object per line, rolled by Logback
+// (10 MB × 7) under ./data/logs, which this reads read-only.
+
+local.file_match "app" {
+	path_targets = [{
+		__path__     = "/app-logs/gigsynchub.json*",
+		job          = "gigsynchub",
+		service_name = "gigsynchub",
+	}]
+	sync_period = "15s"
+}
+
+loki.source.file "app" {
+	targets    = local.file_match.app.targets
+	forward_to = [loki.process.app.receiver]
+}
+
+loki.process "app" {
+	// The level becomes a label so "show me the errors" is an index lookup. The trace id does NOT:
+	// one label value per request is one stream per request, which is how Loki is made slow and
+	// expensive. It stays in the line, where Grafana's derived field finds it (see datasources).
+	stage.json {
+		expressions = {
+			level  = "log.level",
+			logger = "log.logger",
+		}
+	}
+
+	stage.labels {
+		values = {
+			level = "level",
+		}
+	}
+
+	// the app's own timestamp, not the moment Alloy happened to read the line
+	stage.timestamp {
+		source = "@timestamp"
+		format = "RFC3339Nano"
+	}
+
+	forward_to = [loki.write.loki.receiver]
+}
+
+loki.write "loki" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

@@ -1,9 +1,12 @@
 package sk.drabikp.gigsynchub;
 
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,8 +38,19 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Why enumerate rather than sample: a test that lists the methods it checks proves only what
  * someone remembered to add to the list. This one starts from the classes on the classpath, so a new
  * repository method is covered the moment it exists — which is the whole difference between "a good
- * set of tests" and a sufficient one. {@code BandIsolationContract} then proves the isolation
- * behaves; this proves nothing escapes being asked.
+ * set of tests" and a sufficient one. {@link sk.drabikp.gigsynchub.web.BandIsolationTest} then proves
+ * the isolation behaves; this proves nothing escapes being asked.
+ *
+ * <p><b>The methods a repository does not declare are checked too, and differently.</b> Everything
+ * inherited from {@code JpaRepository} — {@code findById}, {@code existsById}, {@code deleteById},
+ * {@code findAllById}, {@code getReferenceById}, {@code findAll(Sort)} — is there on every
+ * repository whether anyone calls it or not, so asking "does this method name the band" of it is
+ * meaningless. What matters is whether anything CALLS one, and with what: a key that carries the
+ * band ({@code GigEntity.Key} and its like) names the band by existing, while a bare {@code Long}
+ * does not. So those are checked at their call sites, below. Until October 2026 they were not
+ * checked at all, and the whole of {@code sync_task}'s write path went through {@code findById(long)}
+ * with nothing but a hand-written filter one layer up between a crafted task id and another band's
+ * work.
  */
 class BandScopedQueriesTest {
 
@@ -52,6 +66,14 @@ class BandScopedQueriesTest {
      */
     private static final Set<String> NOT_A_BANDS_DATA =
             Set.of("BandEntity", "MembershipEntity", "AppUserEntity", "InvitationEntity");
+
+    /**
+     * The inherited methods that reach a row, or every row, by something other than the entity
+     * itself. Where the repository's key carries the band these are harmless; where it is a bare id
+     * they are the hole this test used to have.
+     */
+    private static final Set<String> BY_ID = Set.of("findById", "existsById", "deleteById", "getReferenceById",
+            "findAllById", "deleteAllById", "getById", "getOne", "findOne");
 
     /** {@code bandId} standing in a predicate — not merely mentioned, as an {@code order by} does. */
     private static final Pattern IN_A_PREDICATE =
@@ -102,6 +124,59 @@ class BandScopedQueriesTest {
         assertThat(mute).as("@AcrossBands without a reason tells the next reader nothing").isEmpty();
     }
 
+    /**
+     * A row fetched by its id alone is fetched without its band. Where the id CARRIES the band —
+     * {@code GigEntity.Key}, {@code PublishedGigEntity.Key}, and the tables whose id simply IS the
+     * band — {@code findById} cannot cross a band and needs no further thought. Where it is a bare
+     * {@code Long} from a sequence shared by every band, it can and does: the id is guessable, and
+     * the only thing in the way is whatever the caller happens to check first.
+     *
+     * <p>So those call sites are named here, each with the band check that stands behind it. A new
+     * one fails this test, which is the point: it is the review's own finding that the whole of
+     * {@code sync_task}'s write path was reachable by id with no enumeration covering it.
+     */
+    @Test
+    @DisplayName("a row is fetched by an id that carries its band, or the caller is named here")
+    void a_row_is_fetched_by_an_id_that_carries_its_band_or_the_caller_is_named_here() {
+        Set<String> allowed = Set.of(
+                // Every method of the outbox port now TAKES the band (October 2026), so no caller can
+                // leave it out; inside, the row is fetched by primary key and refused unless its band
+                // matches — JpaSyncOutbox#get, which says why it is that way round rather than a
+                // query naming both. SyncOutboxContract proves the refusal, for this outbox and the
+                // in-memory one alike.
+                "JpaSyncOutbox",
+                // Invitations, not the audit log: save(Invitation) re-reads the invitation it was
+                // handed to stamp acceptedAt, and delete(UUID) is reached only after
+                // MembershipService#revoke has proved the invitation is this band's with of(band,
+                // id). An invitation id is a random UUID, not a number from a shared sequence.
+                "JpaAccountsStores");
+
+        List<String> byBareId = new ArrayList<>();
+        for (JavaClass caller : CLASSES) {
+            for (JavaMethodCall call : caller.getMethodCallsFromSelf()) {
+                if (!BY_ID.contains(call.getTarget().getName())
+                        || !call.getTarget().getOwner().isAssignableTo(Repository.class)) {
+                    continue;
+                }
+                Class<?> repository = call.getTarget().getOwner().reflect();
+                Class<?> entity = entityOf(repository);
+                if (entity == null || !keepsABandsRows(entity) || keyCarriesTheBand(repository, entity)) {
+                    continue;
+                }
+                if (!allowed.contains(caller.getSimpleName())) {
+                    byBareId.add(caller.getSimpleName() + " → " + repository.getSimpleName()
+                            + "." + call.getTarget().getName());
+                }
+            }
+        }
+
+        assertThat(byBareId)
+                .as("these fetch a band's row by an id that does not carry the band. Ask by band as "
+                        + "well, or — if the band really is checked somewhere the compiler cannot see "
+                        + "it — name the caller in this test and say where")
+                .isEmpty();
+    }
+
     /** The band-scoped tables we know of, so the detector above cannot quietly stop finding them. */
     @Test
     @DisplayName("the tables that keep a band's rows are the ones we think they are")
@@ -113,9 +188,14 @@ class BandScopedQueriesTest {
                 .sorted()
                 .toList();
 
-        assertThat(found).contains("GigEntity", "PublishedGigEntity", "SyncTaskEntity", "BandSettingEntity",
-                "CalendarEventEntity", "CalendarDecisionEntity", "CalendarLinkEntity", "CalendarRuleEntity",
-                "PlatformAccountEntity", "BandCalendarEntity", "BandCheckEntity", "AuditEventEntity");
+        // Exactly, not merely contains: an entity that renames its bandId field, or holds the band in
+        // a differently shaped key, would otherwise drop out of every check above and leave the suite
+        // green. What this list says is "these twelve and no others", and a thirteenth table is a
+        // decision someone has to come here and make.
+        assertThat(found).containsExactly("AuditEventEntity", "BandCalendarEntity", "BandCheckEntity",
+                "BandSettingEntity", "CalendarDecisionEntity", "CalendarEventEntity", "CalendarLinkEntity",
+                "CalendarRuleEntity", "GigEntity", "PlatformAccountEntity", "PublishedGigEntity",
+                "SyncLogEntity", "SyncTaskEntity");
     }
 
     private static List<Class<?>> repositories() {
@@ -150,6 +230,21 @@ class BandScopedQueriesTest {
 
     private static boolean hasABandId(Class<?> type) {
         return Arrays.stream(type.getDeclaredFields()).map(Field::getName).anyMatch("bandId"::equals);
+    }
+
+    /**
+     * Is the repository's id type one that cannot name a row without naming its band? Either the key
+     * carries a {@code bandId} of its own (a composite key), or the entity's id field IS the band —
+     * one row per band, as the calendar's connection and the check's result are.
+     */
+    private static boolean keyCarriesTheBand(Class<?> repository, Class<?> entity) {
+        Class<?> key = ResolvableType.forClass(repository).as(Repository.class).getGeneric(1).resolve();
+        if (key != null && hasABandId(key)) {
+            return true;
+        }
+        return Arrays.stream(entity.getDeclaredFields())
+                .filter(f -> f.isAnnotationPresent(Id.class) || f.isAnnotationPresent(EmbeddedId.class))
+                .anyMatch(f -> "bandId".equals(f.getName()));
     }
 
     private static boolean namesTheBand(Method method) {

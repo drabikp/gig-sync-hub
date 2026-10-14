@@ -69,7 +69,7 @@ interface GigMapper {
         try {
             GigCursor cursor = GigCursor.decode(after);
             return cursor == null ? query : query.from(cursor);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw new BadRequestException("That is not a page of this list — start again from the first one.");
         }
     }

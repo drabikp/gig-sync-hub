@@ -120,6 +120,10 @@ function DateField({ value, onChange, ...field }: {
 }
 
 /** New gig, an edit, or a gig from a calendar event (mode). */
+// The lineup is kept as one text of 2000 characters (V1__schema.sql), which the spec's bounds divide
+// into 20 bands of 99 — so the twenty-first is not offered rather than refused on saving.
+const LINEUP_MAX = 20;
+
 export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
   const path = useBandPath();
   const { id, eventId } = useParams();
@@ -194,7 +198,9 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
   const err = (field: string) => (problems.includes(field) ? t('form.required') : undefined);
   const addBand = () => {
     const b = band.trim();
-    if (b && !draft.lineup.includes(b)) set({ lineup: [...draft.lineup, b] });
+    if (b && !draft.lineup.includes(b) && draft.lineup.length < LINEUP_MAX) {
+      set({ lineup: [...draft.lineup, b] });
+    }
     setBand('');
   };
 
@@ -284,7 +290,7 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
         <Stack gap="md">
           <Section title={t('form.when')}>
             <TextInput label={t('form.title')} placeholder={t('form.titlePlaceholder')} value={draft.title}
-              onChange={(e) => set({ title: e.currentTarget.value })} error={err('title')} />
+              maxLength={255} onChange={(e) => set({ title: e.currentTarget.value })} error={err('title')} />
             <Group grow align="flex-start">
               <DateField label={t('form.date')} value={draft.date} error={err('date')} onChange={(date) => set({ date })} />
               <TimeField label={t('form.time')} value={draft.time} error={err('time')}
@@ -328,14 +334,14 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
                 longitude: town.longitude, country: town.country ?? draft.country, postalCode: draft.postalCode || town.postalCode })}
             />
             <TextInput label={t('form.venue')} placeholder={t('form.venuePlaceholder')} value={draft.venue ?? ''}
-              onChange={(e) => set({ venue: e.currentTarget.value })} />
+              maxLength={255} onChange={(e) => set({ venue: e.currentTarget.value })} />
             <Select label={t('form.country')} data={countries} value={draft.country} allowDeselect={false}
               onChange={(v) => set({ country: (v as Country) ?? draft.country })} />
             <Group grow align="flex-start">
               <TextInput label={t('form.street')} description={t('form.optional')} value={draft.street ?? ''}
-                onChange={(e) => set({ street: e.currentTarget.value || null })} />
+                maxLength={255} onChange={(e) => set({ street: e.currentTarget.value || null })} />
               <TextInput label={t('form.postalCode')} description={t('form.optional')} value={draft.postalCode ?? ''}
-                onChange={(e) => set({ postalCode: e.currentTarget.value || null })} />
+                maxLength={20} onChange={(e) => set({ postalCode: e.currentTarget.value || null })} />
             </Group>
           </Section>
 
@@ -355,14 +361,14 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
               )}
               <Group gap="xs" wrap="nowrap">
                 <TextInput style={{ flex: 1 }} placeholder={t('form.addBand')} aria-label={t('form.addBand')} value={band}
-                  onChange={(e) => setBand(e.currentTarget.value)}
+                  maxLength={99} onChange={(e) => setBand(e.currentTarget.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
                       addBand();
                     }
                   }} />
-                <Button variant="light" onClick={addBand}>{t('form.add')}</Button>
+                <Button variant="light" onClick={addBand} disabled={draft.lineup.length >= LINEUP_MAX}>{t('form.add')}</Button>
               </Group>
             </Stack>
             <Stack gap={6}>
@@ -371,11 +377,11 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
                 data={(['FREE', 'VOLUNTARY', 'PAID'] as EntryType[]).map((e) => ({ value: e, label: t(`entry.${e}`) }))} />
               {draft.entry === 'PAID' && (
                 <TextInput label={t('form.price')} placeholder={t('form.pricePlaceholder')} value={draft.price ?? ''}
-                  error={err('price')} onChange={(e) => set({ price: e.currentTarget.value })} />
+                  maxLength={255} error={err('price')} onChange={(e) => set({ price: e.currentTarget.value })} />
               )}
             </Stack>
             <Textarea label={t('form.description')} placeholder={t('form.descriptionPlaceholder')} autosize minRows={3}
-              value={draft.description ?? ''} onChange={(e) => set({ description: e.currentTarget.value || null })} />
+              maxLength={4000} value={draft.description ?? ''} onChange={(e) => set({ description: e.currentTarget.value || null })} />
             <UnstyledButton onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen}>
               <Group gap={6} c="brand.7">
                 <IconChevronDown size={18} style={{ transform: moreOpen ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }} />
@@ -384,9 +390,9 @@ export function GigFormPage({ mode }: { mode: 'new' | 'edit' | 'calendar' }) {
             </UnstyledButton>
             <Collapse in={moreOpen}>
               <Stack gap="md">
-                <TextInput label={t('form.ticketUrl')} type="url" value={draft.ticketUrl ?? ''} onChange={(e) => set({ ticketUrl: e.currentTarget.value || null })} />
-                <TextInput label={t('form.facebookUrl')} type="url" value={draft.facebookUrl ?? ''} onChange={(e) => set({ facebookUrl: e.currentTarget.value || null })} />
-                <TextInput label={t('form.posterUrl')} type="url" value={draft.posterUrl ?? ''} onChange={(e) => set({ posterUrl: e.currentTarget.value || null })} />
+                <TextInput label={t('form.ticketUrl')} type="url" maxLength={255} value={draft.ticketUrl ?? ''} onChange={(e) => set({ ticketUrl: e.currentTarget.value || null })} />
+                <TextInput label={t('form.facebookUrl')} type="url" maxLength={255} value={draft.facebookUrl ?? ''} onChange={(e) => set({ facebookUrl: e.currentTarget.value || null })} />
+                <TextInput label={t('form.posterUrl')} type="url" maxLength={255} value={draft.posterUrl ?? ''} onChange={(e) => set({ posterUrl: e.currentTarget.value || null })} />
               </Stack>
             </Collapse>
           </Section>

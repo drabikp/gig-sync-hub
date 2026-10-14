@@ -45,15 +45,25 @@ class AccountsServiceTest {
         assertThat(service.role(owner.id(), BandId.FIRST)).contains(Role.OWNER);
     }
 
+    /**
+     * With nobody named, nobody claims it. This used to go to whoever signed in FIRST, and
+     * gigsynchub.accounts.first-owner-email is commented out by default, so that was the default:
+     * band #1 is the band migration V2 gave every pre-existing row — its whole gig history, and
+     * after adoption the way back in to every platform it was connected to — and any member of the
+     * sign-in's group who reached a fresh deployment first acquired all of it. Once, with nothing
+     * to undo it, because the lastOwner rule then keeps the band from becoming ownerless again. A
+     * one-shot land grab at install time is not a thing to leave to who clicks first.
+     */
     @Test
-    void without_a_named_owner_the_first_to_sign_in_owns_the_first_band_and_only_they() {
+    void with_no_owner_named_nobody_claims_the_first_band() {
         AccountsService service = AccountsFakes.service(login, stores, "");
 
         User first = signIn(service, "sub-1", "a@band.test");
         User second = signIn(service, "sub-2", "b@band.test");
 
-        assertThat(service.role(first.id(), BandId.FIRST)).contains(Role.OWNER);
+        assertThat(service.role(first.id(), BandId.FIRST)).as("not even the first to arrive").isEmpty();
         assertThat(service.role(second.id(), BandId.FIRST)).isEmpty();
+        assertThat(service.myBands(first.id())).as("they sign in and have no band, which is the point").isEmpty();
     }
 
     @Test

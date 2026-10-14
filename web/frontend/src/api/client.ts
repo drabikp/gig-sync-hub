@@ -62,7 +62,12 @@ async function apiFetch(request: Request, retried = false): Promise<Response> {
   const again = changes && !retried ? request.clone() : null;
   if (changes) request.headers.set('X-XSRF-TOKEN', await csrfToken(retried));
   const response = await fetch(request);
-  if (response.status === 403 && again) return apiFetch(again, true);
+  // Only a CSRF refusal: Spring answers 403 with no problem body for a stale token, while the
+  // app's own refusals are 409/404/400/429. Replaying ANY 403 would mean that the day an
+  // endpoint answers 403 for "you may not", the page would quietly do the change twice.
+  if (response.status === 403 && again && !response.headers.get('content-type')?.includes('json')) {
+    return apiFetch(again, true);
+  }
   if (response.status === 401) {
     if (!new URL(request.url).pathname.startsWith('/api/auth/')) onUnauthorized();
     throw await problem(response);

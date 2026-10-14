@@ -152,6 +152,8 @@ components:
       properties:
         platform:
           type: string
+          maxLength: 40
         gig:
           description: The gig's token.
           type: string
+          maxLength: 100

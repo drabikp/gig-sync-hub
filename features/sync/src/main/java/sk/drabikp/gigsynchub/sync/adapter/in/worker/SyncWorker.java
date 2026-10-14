@@ -1,5 +1,7 @@
 package sk.drabikp.gigsynchub.sync.adapter.in.worker;
 
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +36,7 @@ class SyncWorker {
 
     private final DispatchSyncUseCase dispatcher;
     private final SyncWorkSignal workSignal;
+    private final ObservationRegistry observations;
     private final boolean enabled;
     private final int threads;
     private final long pollSeconds;
@@ -46,9 +49,11 @@ class SyncWorker {
     /** Workers draining right now (at most {@link #threads}). */
     private final AtomicInteger draining = new AtomicInteger();
 
-    public SyncWorker(DispatchSyncUseCase dispatcher, SyncWorkSignal workSignal, SyncProperties properties) {
+    public SyncWorker(DispatchSyncUseCase dispatcher, SyncWorkSignal workSignal, SyncProperties properties,
+                      ObservationRegistry observations) {
         this.dispatcher = dispatcher;
         this.workSignal = workSignal;
+        this.observations = observations;
         this.enabled = properties.worker().enabled();
         this.threads = properties.worker().threads();
         this.pollSeconds = properties.pollSeconds();
@@ -76,9 +81,22 @@ class SyncWorker {
                 draining.decrementAndGet();
             }
             wake();
-            ticker.scheduleWithFixedDelay(this::wake, pollSeconds, pollSeconds, TimeUnit.SECONDS);
+            ticker.scheduleWithFixedDelay(this::tick, pollSeconds, pollSeconds, TimeUnit.SECONDS);
             workSignal.onWork(this::wake);              // work queued before now is drained by this first wake
         });
+    }
+
+    /**
+     * Time passed: settle anything left RUNNING that no worker is holding, then drain. The reaping
+     * is on this thread and not a worker's, so a worker is never kept from its own work by it.
+     */
+    private void tick() {
+        try {
+            dispatcher.reapStranded();
+        } catch (RuntimeException e) {
+            log.error("Settling stranded sync tasks failed", e);
+        }
+        wake();
     }
 
     /** New work was queued (or time passed): every idle worker drains. */
@@ -101,7 +119,14 @@ class SyncWorker {
 
     private void drain() {
         try {
-            while (!Thread.currentThread().isInterrupted() && dispatcher.runNext()) {
+            // One span per WORKLOAD, which is the unit this app does work in: a band's work of one
+            // action on one platform, taken through its workflow. Nothing else can make this span —
+            // a worker thread is not a request, so no framework is watching — and without it the
+            // calls to the platform underneath (PortalCall) are spans with no parent, which is a
+            // list of HTTP calls rather than the story of a publish.
+            while (!Thread.currentThread().isInterrupted()
+                    && Boolean.TRUE.equals(Observation.createNotStarted("sync.workload", observations)
+                            .observe(dispatcher::runNext))) {
                 // one workload per round
             }
         } catch (RuntimeException e) {

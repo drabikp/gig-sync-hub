@@ -1,10 +1,13 @@
 package sk.drabikp.gigsynchub.gig.adapter.out.persistence;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import sk.drabikp.gigsynchub.gig.domain.GigId;
+import sk.drabikp.gigsynchub.gig.domain.TestBands;
 import sk.drabikp.gigsynchub.gig.domain.TestGigs;
 import sk.drabikp.gigsynchub.gig.domain.platform.Publication;
 import sk.drabikp.gigsynchub.gig.domain.platform.TestPlatforms;
@@ -20,8 +23,23 @@ class JpaPublishedGigStoreTest {
     @Autowired
     private JpaPublishedGigStore store;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     private final GigId klub = TestGigs.gig("A", "Klub 007").id();
     private final GigId barrak = TestGigs.gig("A", "Barrák").id();
+
+    /**
+     * The second band, which {@code published_gig_band} insists exists before a row may name it. Made
+     * here rather than relied upon: the test database has only the first band, and a class that waits
+     * for a sibling to leave the row behind passes or fails on the order the classes happen to run in
+     * — which is how this one passed on a developer's machine for weeks and failed on the first CI run
+     * that put it first.
+     */
+    @BeforeEach
+    void anotherBand() {
+        jdbc.update(TestBands.INSERT_OTHER);
+    }
 
     @Test
     void records_and_reads_back_a_published_gig_per_platform() {
