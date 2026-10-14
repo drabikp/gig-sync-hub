@@ -1,0 +1,44 @@
+# Dependabot opens the pull requests; nothing in GitHub merges them. This does, for the updates
+# where reading the diff teaches you nothing a green build hasn't already told you: patch and minor.
+#
+# A major version is left alone on purpose. Semver says a major MAY break you, and the two that
+# matter most here say nothing about this project's own build: frontend-maven-plugin fetches the
+# page's Node (it has broken a build in this repository once already) and apache-maven is the
+# wrapper that builds everything. Those want a person.
+#
+# What makes this safe is not this file — it is that `test` is a required check on master, so
+# `--auto` queues the merge and GitHub only performs it once the whole suite has passed against
+# the updated dependency. Take that requirement away and this becomes a robot merging blind.
+name: dependabot auto-merge
+
+on: pull_request
+
+# Read-only is the default for a run Dependabot triggers, and these two are what the merge needs.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      # What kind of update this is; the pull request's title is not a thing to parse.
+      - id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Queue the merge once the build is green
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Say why a major was left
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        run: |
+          echo "::notice::${{ steps.metadata.outputs.dependency-names }} is a major version bump — merge it by hand."
