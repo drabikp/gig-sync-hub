@@ -309,4 +309,8 @@ What that means in practice:
   them — I hold the copyright, so ask me. That conversation is possible precisely because the default
   here isn't permissive.
 
-The source of this program is at **https://github.com/drabikp/gig-sync-hub**.
+The source of this program is at **https://github.com/drabikp/gig-sync-hub**, and the running app
+offers that link itself under **Settings → About** — §13 entitles everyone using an instance over a
+network to the source it actually runs on. **If you modify this and run it for other people, point
+`web/frontend/src/lib/source.ts` at your own source**; leaving it as it is would send your users to
+code that isn't what they're using, which is the one thing that clause exists to prevent.

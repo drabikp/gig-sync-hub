@@ -264,6 +264,10 @@ export const sk = {
     platforms: 'Platformy', working: 'Funguje', heldBack: 'Pozastavená', sync: 'Synchronizácia', account: 'Účet',
     signedInAs: 'Prihlásený ako {{name}}', signOut: 'Odhlásiť sa',
     timeFormat: 'Formát času', time24: '24-hodinový (20:30)', time12: '12-hodinový (8:30 PM)',
+    about: 'O aplikácii',
+    licence: 'GigSyncHub je slobodný softvér, pod licenciou GNU Affero General Public License, verzia 3 alebo novšia.',
+    source: 'Zdrojový kód',
+    sourceHelp: 'Licencia dáva každému, kto tento server používa, právo na zdrojový kód, na ktorom beží.',
   },
   more: {
     installTitle: 'Pridaj si Gig sync hub na plochu', installText: 'Otvoríš ho jedným ťuknutím, na celú obrazovku, ako aplikáciu.',

@@ -257,6 +257,10 @@ export const en = {
     platforms: 'Platforms', working: 'Working', heldBack: 'Paused', sync: 'Sync', account: 'Account',
     signedInAs: 'Signed in as {{name}}', signOut: 'Sign out',
     timeFormat: 'Time format', time24: '24-hour (20:30)', time12: '12-hour (8:30 PM)',
+    about: 'About',
+    licence: 'GigSyncHub is free software, under the GNU Affero General Public License, version 3 or later.',
+    source: 'Source code',
+    sourceHelp: 'The licence gives everyone who uses this server the right to the source it runs on.',
   },
   more: {
     installTitle: 'Put Gig sync hub on your home screen', installText: 'Open it with one tap, full screen, like an app.',
