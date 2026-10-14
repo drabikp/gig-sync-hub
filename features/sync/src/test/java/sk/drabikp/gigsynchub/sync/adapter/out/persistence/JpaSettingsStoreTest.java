@@ -1,9 +1,12 @@
 package sk.drabikp.gigsynchub.sync.adapter.out.persistence;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import sk.drabikp.gigsynchub.gig.domain.TestBands;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static sk.drabikp.gigsynchub.gig.domain.TestBands.BAND;
@@ -15,6 +18,15 @@ class JpaSettingsStoreTest {
 
     @Autowired
     private JpaSettingsStore settings;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    /** The second band: {@code band_setting.band_id} references it, so it has to exist here. */
+    @BeforeEach
+    void anotherBand() {
+        jdbc.update(TestBands.INSERT_OTHER);
+    }
 
     @Test
     void keeps_replaces_and_removes_a_setting() {
