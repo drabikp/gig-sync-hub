@@ -279,5 +279,34 @@ that stops being true — including the rule that no feature's source may so muc
 
 ## Licence
 
-Not decided yet, so no rights are granted: all rights reserved. If you'd like to use any of this,
-ask.
+**GNU Affero General Public License, version 3 or later** — see [LICENSE](LICENSE).
+
+```
+GigSyncHub — a self-hosted hub for a band's concerts
+Copyright (C) 2026 Peter Drabik
+
+This program is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+```
+
+What that means in practice:
+
+- **Running it for your own band, or for your own bands: do whatever you like.** Use it, change it,
+  keep your changes to yourself. The licence asks nothing of you.
+- **Handing a copy to someone else, changed or not:** pass this licence and the source on with it.
+- **Running a changed version as a service other people use:** those people must be able to get your
+  changed source. That's the Affero part (§13), and it's the whole reason this licence rather than the
+  plain GPL — for server software the GPL has a gap you can drive a product through.
+- **Want to build something closed on top of it?** Then you want different terms, and I can grant
+  them — I hold the copyright, so ask me. That conversation is possible precisely because the default
+  here isn't permissive.
+
+The source of this program is at **https://github.com/drabikp/gig-sync-hub**.

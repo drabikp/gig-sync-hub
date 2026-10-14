@@ -14,6 +14,13 @@
 	<packaging>pom</packaging>
 	<name>gigsynchub</name>
 	<description>Gig sync hub: one band's gig catalog, kept in sync with listing platforms.</description>
+	<licenses>
+		<license>
+			<name>GNU Affero General Public License v3.0 or later</name>
+			<url>https://www.gnu.org/licenses/agpl-3.0.txt</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
 
 	<!-- Vertical slices: one module per feature (features/), each with its own domain, application
 	     (use cases + ports) and adapters; gig is the shared kernel. Platforms plug into the features'
