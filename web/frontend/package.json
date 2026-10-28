@@ -20,7 +20,7 @@
     "@mantine/hooks": "^9.7.3",
     "@mantine/notifications": "^9.7.3",
     "@tabler/icons-react": "^3.49.0",
-    "@tanstack/react-query": "^5.104.1",
+    "@tanstack/react-query": "^5.104.5",
     "dayjs": "^1.11.23",
     "i18next": "^26.4.4",
     "openapi-fetch": "^0.17.0",
