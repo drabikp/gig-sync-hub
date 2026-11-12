@@ -39,7 +39,7 @@ jobs:
       # The page's Node is fetched into web/frontend/node by the build itself (frontend-maven-plugin),
       # so there is no setup-node here; this only keeps it and npm's cache between runs.
       - name: Cache the page's Node and modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             web/frontend/node
