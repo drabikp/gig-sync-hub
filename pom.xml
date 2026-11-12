@@ -212,7 +212,7 @@
 					<plugin>
 						<groupId>org.owasp</groupId>
 						<artifactId>dependency-check-maven</artifactId>
-						<version>12.1.3</version>
+						<version>13.0.0</version>
 						<configuration>
 							<nvdApiKey>${env.GIGSYNCHUB_NVD_API_KEY}</nvdApiKey>
 							<!-- 7.0 is "high": below that is a reading list, not a finding -->
