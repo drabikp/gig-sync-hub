@@ -3,8 +3,6 @@ package sk.drabikp.gigsynchub.bandzone.portal.http;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import sk.drabikp.gigsynchub.accounts.application.AccountsFakes;
 import sk.drabikp.gigsynchub.bandzone.BandzonePlatform;
 import sk.drabikp.gigsynchub.bandzone.BandzonePortalException;
@@ -31,8 +29,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The HTTP client against a stand-in that talks as Bandzone's pages do ({@link BandzoneHttpFixture}):
- * every operation of a session, the login and its reuse, and the cases that need the user.
+ * The HTTP client against a stand-in that talks as Bandzone's pages do since the redesign
+ * ({@link BandzoneHttpFixture}): every operation of a session, the sign-in and its reuse, and the cases
+ * that need the user.
  */
 class HttpBandzonePortalClientTest {
 
@@ -46,7 +45,7 @@ class HttpBandzonePortalClientTest {
     @BeforeEach
     void setUp() throws IOException {
         bandzone = new BandzoneHttpFixture();
-        client = client(BandzoneHttpFixture.PASSWORD);
+        client = client(Map.of("password", BandzoneHttpFixture.PASSWORD));
     }
 
     @AfterEach
@@ -66,41 +65,47 @@ class HttpBandzonePortalClientTest {
         try (BandzoneSession session = client.openSession(BandId.FIRST)) {
             assertThat(session.bandName()).isEqualTo(BandzoneHttpFixture.BAND_NAME);
             String id = session.createGig(gig);
-            BandzoneHttpFixture.Concert concert = bandzone.concerts.get(id);
-            assertThat(concert.value("name")).isEqualTo("Release show");
-            assertThat(concert.value("cityId")).isEqualTo("4109");
+            BandzoneHttpFixture.Concert concert = bandzone.concerts.get(Long.parseLong(id));
+            assertThat(concert.title).isEqualTo("Release show");
+            assertThat(concert.cityId).isEqualTo(4109L);
+            assertThat(concert.dateFrom).as("Prague's wall clock, marked UTC").isEqualTo("2026-11-12T20:00:00.000Z");
+            assertThat(concert.bands).as("the band itself performs").containsOnlyKeys(BandzoneHttpFixture.BAND_ID);
+            assertThat(concert.ticketsKind).isEqualTo("paid");
+            assertThat(concert.ticketRows.get(0).path("price").asString()).isEqualTo("200");
 
             session.updateGig(id, gig);
-            assertThat(concert.poster).as("the poster uploaded").isNotNull();
-            assertThat(concert.value("venueId")).as("the club linked").isEqualTo("125");
-            assertThat(concert.value("end[date]")).isEqualTo("13.11.2026");
-            assertThat(concert.value("info")).isEqualTo("first line\nsecond line");
-            assertThat(concert.performers).extracting(p -> p[2])
-                    .containsExactly(BandzoneHttpFixture.BAND_NAME, "Incertus Posterus", "Stubby");
-            assertThat(concert.performers).extracting(p -> p[1]).as("another concert's profile-less band never linked")
-                    .doesNotContain("999");
+            assertThat(concert.coverBlobId).as("the poster uploaded and set").isNotNull();
+            assertThat(concert.venueId).as("the club linked").isEqualTo(125L);
+            assertThat(concert.dateUntil).isEqualTo("2026-11-13T01:00:00.000Z");
+            assertThat(concert.description).isEqualTo("first line\nsecond line");
+            assertThat(concert.facebookUrl).isEqualTo("https://www.facebook.com/events/1");
+            assertThat(concert.bands.values()).containsExactlyInAnyOrder(BandzoneHttpFixture.BAND_NAME, "Incertus Posterus");
+            assertThat(concert.guests.values()).as("a profile that only starts alike is never linked")
+                    .containsExactly("Stubby");
 
-            bandzone.dialogsRedirect = true;        // the concert's address changed with its name and place
             session.updateGig(id, edited);
-            assertThat(concert.value("cityId")).as("the Hranice in okres Přerov, of three").isEqualTo("1603");
-            assertThat(concert.value("venueId")).as("a club Bandzone doesn't know: free text").isEmpty();
-            assertThat(concert.value("venueId__container[textInput]")).isEqualTo("Garáž u Nováků");
-            assertThat(concert.value("entryType")).isEqualTo("1");
-            assertThat(concert.performers).extracting(p -> p[2])
-                    .containsExactly(BandzoneHttpFixture.BAND_NAME, "Incertus Posterus");
+            assertThat(concert.cityId).as("the Hranice in okres Přerov, of three").isEqualTo(1603L);
+            assertThat(concert.venueId).as("a club Bandzone doesn't know: typed").isNull();
+            assertThat(concert.venueText).isEqualTo("Garáž u Nováků");
+            assertThat(concert.dateUntil).as("the end cleared").isNull();
+            assertThat(concert.facebookUrl).isNull();
+            assertThat(concert.ticketsKind).isEqualTo("voluntary");
+            assertThat(concert.performers()).containsExactlyInAnyOrder(BandzoneHttpFixture.BAND_NAME, "Incertus Posterus");
 
             session.cancelGig(id);
-            assertThat(concert.cancelled).isTrue();
+            assertThat(concert.statusId).isEqualTo(3);
+            session.reactivateGig(id);
+            assertThat(concert.statusId).as("public again, in place").isEqualTo(2);
+            assertThat(bandzone.concerts).hasSize(1);
+            session.cancelGig(id);
             assertThat(session.deleteGig(id)).isTrue();
             assertThat(concert.deleted).isTrue();
             assertThat(session.deleteGig(id)).as("already gone").isFalse();
         }
-        assertThat(bandzone.posts).as("one button per form sent")
-                .noneMatch(p -> p.getValue().containsKey("cancelGig") && p.getValue().containsKey("delete"));
     }
 
     @Test
-    void the_login_is_reused_until_bandzone_ends_it() throws Exception {
+    void the_sign_in_is_reused_until_bandzone_ends_it() throws Exception {
         try (BandzoneSession first = client.openSession(BandId.FIRST)) {
             first.bandName();
         }
@@ -111,12 +116,36 @@ class HttpBandzonePortalClientTest {
     }
 
     @Test
-    void a_refused_login_needs_the_user_and_is_not_retried() {
-        assertThatThrownBy(() -> client("wrong").openSession(BandId.FIRST))
+    void a_refused_sign_in_needs_the_user_and_is_not_retried() {
+        assertThatThrownBy(() -> client(Map.of("password", "wrong")).openSession(BandId.FIRST))
                 .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
                     assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER);
                     assertThat(e.getMessage()).doesNotContain("wrong");
                 });
+        assertThat(bandzone.calls).filteredOn(c -> c[1].equals("/api/auth/login")).hasSize(1);
+    }
+
+    /** A session kept before the redesign (Nette's cookies) is nothing to the new site: the band connects again. */
+    @Test
+    void a_session_bandzone_no_longer_knows_needs_the_band_to_connect_again() {
+        assertThatThrownBy(() -> client(Map.of("session", "SID=old; permaLogin=older")).openSession(BandId.FIRST))
+                .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
+                    assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER);
+                    assertThat(e.getMessage()).contains("connect Bandzone again");
+                });
+        assertThat(bandzone.logins).hasValue(0);
+    }
+
+    @Test
+    void a_login_that_doesnt_manage_the_band_needs_the_user() throws Exception {
+        bandzone.managed = List.of(4242L);
+        try (BandzoneSession session = client.openSession(BandId.FIRST)) {
+            assertThatThrownBy(session::bandName)
+                    .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
+                        assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER);
+                        assertThat(e.getMessage()).contains("doesn't manage the band '" + BandzoneHttpFixture.SLUG + "'");
+                    });
+        }
     }
 
     @Test
@@ -133,6 +162,56 @@ class HttpBandzonePortalClientTest {
         assertThat(bandzone.concerts).isEmpty();
     }
 
+    /** The redesigned form searches Czech towns only — a Slovak town is the user's to handle, not a retry. */
+    @Test
+    void a_slovak_town_needs_the_user_since_bandzone_takes_czech_towns_only() throws Exception {
+        Gig slovak = new Gig(GigId.fresh(), "Košice show", GigSchedule.startingAt(at(2026, 11, 20, 20, 0)),
+                new Location("Collosseum", "Košice", Country.SLOVAKIA), List.of(), Admission.free(), null, null, null,
+                null, false);
+        try (BandzoneSession session = client.openSession(BandId.FIRST)) {
+            assertThatThrownBy(() -> session.createGig(slovak))
+                    .isInstanceOfSatisfying(BandzonePortalException.class, e -> {
+                        assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER);
+                        assertThat(e.getMessage()).contains("only Czech towns");
+                    });
+        }
+        assertThat(bandzone.concerts).isEmpty();
+    }
+
+    /** Bandzone wants a club or a typed place since the redesign; a gig without one says "-", which is none. */
+    @Test
+    void a_gig_without_a_venue_is_placed_as_none_and_free_entry_stays_free() throws Exception {
+        Gig gig = new Gig(GigId.fresh(), "Club night", GigSchedule.startingAt(at(2026, 12, 1, 21, 0)),
+                new Location(null, "Praha", Country.CZECHIA), List.of(), Admission.free(), null, null, null, null, false);
+        try (BandzoneSession session = client.openSession(BandId.FIRST)) {
+            String id = session.createGig(gig);
+            session.updateGig(id, gig);
+            BandzoneHttpFixture.Concert concert = bandzone.concerts.get(Long.parseLong(id));
+            assertThat(concert.venueText).isEqualTo("-");
+            assertThat(concert.venueId).isNull();
+            assertThat(concert.ticketsKind).isEqualTo("free");
+            assertThat(concert.title).isEqualTo("Club night");
+        }
+    }
+
+    /** What Bandzone won't bring back is refused, so the workflow removes it and creates it again instead. */
+    @Test
+    void a_concert_gone_or_played_is_refused_reactivation_and_nothing_is_sent() throws Exception {
+        Gig gig = new Gig(GigId.fresh(), "Played", GigSchedule.startingAt(at(2026, 12, 1, 21, 0)),
+                new Location(null, "Praha", Country.CZECHIA), List.of(), Admission.free(), null, null, null, null, false);
+        try (BandzoneSession session = client.openSession(BandId.FIRST)) {
+            String id = session.createGig(gig);
+            bandzone.concerts.get(Long.parseLong(id)).statusId = 7;
+            assertThatThrownBy(() -> session.reactivateGig(id))
+                    .isInstanceOfSatisfying(BandzonePortalException.class,
+                            e -> assertThat(e.kind()).isEqualTo(FailureKind.REFUSED));
+            assertThatThrownBy(() -> session.reactivateGig("123"))
+                    .isInstanceOfSatisfying(BandzonePortalException.class,
+                            e -> assertThat(e.kind()).isEqualTo(FailureKind.REFUSED));
+        }
+        assertThat(bandzone.calls).noneMatch(c -> c[1].endsWith("/status"));
+    }
+
     @Test
     void a_concert_gone_from_bandzone_is_deleted_already_and_cant_be_cancelled() throws Exception {
         try (BandzoneSession session = client.openSession(BandId.FIRST)) {
@@ -141,31 +220,13 @@ class HttpBandzonePortalClientTest {
                     .isInstanceOfSatisfying(BandzonePortalException.class,
                             e -> assertThat(e.kind()).isEqualTo(FailureKind.NEEDS_USER));
         }
+        assertThat(bandzone.calls).as("nothing deleted blind").noneMatch(c -> c[0].equals("DELETE"));
     }
 
-    /**
-     * The wizard's middle is read from the page, not from its address: Bandzone sends us to its
-     * "similar concerts" address even when it has nothing to ask and serves the info step there.
-     * Taking the address at its word cost a publish (live 2026-10-11), so each shape gets a test.
-     */
-    @ParameterizedTest
-    @EnumSource(BandzoneHttpFixture.AfterStepOne.class)
-    void creates_however_the_wizard_leads_from_its_first_step(BandzoneHttpFixture.AfterStepOne shape) throws Exception {
-        bandzone.afterStepOne = shape;
-        Gig gig = new Gig(GigId.fresh(), "Club night", GigSchedule.startingAt(at(2026, 12, 1, 21, 0)),
-                new Location(null, "Praha", Country.CZECHIA), List.of(), Admission.free(), null, null, null, null, false);
-        try (BandzoneSession session = client.openSession(BandId.FIRST)) {
-            String id = session.createGig(gig);
-            assertThat(bandzone.concerts.get(id).value("entryType")).isEqualTo("2");
-            assertThat(bandzone.concerts.get(id).value("name")).isEqualTo("Club night");
-        }
-    }
-
-    private HttpBandzonePortalClient client(String password) {
-        return new HttpBandzonePortalClient(bandzone.baseUrl(),
+    private HttpBandzonePortalClient client(Map<String, String> secrets) {
+        return new HttpBandzonePortalClient(bandzone.baseUrl(), bandzone.baseUrl(),
                 new AccountsFakes.Accounts().with(BandId.FIRST, BandzonePlatform.PLATFORM,
-                        Map.of("login", BandzoneHttpFixture.LOGIN, "bandSlug", BandzoneHttpFixture.SLUG),
-                        Map.of("password", password)),
+                        Map.of("login", BandzoneHttpFixture.LOGIN, "bandSlug", BandzoneHttpFixture.SLUG), secrets),
                 new PosterDownloader(Duration.ofSeconds(5), Duration.ofSeconds(5), false));
     }
 

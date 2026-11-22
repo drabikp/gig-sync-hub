@@ -352,6 +352,43 @@ class WorkflowEngineTest {
     }
 
     @Test
+    void a_platform_that_can_un_cancel_brings_the_copy_back_in_place_and_keeps_its_id() {
+        SyncFakes.Step bzUncancel = new SyncFakes.Step(BANDZONE, StepType.UNCANCEL, 1);
+        Gig a = upcoming("A");
+        gigs.save(BAND, a);
+        published.record(BAND, BANDZONE, a.id(), "100");
+        SyncTask task = queue(a, BANDZONE, SyncAction.REACTIVATE);
+
+        runAll(engine(bzUncancel, bzRemove, bzCreate));
+
+        assertThat(bzUncancel.ran()).extracting(SyncStep.Item::externalRef).containsExactly("100");
+        assertThat(bzRemove.ran()).isEmpty();
+        assertThat(bzCreate.ran()).isEmpty();
+        assertThat(published.externalRef(BAND, BANDZONE, a.id())).contains("100");
+        assertThat(after(task).status()).isEqualTo(SyncStatus.DONE);
+        assertThat(after(task).message()).isEqualTo("un-cancel");
+    }
+
+    @Test
+    void a_copy_the_platform_wont_un_cancel_is_removed_and_created_again() {
+        SyncFakes.Step bzUncancel = new SyncFakes.Step(BANDZONE, StepType.UNCANCEL, 1);
+        bzUncancel.outcome = item -> StepOutcome.refused("the concert was already played");
+        bzCreate.outcome = item -> StepOutcome.created("300", null);
+        Gig a = upcoming("A");
+        gigs.save(BAND, a);
+        published.record(BAND, BANDZONE, a.id(), "100");
+        SyncTask task = queue(a, BANDZONE, SyncAction.REACTIVATE);
+
+        runAll(engine(bzUncancel, bzRemove, bzCreate));
+
+        assertThat(bzRemove.ran()).extracting(SyncStep.Item::externalRef).containsExactly("100");
+        assertThat(published.externalRef(BAND, BANDZONE, a.id())).contains("300");
+        assertThat(after(task).status()).isEqualTo(SyncStatus.DONE);
+        assertThat(outbox.log(task.band(), task.id())).extracting(SyncLogEntry::message).anySatisfy(m ->
+                assertThat(m).contains("the concert was already played", "→ remove and create again"));
+    }
+
+    @Test
     void a_failed_recreate_leaves_no_record_so_the_next_publish_creates_it() {
         Gig a = upcoming("A");
         gigs.save(BAND, a);

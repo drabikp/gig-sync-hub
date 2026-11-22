@@ -26,9 +26,12 @@ public enum StepType {
     REMOVE(SyncAction.DELETE, "remove"),
     /** Remove one event through its own form (e.g. a past event, which the platform's list can't reach). */
     FORM_REMOVE(SyncAction.DELETE, "remove in the form"),
+    /** Bring a cancelled event back in place: the platform marks it not cancelled again, keeping its id. */
+    UNCANCEL(SyncAction.REACTIVATE, "un-cancel"),
     /**
-     * Bring a cancelled event back: remove the cancelled copy and create it again (for a
-     * platform that can't un-cancel). The engine builds it from the platform's remove and create steps.
+     * Bring a cancelled event back: remove the cancelled copy and create it again (for a platform
+     * that can't un-cancel, or a copy it won't un-cancel). The engine builds it from the platform's
+     * remove and create steps.
      */
     RECREATE(SyncAction.REACTIVATE, "remove and create again");
 

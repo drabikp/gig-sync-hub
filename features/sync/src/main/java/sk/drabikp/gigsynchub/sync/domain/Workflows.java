@@ -20,7 +20,7 @@ public final class Workflows {
             SyncAction.UPDATE, List.of(StepType.BULK_EDIT, StepType.FORM_EDIT),
             SyncAction.CANCEL, List.of(StepType.CANCEL, StepType.FORM_CANCEL),
             SyncAction.DELETE, List.of(StepType.REMOVE, StepType.FORM_REMOVE),
-            SyncAction.REACTIVATE, List.of(StepType.RECREATE)));
+            SyncAction.REACTIVATE, List.of(StepType.UNCANCEL, StepType.RECREATE)));
 
     static {
         for (SyncAction action : SyncAction.values()) {

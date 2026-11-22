@@ -1,45 +1,43 @@
 package sk.drabikp.gigsynchub.bandzone.scrape;
 
-import org.jsoup.HttpStatusException;
 import org.jsoup.Connection;
+import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 import sk.drabikp.gigsynchub.bandzone.BandzonePortalException;
 import sk.drabikp.gigsynchub.bandzone.BandzoneProperties;
+import sk.drabikp.gigsynchub.bandzone.portal.BandzonePageData;
 import sk.drabikp.gigsynchub.portal.PlatformEgress;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.net.PasswordAuthentication;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 /**
- * Reads a band's public page on Bandzone ({@code gigsynchub.bandzone.base-url}): the year tabs it
- * lists, then every year's gig articles and the planned ones, all at once. Each page has
- * {@link #PAGE_TIMEOUT}, the whole read {@link #READ_TIMEOUT}.
+ * Reads a band's gigs from its public page on Bandzone ({@code gigsynchub.bandzone.base-url}). Since the
+ * redesign (2026-11-22) the page carries every gig it can show as data ({@link BandzonePageData}): the
+ * planned ones and the played ones, with how many were played each year. Should the played ones it carries
+ * fall short of those counts, the rest are read from the archive the page's "show more" reads
+ * ({@code /api/band/gigs-archive}), a page at a time. Each request has {@link #PAGE_TIMEOUT}.
  */
 @Component
 class BandzoneHtmlFetcher {
 
-    /** Pseudo-year for the band's "Plánované koncerty" (planned gigs) tab. */
-    private static final String UPCOMING = "upcoming";
     private static final Duration PAGE_TIMEOUT = Duration.ofSeconds(20);
-    private static final Duration READ_TIMEOUT = Duration.ofSeconds(60);
+    /** The archive's own largest page (it answers 50 when asked for more). */
+    private static final int ARCHIVE_PAGE = 50;
+    /** However many years a band has played, its archive ends: this many pages is a page that loops. */
+    private static final int ARCHIVE_PAGES_AT_MOST = 200;
     private static final Logger logger = LoggerFactory.getLogger(BandzoneHtmlFetcher.class);
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final String baseUrl;
     private final PlatformEgress egress;
@@ -49,11 +47,11 @@ class BandzoneHtmlFetcher {
         this.egress = properties.egress();
     }
 
-    Elements fetchAllGigs(String bandSlug) throws BandzonePortalException {
-        Document document;
+    /** Every gig the band's page knows, planned first, each as the page's own data has it. */
+    List<JsonNode> fetchAllGigs(String bandSlug) throws BandzonePortalException {
+        String page;
         try {
-            document = get(UriComponentsBuilder.fromUriString(baseUrl).pathSegment(bandSlug)
-                    .queryParam("at", "gig").queryParam("gy", "0").build().toUriString());
+            page = get(UriComponentsBuilder.fromUriString(baseUrl).pathSegment(bandSlug).build().toUriString());
         } catch (HttpStatusException e) {
             if (e.getStatusCode() == 404) {
                 throw BandzonePortalException.needsUser("Bandzone has no band '" + bandSlug
@@ -63,58 +61,56 @@ class BandzoneHtmlFetcher {
         } catch (IOException e) {
             throw BandzonePortalException.temporary("Could not read Bandzone: " + e.getMessage(), e);
         }
+        JsonNode gigs = BandzonePageData.of(page).object("gigs", "{\"upcoming\"").orElseThrow(() ->
+                BandzonePortalException.temporary("Bandzone's page of '" + bandSlug + "' carries no gigs — has "
+                        + "Bandzone changed its pages?"));
 
-        // the year tabs list played gigs only; planned ones are on the separate "upcoming" tab
-        List<String> pages = new ArrayList<>(parseYears(document));
-        pages.add(UPCOMING);
-        List<Callable<Elements>> reads = pages.stream()
-                .<Callable<Elements>>map(year -> () -> getArticlesForYear(bandSlug, year))
-                .toList();
-
-        Elements articles = new Elements();
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<Elements>> read = executor.invokeAll(reads, READ_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
-            for (Future<Elements> year : read) {
-                articles.addAll(year.get());
-            }
-        } catch (InterruptedException _) {
-            Thread.currentThread().interrupt();
-            throw BandzonePortalException.busy("Interrupted while reading Bandzone.");
-        } catch (CancellationException e) {
-            throw BandzonePortalException.temporary("Bandzone did not give the band's gigs within "
-                    + READ_TIMEOUT.toSeconds() + " s.", e);
-        } catch (ExecutionException e) {
-            throw BandzonePortalException.temporary("Could not read a year of Bandzone gigs: "
-                    + e.getCause().getMessage(), e.getCause());
+        List<JsonNode> all = new ArrayList<>();
+        gigs.path("upcoming").forEach(all::add);
+        List<JsonNode> past = new ArrayList<>();
+        gigs.path("past").forEach(past::add);
+        int played = 0;
+        for (JsonNode year : gigs.path("countsByYear")) {
+            played += year.path("count").asInt();
         }
-        return articles;
+        if (past.size() < played) {
+            logger.debug("The page of '{}' carries {} of its {} played gigs; reading the archive", bandSlug,
+                    past.size(), played);
+            past = archive(bandSlug, played);
+        }
+        all.addAll(past);
+        return all;
     }
 
-    private List<String> parseYears(Document document) {
-        Element tabs = document.selectFirst("div.years");
-        List<String> years = tabs == null ? List.of()
-                : tabs.select("span:not(.years-upcoming) a").stream().map(Element::text).toList();
-        logger.debug("Parsed years: {}", years);
-        return years;
-    }
-
-    private Elements getArticlesForYear(String bandSlug, String year) throws IOException {
-        logger.debug("Downloading data for year {}", year);
-        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(baseUrl).pathSegment(bandSlug).queryParam("at", "gig");
-        Elements elements = get((UPCOMING.equals(year) ? uri : uri.queryParam("gy", year)).build().toUriString())
-                .select("article.gig");
-        logger.debug("Data for year {} downloaded", year);
-        return elements;
+    /** Every played gig, from the archive, a page at a time. */
+    private List<JsonNode> archive(String bandSlug, int played) throws BandzonePortalException {
+        List<JsonNode> past = new ArrayList<>();
+        for (int number = 1; number <= ARCHIVE_PAGES_AT_MOST && past.size() < played; number++) {
+            JsonNode page;
+            try {
+                page = JSON.readTree(get(UriComponentsBuilder.fromUriString(baseUrl).path("/api/band/gigs-archive")
+                        .queryParam("slug", bandSlug).queryParam("page", number).queryParam("perPage", ARCHIVE_PAGE)
+                        .build().toUriString()));
+            } catch (IOException | JacksonException e) {
+                throw BandzonePortalException.temporary("Could not read Bandzone's archive of '" + bandSlug + "': "
+                        + e.getMessage(), e);
+            }
+            page.path("items").forEach(past::add);
+            if (page.path("items").isEmpty() || number >= page.path("totalPages").asInt()) {
+                break;
+            }
+        }
+        return past;
     }
 
     /**
-     * Through the same address the rest of Bandzone's traffic uses ({@link PlatformEgress}). This
-     * one matters more than it looks: reading a band's history asks for every year tab, and a
-     * burst is the thing the pacing elsewhere exists to avoid — so if this server's traffic is to
-     * come from somewhere, it should ALL come from there, not just the half that carries a session.
+     * Through the same address the rest of Bandzone's traffic uses ({@link PlatformEgress}): if this
+     * server's traffic is to come from somewhere, it should ALL come from there, not just the half that
+     * carries a session.
      */
-    private Document get(String url) throws IOException {
-        Connection connection = Jsoup.connect(url).timeout((int) PAGE_TIMEOUT.toMillis());
+    private String get(String url) throws IOException {
+        Connection connection = Jsoup.connect(url).timeout((int) PAGE_TIMEOUT.toMillis())
+                .ignoreContentType(true).maxBodySize(0);
         if (egress.configured()) {
             connection.proxy(egress.host(), egress.port());
             if (egress.username() != null) {
@@ -123,6 +119,6 @@ class BandzoneHtmlFetcher {
                         : null);
             }
         }
-        return connection.get();
+        return connection.execute().body();
     }
 }

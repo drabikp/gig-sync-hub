@@ -9,7 +9,7 @@ import java.util.Locale;
 /**
  * A band's Bandzone account, as the band connected it ({@link PlatformAccounts}): its login, the band's
  * address on Bandzone ({@code bandzone.cz/<bandSlug>}), and the way in — the {@code session} Bandzone gave
- * when the band connected (what is normally kept; it lasts years) or, where this server drives Bandzone in
+ * when the band connected (what is normally kept; 90 days since the 2026-11 redesign) or, where this server drives Bandzone in
  * a browser, the {@code password}. {@link #toString} hides both.
  */
 public record BandzoneAccount(BandId band, String login, String password, String session, String bandSlug) {

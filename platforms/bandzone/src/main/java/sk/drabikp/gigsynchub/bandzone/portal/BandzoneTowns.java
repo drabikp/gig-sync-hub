@@ -45,6 +45,11 @@ public final class BandzoneTowns {
             return new Choice(fits.getFirst(), null);
         }
         String where = city + (district != null ? " (" + district + ")" : "");
+        if (fits.isEmpty() && country == Country.SLOVAKIA && suggestions.stream().noneMatch(Suggestion::slovak)) {
+            // its new concert form (since the 2026-11 redesign) searches Czech towns only: Bratislava finds nothing
+            return new Choice(null, "Bandzone's concert form takes only Czech towns, so it can't place a gig in "
+                    + where + " — add it on Bandzone by hand, or leave Bandzone out for this gig.");
+        }
         if (fits.isEmpty()) {
             return new Choice(null, "Bandzone doesn't know the town " + where
                     + " — correct the gig's city (the town's name, not a district) and try again.");

@@ -22,13 +22,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Bandzone without a browser ({@code gigsynchub.bandzone.client=http}): the band admin's pages are plain
- * server-rendered forms whose widgets send the form back through AJAX, so this client sends exactly what
- * the pages send ({@link HttpBandzoneSession}). Each band's account keeps its cookies in memory, so its
- * login is reused until Bandzone ends it. Normally there is no password to send: the band's account keeps
- * the {@code session} that connecting it gave (it lasts years), and when Bandzone has ended that, the band
- * connects again — nothing is retried with a password this server doesn't have. Nothing to wait for: a
- * session is a few requests, never a scarce browser.
+ * Bandzone without a browser ({@code gigsynchub.bandzone.client=http}): since its redesign (2026-11-22) the
+ * site's pages are a Next.js app over its own JSON API, so this client makes exactly the calls the pages
+ * make ({@link HttpBandzoneSession}). Each band's account keeps its cookies in memory, so its sign-in is
+ * reused until Bandzone ends it. Normally there is no password to send: the band's account keeps the
+ * {@code session} that connecting it gave (90 days), and when Bandzone has ended that — or it is one kept
+ * from before the redesign, which the new site doesn't know — the band connects again: nothing is retried
+ * with a password this server doesn't have. Nothing to wait for: a session is a few requests.
  */
 @Component
 @OnPlatformClient(platform = "bandzone", value = PlatformClient.HTTP)
@@ -39,6 +39,8 @@ class HttpBandzonePortalClient implements BandzonePortalClient {
     private final ObservationRegistry observations;
     private final PlatformEgress egress;
     private final String baseUrl;
+    private final String uploadUrl;
+    private final Duration nonceAge;
     private final PlatformAccounts accounts;
     private final PosterDownloader posters;
     private final Map<String, BandzoneWeb> logins = new ConcurrentHashMap<>();
@@ -47,19 +49,29 @@ class HttpBandzonePortalClient implements BandzonePortalClient {
     @Autowired
     HttpBandzonePortalClient(BandzoneProperties properties, PlatformAccounts accounts,
                              ObservationRegistry observations) {
-        this(properties.baseUrl(), accounts, new PosterDownloader(), observations, properties.egress());
+        this(properties.baseUrl(), BandzoneWeb.uploadUrlOf(properties.baseUrl()), accounts, new PosterDownloader(),
+                observations, properties.egress(), BandzoneWeb.NONCE_AGE);
     }
 
-    /** For a test, which says where Bandzone is and how posters are fetched. */
+    /** For a test against the real site, which says where Bandzone is and how posters are fetched. */
     HttpBandzonePortalClient(String baseUrl, PlatformAccounts accounts, PosterDownloader posters) {
-        this(baseUrl, accounts, posters, ObservationRegistry.NOOP, PlatformEgress.DIRECT);
+        this(baseUrl, BandzoneWeb.uploadUrlOf(baseUrl), accounts, posters, ObservationRegistry.NOOP,
+                PlatformEgress.DIRECT, BandzoneWeb.NONCE_AGE);
     }
 
-    HttpBandzonePortalClient(String baseUrl, PlatformAccounts accounts, PosterDownloader posters,
-                             ObservationRegistry observations, PlatformEgress egress) {
+    /** For a test against a stand-in, which also serves the uploads and needs no wait for the nonce. */
+    HttpBandzonePortalClient(String baseUrl, String uploadUrl, PlatformAccounts accounts, PosterDownloader posters) {
+        this(baseUrl, uploadUrl, accounts, posters, ObservationRegistry.NOOP, PlatformEgress.DIRECT, Duration.ZERO);
+    }
+
+    private HttpBandzonePortalClient(String baseUrl, String uploadUrl, PlatformAccounts accounts,
+                                     PosterDownloader posters, ObservationRegistry observations,
+                                     PlatformEgress egress, Duration nonceAge) {
         this.observations = observations;
         this.egress = egress;
         this.baseUrl = baseUrl;
+        this.uploadUrl = uploadUrl;
+        this.nonceAge = nonceAge;
         this.accounts = accounts;
         this.posters = posters;
     }
@@ -68,7 +80,7 @@ class HttpBandzonePortalClient implements BandzonePortalClient {
     public BandzoneSession openSession(BandId band, Duration wait) throws BandzonePortalException {
         BandzoneAccount account = BandzoneAccount.of(accounts, band);
         BandzoneWeb web = logins.computeIfAbsent(account.browserKey(),
-                key -> new BandzoneWeb(baseUrl, observations, egress));
+                key -> new BandzoneWeb(baseUrl, uploadUrl, observations, egress, nonceAge));
         if (web.loggedIn()) {
             logger.info("Bandzone: reusing the login");
         } else {

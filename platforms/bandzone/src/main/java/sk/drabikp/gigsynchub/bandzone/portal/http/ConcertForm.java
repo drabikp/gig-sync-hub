@@ -1,167 +1,181 @@
 package sk.drabikp.gigsynchub.bandzone.portal.http;
 
-import org.jsoup.nodes.Element;
+import org.springframework.web.util.UriComponentsBuilder;
 import sk.drabikp.gigsynchub.bandzone.BandzonePortalException;
+import sk.drabikp.gigsynchub.bandzone.portal.BandzonePageData;
 import sk.drabikp.gigsynchub.bandzone.portal.BandzoneTowns;
-import sk.drabikp.gigsynchub.gig.domain.EntryType;
-import sk.drabikp.gigsynchub.gig.domain.Gig;
+import sk.drabikp.gigsynchub.gig.domain.Admission;
 import sk.drabikp.gigsynchub.gig.domain.Location;
+import tools.jackson.databind.JsonNode;
 
-import java.nio.file.Path;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * A concert's fields in one of Bandzone's forms — the wizard's steps and the edit form share their
- * names: date and time, the town (city picker), the club (venue picker), the info fields, the poster.
- * A picker is the form's own buttons: its search answers suggestions, its pick answers the form again,
- * which then is the form ({@link #form()}) — as in the page, where a pick re-renders it.
+ * What the new-concert wizard and the concert's edit form send about a concert, as their own code builds
+ * it: where (the town picked from Bandzone's city search, the club from its venue search or typed), when
+ * (a date and a time in the wizard, {@link BandzonePageData#format one value} in the edit form) and the entry (its tickets).
  */
 final class ConcertForm {
 
-    static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d.M.yyyy");
+    static final DateTimeFormatter DATE = DateTimeFormatter.ISO_LOCAL_DATE;
     static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
-    /** A picker's search button is pressed as "1", as the page's script does. */
-    private static final String SEARCH = "1";
+    /**
+     * What a concert without a venue says where: Bandzone wants a club or a typed place since its redesign,
+     * and "-" is what the platform check already reads as no venue at all.
+     */
+    static final String NO_VENUE = "-";
+    /** The label the form gives a ticket row of its own accord ("Základní", basic). */
+    private static final String BASIC = "Základní";
+    private static final Pattern PRICE = Pattern.compile(
+            "\\s*(\\d+(?:[.,]\\d{1,2})?)\\s*(kč|czk|,-|€|eur|zł|pln|\\$|usd)?\\s*", Pattern.CASE_INSENSITIVE);
+
+    /** The concert's place: a town of Bandzone's, and its club ({@code venueId}) or a typed venue. */
+    record Place(long cityId, Long venueId, String venueName) {
+
+        boolean club() {
+            return venueId != null;
+        }
+    }
 
     private final BandzoneWeb web;
-    private final String signal;
-    private NetteForm form;
 
-    ConcertForm(BandzoneWeb web, NetteForm form, String signal) {
+    ConcertForm(BandzoneWeb web) {
         this.web = web;
-        this.form = form;
-        this.signal = signal;
-    }
-
-    NetteForm form() {
-        return form;
-    }
-
-    void setStart(ZonedDateTime start) {
-        form.set("start[date]", start.format(DATE)).set("start[time]", start.format(TIME));
-    }
-
-    /** The end, or none (cleared). */
-    void setEnd(ZonedDateTime end) {
-        form.set("end[date]", end == null ? "" : end.format(DATE)).set("end[time]", end == null ? "" : end.format(TIME));
     }
 
     /**
-     * Picks the town through the city search: the suggestion that fits by name, country and district
-     * ({@link BandzoneTowns}); several fits or none → the user corrects the town, never a guess. A town
-     * the form shows already is kept only when it was merely typed (a picked one is chosen again: the
-     * name alone may be another town of the same name).
+     * The gig's town through Bandzone's city search: the suggestion that fits by name, country and district
+     * ({@link BandzoneTowns}); several fits or none → the user corrects the town, never a guess. The club:
+     * one in that town whose name matches exactly (ignoring case) is linked, anything else is typed, which
+     * Bandzone accepts; no venue is {@link #NO_VENUE}.
      */
-    void selectCity(Location location) throws BandzonePortalException {
-        String city = location.city();
-        if (location.district() == null && city.equalsIgnoreCase(form.value("cityId__container[textInput]"))
-                && !form.value("cityId").isBlank()) {
-            return;
-        }
-        form.set("cityId", "").set("cityId__container[textInput]", city);
-        Answer found = web.post(form.action(), form.pressing("cityId__container[searchButton]", SEARCH));
+    Place place(Location location) throws BandzonePortalException {
+        JsonNode towns = web.send("GET", UriComponentsBuilder.fromPath("/api/gig/search-cities")
+                .queryParam("query", location.city()).queryParam("limit", 20).build().encode().toUriString(), null,
+                "search its towns for '" + location.city() + "'");
         List<BandzoneTowns.Suggestion> suggestions = new ArrayList<>();
-        for (int i = 0; i < found.items().size(); i++) {
-            Answer.Item item = found.items().get(i);
-            String name = item.part(".name");
-            suggestions.add(new BandzoneTowns.Suggestion(i, name.isEmpty() ? item.value() : name, item.part(".description")));
+        for (int i = 0; i < towns.size(); i++) {
+            JsonNode town = towns.get(i);
+            suggestions.add(new BandzoneTowns.Suggestion(i, town.path("name").asString(""), description(town)));
         }
-        BandzoneTowns.Choice choice = BandzoneTowns.choose(city, location.country(), location.district(), suggestions);
+        BandzoneTowns.Choice choice = BandzoneTowns.choose(location.city(), location.country(), location.district(),
+                suggestions);
         if (choice.pick() == null) {
             throw BandzonePortalException.needsUser(choice.problem());
         }
-        Answer.Item town = found.items().get(choice.pick().index());
-        form.set("cityId", town.id()).set("cityId__container[textInput]", town.value());
-        pick("cityId__container[selectButton]", "cityId", town.id());
+        long cityId = towns.get(choice.pick().index()).path("cityId").asLong();
+
+        String venue = location.venue();
+        if (venue == null || venue.isBlank()) {
+            return new Place(cityId, null, NO_VENUE);
+        }
+        JsonNode clubs = web.send("GET", UriComponentsBuilder.fromPath("/api/gig/search-venues")
+                .queryParam("cityId", cityId).queryParam("query", venue).build().encode().toUriString(), null,
+                "search its clubs for '" + venue + "'");
+        for (JsonNode club : clubs) {
+            if (club.path("cityId").asLong() == cityId && venue.strip().equalsIgnoreCase(club.path("name").asString("").strip())) {
+                return new Place(cityId, club.path("venueId").asLong(), club.path("name").asString());
+            }
+        }
+        return new Place(cityId, null, venue.strip());
     }
 
     /**
-     * Sets the club. An exact (case-insensitive) match in Bandzone's club database links the club;
-     * anything else is kept as free text, which Bandzone accepts. No venue clears it.
+     * A town as the search describes it, "okres Přerov, Olomoucký, Česká Republika" — the district written
+     * as the place search writes it, the country as {@link BandzoneTowns} reads it.
      */
-    void selectVenue(String venue) throws BandzonePortalException {
-        if (venue != null && venue.equalsIgnoreCase(form.value("venueId__container[textInput]"))) {
-            return;
+    static String description(JsonNode town) {
+        List<String> parts = new ArrayList<>();
+        String district = town.path("districtName").asString("");
+        if (!district.isBlank()) {
+            parts.add("okres " + district);
         }
-        form.set("venueId", "").set("venueId__container[textInput]", venue == null ? "" : venue);
-        if (venue == null) {
-            return;
+        for (String part : List.of(town.path("regionName").asString(""), town.path("countryName").asString(""))) {
+            if (!part.isBlank()) {
+                parts.add(part);
+            }
         }
-        Answer found = web.post(form.action(), form.pressing("venueId__container[searchButton]", SEARCH));
-        Optional<Answer.Item> club = found.items().stream()
-                .filter(item -> venue.equalsIgnoreCase(titleOf(item)))
-                .findFirst();
-        if (club.isPresent()) {
-            form.set("venueId", club.get().id()).set("venueId__container[textInput]", club.get().value());
-            pick("venueId__container[selectButton]", "venueId", club.get().id());
-        }
+        return String.join(", ", parts);
     }
 
-    /** Sets every info field, blanking the optional ones the gig does not have (for edits). */
-    void fillInfo(Gig gig) {
-        form.set("name", gig.title())
-                .set("entryType", entryTypeValue(gig.admission().type()))
-                .set("entry", gig.admission().isPaid() ? gig.admission().amount() : "")
-                .set("info", orEmpty(gig.description()))
-                .set("facebookUrl", orEmpty(gig.facebookUrl()));
+    /** The concert's place as the edit form saves it: the club, or the typed venue with its town. */
+    static void placeInto(Map<String, Object> patch, Place place) {
+        if (place.club()) {
+            patch.put("venueId", place.venueId());
+            patch.put("venueText", null);
+        } else {
+            patch.put("venueId", null);
+            patch.put("venueText", place.venueName());
+            patch.put("cityId", place.cityId());
+        }
     }
 
     /**
-     * Uploads the poster through the form's uploader (Bandzone keeps one image; a new upload replaces
-     * it), then reloads the form as the page does, which then shows the image.
+     * The entry as the form's tickets: free, voluntary, or paid — one basic ticket at the gig's price
+     * (a number with its currency when it reads as one, else the text as written).
      */
-    void uploadPoster(Path file) throws BandzonePortalException {
-        Element uploader = form.element().selectFirst(".fileupload[data-url]");
-        Element input = form.element().selectFirst("input[type=file]");
-        if (uploader == null || input == null) {
-            throw BandzonePortalException.temporary("Bandzone's edit form has no poster uploader.");
+    static Map<String, Object> tickets(Admission admission) {
+        Map<String, Object> tickets = new LinkedHashMap<>();
+        tickets.put("kind", kind(admission));
+        tickets.put("ticketUrl", null);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (admission.isPaid()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("label", BASIC);
+            Matcher price = PRICE.matcher(admission.amount());
+            if (price.matches()) {
+                row.put("price", price.group(1).replace(',', '.'));
+                row.put("priceText", null);
+                row.put("currency", currency(price.group(2)));
+            } else {
+                row.put("price", null);
+                row.put("priceText", admission.amount().strip());
+                row.put("currency", "CZK");
+            }
+            row.put("validUntil", null);
+            row.put("soldOut", false);
+            row.put("note", null);
+            row.put("url", null);
+            rows.add(row);
         }
-        web.upload(uploader.absUrl("data-url"), input.attr("name"), file);
-        Answer reloaded = web.post(form.action(), form.pressing("_FileUploadReloadSubmit_", "reload"));
-        form = reloaded.form(signal).orElseThrow(() -> BandzonePortalException.temporary(
-                "Bandzone did not show the form again after the poster upload."));
+        tickets.put("rows", rows);
+        return tickets;
     }
 
-    /** Sends the form with {@code button}; Bandzone answers where to go next, or the form with its errors. */
-    String send(String button, String what) throws BandzonePortalException {
-        Answer answer = web.post(form.action(), form.pressing(button));
-        if (answer.redirect() == null) {
-            throw BandzonePortalException.temporary("Bandzone did not take " + what + ": " + answer.problems());
-        }
-        return answer.redirect();
-    }
-
-    /** The {@code entryType} radio value Bandzone stores (0 = paid, 1 = voluntary, 2 = free). */
-    static String entryTypeValue(EntryType entryType) {
-        return switch (entryType == null ? EntryType.FREE : entryType) {
-            case PAID -> "0";
-            case VOLUNTARY -> "1";
-            case FREE -> "2";
+    /** The tickets' {@code kind} Bandzone stores for an admission. */
+    static String kind(Admission admission) {
+        return switch (admission.type()) {
+            case PAID -> "paid";
+            case VOLUNTARY -> "voluntary";
+            case FREE -> "free";
         };
     }
 
-    /** Presses a picker's pick and takes the form Bandzone answers with, which must hold the pick. */
-    private void pick(String button, String idField, String id) throws BandzonePortalException {
-        Answer picked = web.post(form.action(), form.pressing(button));
-        NetteForm shown = picked.form(signal).orElseThrow(() -> BandzonePortalException.temporary(
-                "Bandzone did not show the form again after picking " + idField + " " + id + "."));
-        if (!id.equals(shown.value(idField))) {
-            throw BandzonePortalException.temporary("Bandzone did not take the pick " + idField + " " + id + ".");
+    static String date(ZonedDateTime when) {
+        return when.withZoneSameInstant(BandzonePageData.PRAGUE).format(DATE);
+    }
+
+    static String time(ZonedDateTime when) {
+        return when.withZoneSameInstant(BandzonePageData.PRAGUE).format(TIME);
+    }
+
+    private static String currency(String written) {
+        if (written == null) {
+            return "CZK";
         }
-        form = shown;
-    }
-
-    /** A club's name as the suggestion shows it (its {@code h4.title}), else the value it fills in. */
-    private static String titleOf(Answer.Item item) {
-        String title = item.part("h4.title");
-        return title.isEmpty() ? item.value() : title;
-    }
-
-    private static String orEmpty(String value) {
-        return value == null ? "" : value;
+        return switch (written.toLowerCase(Locale.ROOT)) {
+            case "€", "eur" -> "EUR";
+            case "zł", "pln" -> "PLN";
+            case "$", "usd" -> "USD";
+            default -> "CZK";
+        };
     }
 }

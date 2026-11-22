@@ -13,7 +13,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Reactivating where the platform can't un-cancel: the cancelled copy is removed (and its
+ * Reactivating where the platform can't un-cancel (it has no {@link StepType#UNCANCEL}, or that step
+ * refused the gig): the cancelled copy is removed (and its
  * record forgotten at once — from then on, no record means a later Publish creates it),
  * then the gig is created again; the new id is recorded when this is settled. The copy is
  * removed the first of the platform's ways that takes the gig.
