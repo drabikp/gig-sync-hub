@@ -58,8 +58,13 @@ final class GigSummaryToGigMapper {
         return city.replace(", ČR", "").replace(", SK", "").trim();
     }
 
+    /** From the entry as Bandzone shows it: "Zdarma" (or nothing), "Dobrovolné", or a price. */
     private static Admission resolveAdmission(String entryFee) {
-        boolean free = entryFee == null || entryFee.isBlank() || entryFee.toLowerCase(Locale.ROOT).contains("zdarma");
+        String text = entryFee == null ? "" : entryFee.toLowerCase(Locale.ROOT);
+        if (text.contains("dobrovoln")) {
+            return Admission.voluntary();
+        }
+        boolean free = text.isBlank() || text.contains("zdarma");
         return Admission.of(free ? EntryType.FREE : EntryType.PAID, entryFee);
     }
 }

@@ -12,7 +12,7 @@ class WorkflowsTest {
         assertThat(Workflows.of(SyncAction.UPDATE)).containsExactly(StepType.BULK_EDIT, StepType.FORM_EDIT);
         assertThat(Workflows.of(SyncAction.CANCEL)).containsExactly(StepType.CANCEL, StepType.FORM_CANCEL);
         assertThat(Workflows.of(SyncAction.DELETE)).containsExactly(StepType.REMOVE, StepType.FORM_REMOVE);
-        assertThat(Workflows.of(SyncAction.REACTIVATE)).containsExactly(StepType.RECREATE);
+        assertThat(Workflows.of(SyncAction.REACTIVATE)).containsExactly(StepType.UNCANCEL, StepType.RECREATE);
         for (SyncAction action : SyncAction.values()) {
             assertThat(Workflows.of(action)).as(action.name()).isNotEmpty()
                     .allSatisfy(step -> assertThat(step.action()).isEqualTo(action));
@@ -24,6 +24,7 @@ class WorkflowsTest {
         assertThat(Workflows.after(StepType.BULK_EDIT)).contains(StepType.FORM_EDIT);
         assertThat(Workflows.after(StepType.CANCEL)).contains(StepType.FORM_CANCEL);
         assertThat(Workflows.after(StepType.FORM_EDIT)).isEmpty();
+        assertThat(Workflows.after(StepType.UNCANCEL)).contains(StepType.RECREATE);
         assertThat(Workflows.after(StepType.RECREATE)).isEmpty();
     }
 }

@@ -14,6 +14,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -85,6 +86,34 @@ class BandzoneStepsTest {
             assertThat(o.kind()).isEqualTo(StepOutcome.Kind.DONE);
             assertThat(o.note()).contains("already removed");
         });
+    }
+
+    @Test
+    void reactivating_makes_the_concert_public_again_in_place_and_brings_it_up_to_date() throws Exception {
+        when(portalClient.openSession(BandId.FIRST)).thenReturn(session);
+
+        StepOutcome outcome = new BandzoneUncancel(portalClient).run(List.of(new SyncStep.Item(BandId.FIRST, "100", gig)))
+                .getFirst();
+
+        assertThat(outcome.kind()).isEqualTo(StepOutcome.Kind.DONE);
+        assertThat(outcome.ref()).as("the concert keeps its id").isNull();
+        verify(session).reactivateGig("100");
+        verify(session).updateGig("100", gig);
+    }
+
+    @Test
+    void a_concert_bandzone_wont_bring_back_is_refused_and_one_brought_back_stays_so() throws Exception {
+        when(portalClient.openSession(BandId.FIRST)).thenReturn(session);
+        doThrow(BandzonePortalException.refused("Bandzone keeps a played concert's state as it is"))
+                .when(session).reactivateGig("100");
+        doThrow(BandzonePortalException.temporary("poster upload timed out")).when(session).updateGig(eq("101"), any());
+        BandzoneUncancel uncancel = new BandzoneUncancel(portalClient);
+
+        assertThat(uncancel.run(List.of(new SyncStep.Item(BandId.FIRST, "100", gig))).getFirst().kind())
+                .isEqualTo(StepOutcome.Kind.REFUSED);
+        StepOutcome back = uncancel.run(List.of(new SyncStep.Item(BandId.FIRST, "101", gig))).getFirst();
+        assertThat(back.kind()).isEqualTo(StepOutcome.Kind.DONE);
+        assertThat(back.note()).contains("public again", "Re-sync");
     }
 
     @Test

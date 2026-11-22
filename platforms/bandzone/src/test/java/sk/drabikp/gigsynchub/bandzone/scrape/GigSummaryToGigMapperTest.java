@@ -63,6 +63,14 @@ class GigSummaryToGigMapperTest {
         assertThat(paid.admission().amount()).isEqualTo("150 Kč");
     }
 
+    /** Since the redesign the list writes the entry as the form names it: "Dobrovolné" is no price. */
+    @Test
+    void a_voluntary_entry_is_voluntary_not_paid() {
+        assertThat(map(base().setCity("Praha").setEntryFee("Dobrovolné").build()).admission().type())
+                .isEqualTo(EntryType.VOLUNTARY);
+        assertThat(map(base().setCity("Praha").setEntryFee("dobrovolné").build()).admission().amount()).isNull();
+    }
+
     @Test
     void a_scraped_gig_without_the_pieces_the_aggregate_requires_maps_to_empty() {
         assertThat(GigSummaryToGigMapper.toGig(base().setCity("Praha, ČR").setStart(null).build()))

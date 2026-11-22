@@ -15,6 +15,7 @@ import sk.drabikp.gigsynchub.gig.domain.GigId;
 import sk.drabikp.gigsynchub.gig.domain.GigSchedule;
 import sk.drabikp.gigsynchub.gig.domain.Location;
 
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -24,8 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
- * The HTTP client against the REAL Bandzone, the same cycle as the Selenium client's live test: creates a
- * gig (every field, lineup and poster), edits it (another of three towns called Hranice), cancels it,
+ * The HTTP client against the REAL Bandzone: creates a
+ * gig (every field, lineup and poster), edits it (another of three towns called Hranice), cancels it, makes it
+ * public again and cancels it again,
  * deletes it and deletes it again (already gone). Skipped unless {@code BZ_LIVE=true}; reads
  * {@code BZ_LOGIN}, {@code BZ_PASSWORD}, {@code BZ_SLUG} (required), {@code BZ_LINEUP_BAND} (a band that
  * gets notified; default none), {@code BZ_KEEP=true} (keep the gig). Use a test band — the gig is briefly
@@ -53,14 +55,15 @@ class HttpBandzonePortalClientLiveTest {
 
         List<String> fullLineup = lineupBand.isBlank() ? List.of(STUB) : List.of(lineupBand, STUB);
         List<String> editedLineup = lineupBand.isBlank() ? List.of() : List.of(lineupBand);
+        // ahead of today: a concert already played is archived, and Bandzone no longer lets its state change
+        ZonedDateTime evening = LocalDate.now(PRAGUE).plusDays(60).atTime(20, 0).atZone(PRAGUE);
         Gig gig = new Gig(GigId.fresh(), "TEST http client (smazat)",
-                new GigSchedule(ZonedDateTime.of(2026, 11, 12, 20, 0, 0, 0, PRAGUE),
-                        ZonedDateTime.of(2026, 11, 13, 1, 0, 0, 0, PRAGUE)),
+                new GigSchedule(evening, evening.plusHours(5)),
                 new Location("Lucerna Music Bar", "Praha", Country.CZECHIA), fullLineup,
                 Admission.paid("200 Kč"), "created by the live test\nsecond line", "https://www.facebook.com/events/1",
-                null, "https://bandzone.cz/img/default/band-single-small.png", false);
+                null, "https://bandzone.cz/apple-touch-icon.png", false);
         Gig edited = new Gig(GigId.fresh(), "TEST http client edited (smazat)",
-                GigSchedule.startingAt(ZonedDateTime.of(2026, 11, 14, 21, 30, 0, 0, PRAGUE)),
+                GigSchedule.startingAt(evening.plusDays(2).plusMinutes(90)),
                 new Location("Garáž u Nováků", "Hranice", Country.CZECHIA, new Address(null, "753 01",
                         "okres Přerov", "Olomoucký kraj", 49.548, 17.735)), editedLineup,
                 Admission.voluntary(), "edited by the live test", null, null, null, false);
@@ -73,6 +76,8 @@ class HttpBandzonePortalClientLiveTest {
                 try {
                     session.updateGig(id, gig);
                     session.updateGig(id, edited);
+                    session.cancelGig(id);
+                    session.reactivateGig(id);
                     session.cancelGig(id);
                 } finally {
                     if (keep) {

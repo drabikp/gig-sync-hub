@@ -16,9 +16,9 @@ import java.util.Map;
 /**
  * What is kept when a band connects Bandzone, with no browser anywhere: the password it typed is used ONCE,
  * here, to sign in ("stay signed in"), and what is written down is the session Bandzone gave back — which
- * lasts years. So the server holds something the band can revoke by signing out there, never its password.
- * Only while this server drives Bandzone over HTTP ({@code gigsynchub.bandzone.client=http}); driving it in a
- * browser needs the password itself, and then the account is kept as the band typed it.
+ * lasts 90 days since the redesign (it was years before). So the server holds something the band can revoke
+ * by signing out there, never its password. Only while this server drives Bandzone over HTTP
+ * ({@code gigsynchub.bandzone.client=http}).
  */
 @Component
 @OnPlatformClient(platform = "bandzone", value = PlatformClient.HTTP)

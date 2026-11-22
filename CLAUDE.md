@@ -156,8 +156,9 @@ platforms/portal    what every platform shares: PlatformClient (`gigsynchub.<pla
                     Bandzone's own waits are in its web client (this module was `platforms/browser`
                     while a browser was driven here; nothing drives one any more)
 platforms/bandzone      bandzone (traits, properties, exception) · scrape · portal (client API, stub,
-                        BandzoneTowns, PosterDownloader) · portal.http (NetteForm, Answer, BandzoneWeb,
-                        ConcertForm, LineupTab, session, client, sign-in) · step · rest
+                        BandzoneTowns, PosterDownloader, BandzonePageData — the JSON a Next.js page
+                        carries) · portal.http (BandzoneWeb, ConcertForm, StoredConcert, LineupTab,
+                        session, client, sign-in) · step · rest
                         (the public `/gigs/{band_slug}` endpoint — any band, by its slug)
 platforms/bandsintown   bandsintown (traits, properties, exception, RemovalReason) · portal (client API,
                         stub, PortalReply + BitEvent/BitPlace/BitEventMapper/BitPlaces — how the portal's
@@ -381,7 +382,7 @@ rows are keyed `(band_id, …)`.
   clients read the band's account at `openSession(band, …)` (`BandzoneAccount` / `BandsintownAccount`;
   none = NEEDS_USER "connect it in Settings"), the importers and the CSV too. **No password is kept**: a
   band types its Bandzone one once (the server signs in and writes down only the session, which lasts
-  years), and signs in to Bandsintown in its OWN browser, pasting what that leaves — so no authenticator
+  90 days), and signs in to Bandsintown in its OWN browser, pasting what that leaves — so no authenticator
   secret is kept either. When a platform ends a sign-in the band connects again; it is never retried.
   Band #1's old configuration (`gigsynchub.bandzone.login/…`,
   `gigsynchub.bandsintown.login/…`, `gigsynchub.calendar.ical-url`, the rules file) is kept once on start
@@ -522,8 +523,10 @@ CANCEL      cancel (BZ: BandzoneCancel; BIT: BandsintownCancel = remove "cancele
             → cancel in the form (BIT: BandsintownFormCancel — past events)
 DELETE      remove (BZ: BandzoneRemove; BIT: BandsintownRemove, no past events)
             → remove in the form (BIT: BandsintownFormRemove — past events) → record forgotten
-REACTIVATE  remove and create again — built by the engine from the platform's remove (the
-            first of remove / remove in the form that takes the gig) + create
+REACTIVATE  un-cancel in place (BZ: BandzoneUncancel — keeps the id, then brings the concert up to
+            date; refuses a concert gone or already played) → remove and create again — built by
+            the engine from the platform's remove (the first of remove / remove in the form that
+            takes the gig) + create (BIT, and whatever BZ refused)
 ```
 
 **The engine orchestrates; it is not coordinated.** `WorkflowEngine.run(Workload)` is given a
@@ -644,8 +647,9 @@ first few being checked for ever. Each band's latest result is kept (`CheckResul
 Initial (and repeatable) import of the band's existing gigs, upcoming and past, from
 any platform, LINKED to the platform events so they are managed from the catalog
 instead of published again. `GigImporter` per platform returns `ImportedGig`s
-(gig + platform id): Bandzone scrapes the public band page (year tabs + the "planned"
-tab) keeping the concert id and cancelled state; Bandsintown reads the portal.
+(gig + platform id): Bandzone reads the public band page's data (planned and played gigs; the
+archive API for any played ones the page leaves out) keeping the concert id and cancelled state —
+the list says nothing of the lineup or the country; Bandsintown reads the portal.
 `ImportPlanner`: skip platform events already linked; group by `GigMatch` (the day and the
 venue — a copy read from a platform has an identity of its own that means nothing here) with the
 catalog gig and across platforms; else SUGGEST a match on same date + city (only when
@@ -714,7 +718,9 @@ district as Bandzone writes it). The gig form's City is a town picker (typed tow
 allowed, flagged "not picked from the list"); the calendar pre-fill picks the town when
 exactly one fits name + country + postal area (`TownChoice`).
 - **Bandzone** has its own town list: `BandzoneTowns` picks the suggestion with the same name,
-  country and district — several fits or none → a clear permanent error, never a guess.
+  country and district — several fits or none → a clear permanent error, never a guess. Since the
+  2026-11 redesign its concert form searches **Czech towns only** (Bratislava finds nothing), so a
+  Slovak gig is told to go on Bandzone by hand.
 - **Bandsintown** geocodes the uploaded text — an upload carries no coordinates, its template has
   no such columns — so rows carry street and postal code to tell same-named places apart. After an
   upload (a publish or a bulk edit) the event is read back and its coordinates compared with the
@@ -723,9 +729,18 @@ exactly one fits name + country + postal area (`TownChoice`).
 
 ## Bandzone (no browser needed)
 
-`BandzoneGigProvider`/`BandzoneGigImporter` scrape read-only (`BandzoneHtmlFetcher`, at
-`gigsynchub.bandzone.base-url`, the year tabs read at once with a 60 s limit). Writes go through the
-band-admin pages; off by default (stub). Whether this server drives it is
+**Bandzone was redesigned (found 2026-11-22)**: the whole site, its admin included, is now a Next.js app
+over its own JSON API under `/api` — the old Nette forms, the `?at=gig&gy=` year tabs and the
+`article.gig` markup are gone, and the client and the scrape were rewritten to the API that day. Nothing
+of it is documented by Bandzone: it was read off the site's own scripts and confirmed on the test band.
+
+`BandzoneGigProvider`/`BandzoneGigImporter` read the public band page (`BandzoneHtmlFetcher`, at
+`gigsynchub.bandzone.base-url`): it carries every gig it can show as data (`BandzonePageData` — the
+`self.__next_f.push` chunks, `"gigs":{"upcoming","past","countsByYear"}`); played gigs it leaves out
+are read from `/api/band/gigs-archive` (50 a page). **A date there is Prague's wall clock written with a
+`Z`** (a concert at 20:00 is `…T20:00:00.000Z`), and a value may carry React's `$D` prefix. statusId 2
+public, 3 cancelled, 4 postponed, 6 draft, 7 played. The band page lags a minute or so behind a write.
+Writes go through the API; off by default (stub). Whether this server drives it is
 `gigsynchub.<platform>.client` (`PlatformClient`, `OnPlatformClient`):
 
 ```
@@ -733,69 +748,66 @@ gigsynchub.bandzone.client=http       # this server drives Bandzone (no browser 
 gigsynchub.bandzone.client=off        # the stub (default): it doesn't
 ```
 
-**The client** (`portal.http`): Bandzone's admin is plain server-rendered forms
-whose widgets post the whole form back over AJAX and get JSON, so the client sends exactly what the
-pages send — `NetteForm` (a form as a browser would send it: its fields in page order, its buttons
-pressed by name), `Answer` (the JSON: a picker's `items`, the re-rendered form's `snippets`, a
-finished form's `redirect`, its `flash` messages), `BandzoneWeb` (one account's cookies, the login,
-the AJAX posts, the poster's multipart upload), `ConcertForm` (the fields the wizard and the edit
-form share; a picker is the form's own search and pick buttons), `LineupTab`, `HttpBandzoneSession`.
-A field or button the page hasn't got is an error naming it, never a silent skip. The town is picked by
-name + country + district (`BandzoneTowns`), a club matched exactly is linked and anything else kept as
-free text, a cancel is checked on the band's gig list and a delete on the concert's public page (404).
+**The client** (`portal.http`) makes the calls the pages make — JSON both ways, the session in the
+HttpOnly `bz_session` cookie, no CSRF token: `BandzoneWeb` (one account's cookies — sent back as a
+browser sends them, `name=value`, because the JDK's own handler turns a `Max-Age` cookie into a quoted
+RFC 2965 one Bandzone doesn't know —, the sign-in, the API calls with their refusals typed, pages read
+for their data, the poster upload), `ConcertForm` (where/when/entry as the wizard and the edit form send
+them), `StoredConcert` (the concert as its edit page `/koncert/<id>/upravit` carries it — every write is
+read back from there), `LineupTab`, `HttpBandzoneSession`. The town is picked from `/api/gig/search-cities`
+by name + country + district (`BandzoneTowns`); a club of that town matched exactly
+(`/api/gig/search-venues`) is linked, anything else typed — and **a venue is mandatory** now, so a gig
+without one is typed as `-`, which the platform check reads as none. The band publishing is found among
+the login's own bands (`/api/user/bands`): a login that doesn't manage the band's address needs the user.
 
 **Connecting a band** (`BandzoneAccount`): it types its login, its password and the band's address
 (`bandSlug`) on the page once. The server signs in there and then (`HttpBandzoneSignIn`, through the
-accounts' `PlatformSignIn`) and writes down only the **session** Bandzone gives back — with "stay signed
-in" it lasts about ten years — so the password is never stored. A band that doesn't sign in is not saved,
-so an account that doesn't work can't be connected. "Test sign-in" reads the band's page with the kept
-session (`BandzoneAccountCheck`); when Bandzone has ended it, the band connects again.
+accounts' `PlatformSignIn`: `GET /api/auth/form-nonce`, at least a second's wait, then `POST
+/api/auth/login {login, password, permanent, formNonce, website: ""}` — `website` is a honeypot) and
+writes down only the **session** Bandzone gives back — "stay signed in" makes it last **90 days** (it was
+ten years before the redesign) — so the password is never stored. A band that doesn't sign in is not
+saved, so an account that doesn't work can't be connected. "Test sign-in" opens a session with the kept
+cookies and finds the band among the login's (`BandzoneAccountCheck`); when Bandzone has ended it — and
+every session kept before the redesign is ended — the band connects again.
 `gigsynchub.bandzone.login / .password / .band-slug` are band #1's old ones (kept once). The real band's
 login lives in the git-ignored `.bz-creds` (line 1 login, line 2 password, `chmod 600`);
 `.bz-test-creds` is the test band.
 
-**And why this is not Bandsintown's way in** (checked live 2026-10-11, so don't reach for the
-bookmarklet here): **Bandzone has no federated sign-in** — its login form carries `login`, `password`,
-`permanent`, `doLogin` and nothing else, `/registrace.html` offers no sign-up with anyone else's
-account, and the site's own scripts (`js.base`, `js.guest`, `js.js2-common`, ~470 KB) never call
-`FB.login` or `getLoginStatus`; the Facebook SDK on every page is there for social plugins
-(`FB.init({xfbml:true})`) and a tracking pixel, which is what makes the pages LOOK as though Facebook
-could sign you in. Every account therefore has a password: the profile's own settings
-(`/fan/<id>/upravit.html`) offer **Změna hesla** and **Trvalá přihlášení** — where a band can clear the
-permanent logins, which is how it revokes what we keep — and no "connected account" anywhere. An
-account that somehow has no password (one made in some older Facebook era) gets one from
-`/zapomenute-udaje.html`, which asks only for the e-mail. **And a bookmarklet could not help even if
-Bandzone did offer Facebook**: the way in is cookies, and all three (`SID`, the ten-year `permaLogin`,
-`nette-browser`) are **HttpOnly**, so `document.cookie` sees none of them. That is the whole difference
-between the two platforms — Bandsintown's token sits in `localStorage`, which the page's own code can
-read; Bandzone's sits where only the browser and the server can.
+**And why this is not Bandsintown's way in** (checked live 2026-10-11 on the old site, again 2026-11-22
+on the new one — don't reach for the bookmarklet here): **Bandzone has no working federated sign-in.**
+The old login form carried `login`/`password`/`permanent` and nothing else, its Facebook SDK was there
+for social plugins only, and every account has a password (one that somehow hasn't gets one from the
+forgotten-password page, which asks only for the e-mail). The redesigned site has Google and Apple
+sign-in in its code, but `/api/auth/oauth/providers` answers `{"google":false,"apple":false}` — if that
+ever turns true, some bands may have no password and this needs revisiting. **And a bookmarklet could
+not help either way**: the way in is the `bz_session` cookie, which is **HttpOnly**, so
+`document.cookie` never sees it. That is the whole difference between the two platforms — Bandsintown's
+token sits in `localStorage`, which the page's own code can read; Bandzone's sits where only the browser
+and the server can.
 
-- **Create** — the 2-step wizard: date/time/city → (optional "similar concerts" screen,
-  answered "new") → info (name, entry, description, Facebook) → Bandzone sends to
-  `/koncert/{id}-…`; the id is taken from that address. **Which step came next is read off the PAGE,
-  never off its address**: Bandzone sends you to `zalozit-podobne-koncerty.html?key=…` even when it
-  has nothing similar to ask about, and serves the info step at that very address — trusting the
-  address cost a publish ("no form for the similar-concerts question", live 2026-10-11). So: answer
-  the question if the page holds it, else fill in the info step, wherever we landed. `BandzoneFormCreate` then
-  completes the gig via the edit form (end, venue, poster, lineup); if that fails the
-  gig is still PUBLISHED with a note to use Re-sync.
-- **Update** — `/koncert/{id}/update`: poster upload (`PosterDownloader`: 10 s to connect, 30 s
-  for the file), city then venue search (the venue search is scoped to the city; no exact club
-  match → free-text venue), dates, info fields; then read back and verified. A picker's pick and
-  the poster upload make Bandzone answer with the form again, so what follows works from that
-  answer rather than from the page it was sent.
-- **Lineup** (`LineupTab`) — full sync: removes performers not in the lineup
-  (never the band itself, whose name comes from the profile's `og:title`); adds an
-  exact case-insensitive profile match, else a "band without profile" stub — never another
-  concert's stub, which the search also offers.
-- **Cancel / delete** (the concert's delete tab) — the button's form is submitted, then checked: a
-  cancelled concert must be listed `gig--canceled` on the band's gig list (planned tab, else its
-  year's); a deleted one's PUBLIC page (`/koncert/<id>`) must answer 404 — the admin pages of a
-  deleted concert still open, delete button and all (seen 2026-10-09), so they prove nothing. A
-  concert already gone: delete = done ("already removed"), cancel = needs the user.
-- Not supported by Bandzone: un-cancel, removing a poster, ticket URL, per-band set times
-  (Bandzone gets the whole event; the band's `Slot` goes to Bandsintown only).
-- A city Bandzone's search doesn't know fails at once (permanent) with "correct the city".
+- **Create** — the wizard's one call, `POST /api/gig/create`: date and time, town, club or typed venue,
+  name, the band itself (`bandIds`), tickets, description, Facebook link → `{gigId}`. Interrupted
+  part-way it may exist already, so it fails for the user to check. `BandzoneFormCreate` then completes
+  the gig through the edit calls (poster, lineup — and everything again); if that fails the gig is
+  still PUBLISHED with a note to use Re-sync.
+- **Update** — `PATCH /api/gig/{id}` (title, `dateFrom`/`dateUntil`, the club or the typed venue with
+  its town, Facebook link, description — null clears), `PUT …/tickets` (free / voluntary / paid with one
+  basic row: a price with its currency when it reads as one, else the text), the poster (`PosterDownloader`:
+  10 s to connect, 30 s for the file; uploaded to `upload.bandzone.cz/api/upload`, which the `bz_upload`
+  cookie `/api/bff/account/me` hands out lets in, polled until processed, then `PATCH …/cover
+  {blobId}`); then read back and verified, the entry included.
+- **Lineup** (`LineupTab`) — full sync: removes performers not in the lineup (never the band itself, by
+  its id); adds an exact case-insensitive profile match (`/api/gig/search-bands` → `POST …/lineup
+  {bandId}`), else a guest — a performer without a profile, the concert's own (`POST …/guests`).
+- **Cancel / reactivate** — `POST …/status {status: "cancelled" | "approved"}`, checked on the edit page.
+  A concert gone: cancel needs the user; reactivate is refused, so the workflow creates it again. A
+  played concert (statusId 7) may not change state: reactivate is refused the same way.
+- **Delete** — `DELETE /api/gig/{id}`, then the concert's PUBLIC page must answer 404. Bandzone answers
+  a delete of a concert it no longer has as a success, so a concert already gone is asked about first:
+  delete = done ("already removed").
+- Not supported here (Bandzone could, nobody asked yet): removing a poster, ticket URL, per-band set
+  times (Bandzone gets the whole event; the band's `Slot` goes to Bandsintown only).
+- A town Bandzone's search doesn't know fails at once (permanent) with "correct the city".
 
 ## Bandsintown (no browser on the server)
 
@@ -904,7 +916,7 @@ is the one place the portal's JSON is read.
   does, the public page scrape included: that one asks for every year tab at once, and a burst is
   what the pacing exists to avoid, so half the traffic coming from somewhere else would be the
   worst of both. **Not a rotating list, deliberately** — these are the band's own long-lived
-  sessions (Bandzone's lasts years), and a session arriving from a different address each time is
+  sessions (Bandzone's lasts 90 days), and a session arriving from a different address each time is
   the shape of a stolen one rather than a quieter one; free proxy lists are also compromised hosts
   carrying other people's blocks, and an unknown party in the middle of the session this app seals
   everywhere else. The javadoc says it at length, with the two JDK traps (no SOCKS; Basic auth to
@@ -1198,17 +1210,15 @@ test run — `./mvnw test` needs Docker; `H2ImportTest`: an H2 backup into its o
 (`JpaGigConcurrencyTest`: the optimistic lock across real transactions).
 
 **The platforms are tested against stand-ins that talk as their sites do**, so no browser and no
-network are needed. `BandzoneHttpFixture` (bandzone test sources) answers as the band admin's pages
-do — the login and its cookie, the pickers' `items`, a pick's re-rendered form, a finished form's
-`redirect`, the poster uploader, the wizard in each of the three shapes Bandzone has shown after its
-first step (`AfterStepOne`: the question, no question but still at the question's address, straight
-to the info step — the middle one is what the real site does, and modelling it as a redirect to the
-info ADDRESS is what let a publish fail with green tests), the
-performers tab with its remove dialogs (which may answer only "go there" when the concert's address
-changed with its name), the delete tab, the band's gig list and a deleted concert's 404 — and keeps
-what it is sent, so the client's read-backs see what was stored. `HttpBandzonePortalClientTest` runs
-the whole cycle against it, plus a refused login, a town Bandzone knows several of, and a concert
-already gone. `BitHttpFixture` does the same for the artist portal's API (its reply envelope, the
+network are needed. `BandzoneHttpFixture` (bandzone test sources) answers as the redesigned site's API
+does — the form nonce and the sign-in with its honeypot and its `Max-Age` cookie, the account and its
+bands, the searches (three Hranice), create, the edit form's PATCH, tickets, cover, lineup and guests,
+status (a played concert refused), delete (a success for one already gone, as Bandzone answers), the
+upload service with its job polling, the edit page carrying the concert as page data, and a deleted
+concert's 404 — and keeps what it is sent, so the client's read-backs see what was stored.
+`HttpBandzonePortalClientTest` runs the whole cycle against it, plus a refused sign-in, a session kept
+from before the redesign, a login that doesn't manage the band, a town Bandzone knows several of, a
+Slovak town, a gig without a venue, a reactivation refused and a concert already gone. `BitHttpFixture` does the same for the artist portal's API (its reply envelope, the
 past list's date cursor, the upload's row → event id mapping, row errors, and an event's two writes —
 a PATCH that sets its state, a PUT that replaces it whole) and `HttpBitSessionTest` runs the six
 operations against it.
@@ -1216,7 +1226,8 @@ operations against it.
 Change a client → run these first; the live tests below then confirm against the real sites.
 
 `HttpBandzonePortalClientLiveTest` creates, edits (every field, incl. lineup and poster), cancels,
-deletes and deletes again (already gone) a real Bandzone gig, and checks the login is reused. Skipped
+reactivates, cancels again, deletes and deletes again (already gone) a real Bandzone gig 60 days ahead
+(a played concert's state can't change), and checks the login is reused. Skipped
 unless `BZ_LIVE=true`; reads `BZ_LOGIN` / `BZ_PASSWORD` / `BZ_SLUG`, `BZ_LINEUP_BAND` (a real band
 that gets notified), optional `BZ_KEEP=true`. Run it only against a test band.
 

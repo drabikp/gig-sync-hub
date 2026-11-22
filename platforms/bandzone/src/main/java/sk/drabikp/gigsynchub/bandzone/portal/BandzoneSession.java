@@ -22,7 +22,7 @@ public interface BandzoneSession extends AutoCloseable {
     /**
      * Overwrites an existing concert's details (title, start, city, admission,
      * description, Facebook link) in place; its Bandzone id does not change. Does not
-     * touch the cancelled state — Bandzone has no way to un-cancel a concert.
+     * touch the cancelled state ({@link #reactivateGig}).
      */
     void updateGig(String bandzoneId, Gig gig) throws BandzonePortalException;
 
@@ -33,6 +33,15 @@ public interface BandzoneSession extends AutoCloseable {
      * @throws BandzonePortalException needing the user when the concert is gone from Bandzone
      */
     void cancelGig(String bandzoneId) throws BandzonePortalException;
+
+    /**
+     * Makes a cancelled concert public again, in place (its id stays) — Bandzone can since its 2026-11
+     * redesign. A concert already public is left as it is.
+     *
+     * @throws BandzonePortalException refused (nothing happened — the gig is to be created again instead)
+     *                                 when the concert is gone, or was played and so may not change state
+     */
+    void reactivateGig(String bandzoneId) throws BandzonePortalException;
 
     /**
      * Deletes the concert from Bandzone entirely, checked afterwards. A concert already gone is
