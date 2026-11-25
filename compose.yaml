@@ -164,6 +164,8 @@ services:
     image: postgres:18-alpine
     logging: *logging
     <<: *hardening
+    # it reads the owner-only secrets, and root with `cap_drop: ALL` is a root without DAC_OVERRIDE
+    user: "${GSH_UID:-1000}:${GSH_GID:-1000}"
     depends_on:
       db:
         condition: service_healthy
